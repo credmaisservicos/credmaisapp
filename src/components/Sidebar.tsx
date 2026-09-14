@@ -1,15 +1,8 @@
 import { useState, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import defaultLogo from "@/assets/credmais-mark.svg";
-import type { LucideIcon } from "lucide-react";
 import {
-  LayoutDashboard, BarChart3, Users, Receipt, Wallet,
-  TrendingUp, DollarSign, Database, Target, Calculator,
-  CheckSquare, StickyNote, Table, ChevronDown, FileText,
-  Crown, ClipboardList, Sparkles, Settings, Bot, QrCode,
-  UserCheck, Shield, Cog, LogOut, User, LifeBuoy, MessageCircle,
-  AlertTriangle, ChevronLeft, Plus, Search, Archive, Landmark,
-  Activity, Terminal, Smartphone, ShieldCheck,
+  ChevronDown, ChevronLeft, LogOut, Plus, Search, User,
 } from "lucide-react";
 import AppModeSwitcher from "@/components/AppModeSwitcher";
 import { useAppMode } from "@/contexts/AppModeContext";
@@ -17,134 +10,15 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useWhiteLabel } from "@/contexts/WhiteLabelContext";
 import { useChatUnread } from "@/hooks/useChatUnread";
 import { usePlan } from "@/hooks/usePlan";
-
-import type { ModuleKey } from "@/contexts/WhiteLabelContext";
-
-interface MenuItem {
-  label: string;
-  icon: LucideIcon;
-  path: string;
-  badge?: number;
-  highlight?: boolean;
-  module?: ModuleKey;
-  /** Disponível somente no plano Completo (R$299) */
-  pro?: boolean;
-}
-
-interface MenuSection {
-  title: string;
-  items: MenuItem[];
-  collapsible?: boolean;
-  defaultOpen?: boolean;
-}
-
-const menuIconTone: Record<string, string> = {
-  "/hoje": "amber", "/dashboard": "blue", "/analises": "violet", "/clientes": "orange",
-  "/cobrancas": "rose", "/investidores": "teal", "/carteira": "emerald", "/comercial": "indigo", "/garantias": "yellow",
-  "/lucros": "green", "/gastos": "red", "/relatorios": "sky", "/historico-financeiro": "slate",
-  "/comunicacao": "purple", "/comunicacao/inbox": "pink", "/chat": "cyan", "/cobradores": "lime",
-  "/qrcode": "blue", "/ferramentas/simulador": "violet", "/ferramentas/metas": "amber", "/ferramentas/tarefas": "green",
-  "/ferramentas/anotacoes": "yellow", "/ferramentas/planilha": "cyan", "/puxada-dados": "slate", "/configuracoes": "slate",
-  "/suporte": "pink", "/auditoria": "red", "/admin": "amber",
-};
-
-const sections: MenuSection[] = [
-  {
-    title: "Início",
-    items: [
-      { label: "Hoje", icon: Sparkles, path: "/hoje", highlight: true },
-      { label: "Painel", icon: LayoutDashboard, path: "/dashboard" },
-      { label: "Análises", icon: BarChart3, path: "/analises", module: "analises" },
-    ],
-  },
-  {
-    title: "Operação",
-    items: [
-      { label: "Clientes", icon: Users, path: "/clientes" },
-      { label: "Cobranças", icon: Receipt, path: "/cobrancas" },
-      { label: "Investidores", icon: Landmark, path: "/investidores" },
-      { label: "Carteira", icon: Wallet, path: "/carteira" },
-      { label: "Comercial", icon: Smartphone, path: "/comercial" },
-      { label: "Garantias", icon: ShieldCheck, path: "/garantias" },
-    ],
-  },
-  {
-    title: "Financeiro",
-    items: [
-      { label: "Lucros", icon: TrendingUp, path: "/lucros", module: "lucros" },
-      { label: "Gastos", icon: DollarSign, path: "/gastos", module: "gastos" },
-      { label: "Relatórios", icon: FileText, path: "/relatorios", module: "relatorios" },
-      { label: "Histórico financeiro", icon: Archive, path: "/historico-financeiro" },
-    ],
-  },
-  {
-    title: "Comunicação & Automações",
-    collapsible: true,
-    defaultOpen: true,
-    items: [
-      { label: "Atendimento", icon: Bot, path: "/comunicacao", pro: true },
-      { label: "Conversas", icon: MessageCircle, path: "/comunicacao/inbox", module: "comunicacao_inbox", pro: true },
-      { label: "Chat interno", icon: MessageCircle, path: "/chat", module: "chat_interno" },
-      { label: "Cobradores", icon: UserCheck, path: "/cobradores", module: "cobradores" },
-      { label: "QR Code de acesso", icon: QrCode, path: "/qrcode", module: "portais" },
-    ],
-  },
-  {
-    title: "Ferramentas",
-    collapsible: true,
-    defaultOpen: false,
-    items: [
-      { label: "Simulador", icon: Calculator, path: "/ferramentas/simulador", module: "simulador" },
-      { label: "Metas", icon: Target, path: "/ferramentas/metas", module: "metas" },
-      { label: "Tarefas", icon: CheckSquare, path: "/ferramentas/tarefas", module: "tarefas" },
-      { label: "Anotações", icon: StickyNote, path: "/ferramentas/anotacoes", module: "anotacoes" },
-      { label: "Planilha", icon: Table, path: "/ferramentas/planilha", module: "planilha" },
-      { label: "Consulta CPF/CNPJ", icon: Database, path: "/puxada-dados", module: "puxada_dados" },
-    ],
-  },
-  {
-    title: "Sistema",
-    collapsible: true,
-    defaultOpen: false,
-    items: [
-      { label: "Configurações", icon: Settings, path: "/configuracoes" },
-      { label: "Suporte", icon: LifeBuoy, path: "/suporte" },
-      { label: "Auditoria", icon: Shield, path: "/auditoria" },
-      { label: "Admin", icon: Crown, path: "/admin" },
-    ],
-  },
-];
-
-
-/**
- * Menu do painel do dono do app. Em modo "plataforma" ele SUBSTITUI o menu de
- * operação por completo — nenhuma tela de credor (clientes, contratos,
- * cobranças) aparece aqui.
- */
-const platformSections: MenuSection[] = [
-  {
-    title: "Plataforma",
-    items: [
-      { label: "Usuários & Assinaturas", icon: Users, path: "/admin" },
-      { label: "Suporte", icon: LifeBuoy, path: "/admin?secao=support" },
-      { label: "Automações", icon: Activity, path: "/admin?secao=automations" },
-      { label: "Logs do sistema", icon: Terminal, path: "/admin?secao=logs" },
-      { label: "Manutenção & Controle", icon: Cog, path: "/admin?secao=settings" },
-    ],
-  },
-  {
-    title: "Diagnóstico",
-    items: [
-      { label: "Auditoria do bot", icon: Bot, path: "/admin/bot-audit" },
-      { label: "Trilha de auditoria", icon: Shield, path: "/auditoria" },
-      { label: "Histórico", icon: Archive, path: "/historico" },
-    ],
-  },
-  {
-    title: "Conta",
-    items: [{ label: "Meu perfil", icon: User, path: "/perfil" }],
-  },
-];
+import {
+  operationSections as sections,
+  platformSections,
+  menuIconTone,
+  filterMenuSections,
+  isMenuPathActive,
+  type MenuItem,
+  type MenuSection,
+} from "@/components/navigation/menu";
 
 interface SidebarProps {
   collapsed?: boolean;
@@ -164,31 +38,15 @@ const Sidebar = ({ collapsed = false, onToggleCollapse }: SidebarProps) => {
   const { hasAutomations } = usePlan();
   const { mode } = useAppMode();
 
-  const operationSections = useMemo(() =>
-    sections.map((s) => ({
-      ...s,
-      items: s.items.filter((i) => {
-        // Painel do dono do app e trilha de auditoria: mesma regra, uma fonte só.
-        if (["/admin", "/auditoria", "/historico"].includes(i.path)) return isPlatformAdmin;
-        if (i.pro && !hasAutomations) return false;
-        if (i.module && modules && modules[i.module] === false) return false;
-        return true;
-      }),
-    })).filter(s => s.items.length > 0), [isPlatformAdmin, modules, hasAutomations]);
+  const operationSections = useMemo(
+    () => filterMenuSections(sections, { isPlatformAdmin, hasAutomations, modules }),
+    [isPlatformAdmin, modules, hasAutomations],
+  );
 
   // Em modo plataforma o menu de operação some por inteiro.
   const visibleSections = mode === "platform" ? platformSections : operationSections;
 
-  // Itens do painel apontam para /admin?secao=x, então a comparação leva a query
-  // em conta — senão todos os itens do painel ficariam ativos ao mesmo tempo.
-  const isActive = (path: string) => {
-    const [p, q] = path.split("?");
-    const samePath = location.pathname === p || location.pathname.startsWith(p + "/");
-    if (!samePath) return false;
-    const current = new URLSearchParams(location.search).get("secao");
-    if (!q) return !current;
-    return current === new URLSearchParams(q).get("secao");
-  };
+  const isActive = (path: string) => isMenuPathActive(path, location.pathname, location.search);
 
   const openGlobalSearch = () => {
     // dispara o atalho global Cmd/Ctrl+K (GlobalSearch escuta esse evento)

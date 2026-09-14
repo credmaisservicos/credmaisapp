@@ -165,7 +165,7 @@ const Anotacoes = () => {
               <p className="text-muted-foreground text-sm mt-0.5">{notes.length} nota{notes.length !== 1 ? "s" : ""} salva{notes.length !== 1 ? "s" : ""}</p>
             </div>
           </div>
-          <button onClick={() => setShowForm(!showForm)} className="btn-premium">
+          <button onClick={() => setShowForm(!showForm)} className="btn-premium w-full sm:w-auto justify-center">
             <Plus size={16} /> Nova Anotação
           </button>
         </div>

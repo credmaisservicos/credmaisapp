@@ -329,7 +329,7 @@ const Suporte = () => {
 
   // ============ LIST VIEW ============
   return (
-    <div className="min-h-dvh p-4 md:p-6 max-w-5xl mx-auto space-y-6">
+    <div className="min-h-dvh md:p-6 max-w-5xl mx-auto space-y-6">
       <div className="page-hero animate-fade-in">
         <div className="page-hero-content flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3">
@@ -341,7 +341,7 @@ const Suporte = () => {
               <p className="text-sm text-muted-foreground mt-0.5">Abra um ticket e fale com nossa equipe</p>
             </div>
           </div>
-          <button onClick={() => setNewOpen(true)} className="btn-premium">
+          <button onClick={() => setNewOpen(true)} className="btn-premium w-full sm:w-auto justify-center">
             <Plus size={16} /> Novo ticket
           </button>
         </div>

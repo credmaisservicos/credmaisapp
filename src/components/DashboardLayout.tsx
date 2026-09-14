@@ -7,7 +7,7 @@ import MobileBottomNav from "@/components/MobileBottomNav";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import GlobalAnnouncement from "@/components/GlobalAnnouncement";
 import InstallAppBanner from "@/components/InstallAppBanner";
-import { Navigate, Outlet, useLocation } from "react-router-dom";
+import { Navigate, Outlet, useLocation, useNavigationType } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useAppMode, isPlatformPath, isNeutralPath } from "@/contexts/AppModeContext";
@@ -29,6 +29,7 @@ const DashboardLayout = () => {
   const [payOpen, setPayOpen] = useState(false);
   const isMobile = useIsMobile();
   const location = useLocation();
+  const navigationType = useNavigationType();
   const { mode } = useAppMode();
   const online = useOnlineStatus();
   usePushNotifications();
@@ -71,6 +72,14 @@ const DashboardLayout = () => {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [openQuickPayment]);
+
+  // No celular a página inteira rola (não um painel interno), então trocar de
+  // tela por um toque herdava a posição de rolagem da anterior e a nova abria
+  // no meio. Voltar (POP) preserva a posição, como o usuário espera.
+  useEffect(() => {
+    if (!isMobile || navigationType === "POP") return;
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [isMobile, navigationType, location.pathname]);
 
   // Improvement #14: Auto-collapse sidebar on small desktop screens
   useEffect(() => {
@@ -132,7 +141,7 @@ const DashboardLayout = () => {
 
 
       {/* Mobile: bottom nav */}
-      {isMobile && <MobileBottomNav />}
+      {isMobile && <MobileBottomNav onQuickPayment={openQuickPayment} />}
 
 
       <Suspense fallback={null}>

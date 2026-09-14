@@ -167,7 +167,7 @@ export default function DashboardCharts({ contracts, installments, profits }: Pr
 
       {/* Revenue area chart */}
       <div className="premium-card p-5 animate-fade-in">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-2xl bg-success/10 flex items-center justify-center">
               <TrendingUp size={14} className="text-success" />

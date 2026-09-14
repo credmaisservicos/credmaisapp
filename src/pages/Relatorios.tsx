@@ -296,7 +296,7 @@ const Relatorios = () => {
       {loading ? (
         <div className="space-y-4">
           <div className="h-8 w-48 skeleton-shimmer rounded-lg" />
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">{[1,2,3,4,5,6].map(i => <div key={i} className="h-24 rounded-xl skeleton-shimmer" />)}</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{[1,2,3,4,5,6].map(i => <div key={i} className="h-24 rounded-xl skeleton-shimmer" />)}</div>
         </div>
       ) : reportError ? (
         <div className="rounded-2xl border border-destructive/30 bg-destructive/5 py-14 text-center">

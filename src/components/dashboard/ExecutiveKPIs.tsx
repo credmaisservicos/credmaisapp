@@ -108,7 +108,7 @@ const ExecutiveKPIs = ({ contracts, installments }: Props) => {
 
   return (
     <section className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-xl bg-primary/15 flex items-center justify-center text-primary">
             <LineChart size={16} />
@@ -139,7 +139,7 @@ const ExecutiveKPIs = ({ contracts, installments }: Props) => {
       </div>
 
       <Card className="p-5 rounded-2xl bg-gradient-to-br from-card via-card to-primary/5 border-primary/20">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
           <div>
             <h4 className="text-sm font-bold">Projeção de caixa · próximos 90 dias</h4>
             <p className="text-xs text-muted-foreground">Baseada nas parcelas pendentes por janela de vencimento</p>

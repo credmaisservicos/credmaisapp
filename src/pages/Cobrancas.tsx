@@ -1148,7 +1148,7 @@ const Cobrancas = () => {
 
       {/* Sticky bulk action bar */}
       {selected.size > 0 && (
-        <div className="collection-bulk-bar sticky bottom-3 z-30 grid gap-3 rounded-2xl border px-4 py-3 backdrop-blur-xl animate-fade-in md:grid-cols-[1fr_auto] md:items-center">
+        <div className="collection-bulk-bar mobile-dock sticky bottom-3 z-30 grid gap-3 rounded-2xl border px-4 py-3 backdrop-blur-xl animate-fade-in md:grid-cols-[1fr_auto] md:items-center">
           <div className="collection-bulk-summary flex min-w-0 items-center gap-3">
             <span className="text-sm font-semibold text-primary">{selected.size} selecionada(s)</span>
             <span className="text-xs text-foreground/80">Total: <span className="font-bold text-foreground">R$ {fmt(selectedSum)}</span></span>

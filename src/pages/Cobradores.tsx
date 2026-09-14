@@ -509,7 +509,7 @@ const Cobradores = () => {
                   </div>
 
                   {/* Quick stats */}
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 min-[400px]:grid-cols-3 gap-2">
                     <div className="flex-1 flex items-center gap-2 p-2.5 rounded-xl bg-accent/20">
                       <Users size={12} className="text-primary shrink-0" />
                       <span className="text-xs text-foreground font-medium">{cAssignments.length}</span>

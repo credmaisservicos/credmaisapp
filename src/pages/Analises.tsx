@@ -148,7 +148,7 @@ function DetailModal({ payload, onClose }: { payload: DetailPayload; onClose: ()
               <div className="py-10 text-center text-sm text-muted-foreground">Nenhum registro encontrado.</div>
             ) : (
               <div className="max-h-[60vh] overflow-auto rounded-lg border border-border/50">
-                <table className="w-full text-sm">
+                <table className="w-full min-w-[560px] text-sm">
                   <thead className="bg-muted/50 sticky top-0">
                     <tr>
                       {payload.columns.map((c) => (

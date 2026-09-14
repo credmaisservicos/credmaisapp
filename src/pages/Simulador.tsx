@@ -240,7 +240,7 @@ const Simulador = () => {
       {/* Frequency Selection */}
       <div className="rounded-2xl border border-border bg-card p-4 space-y-4 card-shine">
         <label className="text-label mb-1 block">Frequência de Pagamento</label>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 min-[420px]:grid-cols-3 gap-3">
           {([
             { value: "monthly" as Frequency, label: "Mensal", icon: Calendar, desc: "1x por mês" },
             { value: "weekly" as Frequency, label: "Semanal", icon: Repeat, desc: "A cada 7 dias" },

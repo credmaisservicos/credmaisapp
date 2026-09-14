@@ -53,7 +53,7 @@ export default function AtivoPassivoCard() {
 
   return (
     <div className="rounded-2xl border border-white/[.08] bg-card/55 p-5 backdrop-blur-xl">
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-widest text-primary/80">Balanço da Operação</p>
           <h3 className="mt-0.5 font-heading text-lg font-bold text-white">Ativo × Passivo</h3>

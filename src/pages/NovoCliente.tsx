@@ -885,6 +885,7 @@ const NovoCliente = () => {
                 else navigate("/clientes");
               }
             }}
+            aria-label="Voltar"
             className="p-2.5 rounded-xl hover:bg-card/60 text-muted-foreground transition-colors"
           >
             <ArrowLeft size={18} />
@@ -1952,7 +1953,7 @@ const NovoCliente = () => {
       )}
 
       {/* ═══ NAV BAR ═══ */}
-      <div className="sticky bottom-3 z-10 flex items-center justify-between gap-2 rounded-2xl border border-border bg-card/95 p-3 backdrop-blur sm:p-4">
+      <div className="mobile-dock sticky bottom-3 z-10 flex items-center justify-between gap-2 rounded-2xl border border-border bg-card/95 p-3 backdrop-blur sm:p-4">
         <button
           onClick={() => {
             if (isNewContractOnly) {

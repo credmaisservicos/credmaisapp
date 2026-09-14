@@ -144,7 +144,7 @@ export default function InvestidorDetalhe() {
 
   if (loadError) {
     return (
-      <div className="space-y-4 p-4 md:p-6">
+      <div className="space-y-4 md:p-6">
         <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => navigate("/investidores")}>
           <ArrowLeft size={14} /> Voltar
         </Button>
@@ -160,7 +160,7 @@ export default function InvestidorDetalhe() {
 
   if (!investor) {
     return (
-      <div className="space-y-4 p-6">
+      <div className="space-y-4 md:p-6">
         <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => navigate("/investidores")}>
           <ArrowLeft size={14} /> Voltar
         </Button>
@@ -172,7 +172,7 @@ export default function InvestidorDetalhe() {
   }
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
+    <div className="space-y-6 md:p-6">
       <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => navigate("/investidores")}>
         <ArrowLeft size={14} /> Voltar para investidores
       </Button>

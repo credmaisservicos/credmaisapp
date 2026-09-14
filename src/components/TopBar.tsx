@@ -216,26 +216,32 @@ const TopBar = ({ onSearchClick, onQuickPayment }: TopBarProps) => {
         {isMobile && <AppModeSwitcher collapsed />}
 
         {isMobile && (
-          <button onClick={onSearchClick} aria-label="Buscar" className="p-2 rounded-full hover:bg-muted/50 transition-all duration-200 text-muted-foreground hover:text-foreground">
-            <Search size={18} />
+          <button onClick={onSearchClick} aria-label="Buscar" className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-muted/50 transition-all duration-200 text-muted-foreground hover:text-foreground">
+            <Search size={19} />
           </button>
         )}
 
-        <button
-          onClick={toggleTheme}
-          aria-label={theme === "dark" ? "Ativar modo claro" : "Ativar modo escuro"}
-          title={theme === "dark" ? "Modo claro" : "Modo escuro"}
-          className="relative w-9 h-9 flex items-center justify-center rounded-full hover:bg-muted/60 transition-all duration-200 text-muted-foreground hover:text-foreground group"
-        >
-          <span className="relative block w-[18px] h-[18px]">
-            <Sun size={18} className={`absolute inset-0 transition-all duration-300 ${theme === "dark" ? "opacity-0 -rotate-90 scale-75" : "opacity-100 rotate-0 scale-100 text-amber-500"}`} />
-            <Moon size={18} className={`absolute inset-0 transition-all duration-300 ${theme === "dark" ? "opacity-100 rotate-0 scale-100 text-primary" : "opacity-0 rotate-90 scale-75"}`} />
-          </span>
-        </button>
+        {/* Tema e idioma no celular ficam no menu "Mais": a barra superior
+            de 360px só comporta o essencial (buscar e avisos). */}
+        {!isMobile && (
+          <button
+            onClick={toggleTheme}
+            aria-label={theme === "dark" ? "Ativar modo claro" : "Ativar modo escuro"}
+            title={theme === "dark" ? "Modo claro" : "Modo escuro"}
+            className="relative w-9 h-9 flex items-center justify-center rounded-full hover:bg-muted/60 transition-all duration-200 text-muted-foreground hover:text-foreground group"
+          >
+            <span className="relative block w-[18px] h-[18px]">
+              <Sun size={18} className={`absolute inset-0 transition-all duration-300 ${theme === "dark" ? "opacity-0 -rotate-90 scale-75" : "opacity-100 rotate-0 scale-100 text-amber-500"}`} />
+              <Moon size={18} className={`absolute inset-0 transition-all duration-300 ${theme === "dark" ? "opacity-100 rotate-0 scale-100 text-primary" : "opacity-0 rotate-90 scale-75"}`} />
+            </span>
+          </button>
+        )}
 
-        <span className="app-language-switcher">
-          <LanguageSwitcher />
-        </span>
+        {!isMobile && (
+          <span className="app-language-switcher">
+            <LanguageSwitcher />
+          </span>
+        )}
         <NotificationsBell />
 
         {!isMobile && <UserMenu profile={profile} theme={theme} toggleTheme={toggleTheme} onSignOut={handleSignOut} navigate={navigate} isAdmin={isPlatformAdmin} />}

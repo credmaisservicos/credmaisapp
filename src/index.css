@@ -350,7 +350,8 @@
        tornava editar/excluir/mais ações praticamente impossíveis de descobrir. */
     .app-content button.opacity-0,
     .app-content a.opacity-0,
-    .app-content [role="button"].opacity-0 {
+    .app-content [role="button"].opacity-0,
+    .app-content .opacity-0:has(> input[type="checkbox"]) {
       opacity: 1 !important;
     }
 
@@ -1451,7 +1452,7 @@ div[style*="Edit with Lovable"],
 }
 
 /* Defesas no viewport pequeno (mobile) */
-@media (max-width: 640px) {
+@media (max-width: 767px) {
   /* Evita que containers com muitos flex-children estourem */
   .card, .glass, .glass-card, .surface-card { min-width: 0; }
 
@@ -1478,12 +1479,12 @@ div[style*="Edit with Lovable"],
   }
 }
 
-@media (min-width: 400px) and (max-width: 640px) {
+@media (min-width: 400px) and (max-width: 767px) {
   .payment-mode-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* Tablets — melhor uso do espaço horizontal */
-@media (min-width: 641px) and (max-width: 1024px) {
+@media (min-width: 768px) and (max-width: 1024px) {
   /* Deixa modais um pouco maiores mas com ar */
   [role="dialog"] { max-width: min(680px, calc(100vw - 3rem)) !important; }
 }
@@ -1512,7 +1513,7 @@ div[style*="Edit with Lovable"],
 }
 
 /* Área de toque confortável no mobile para controles interativos */
-@media (max-width: 640px) {
+@media (max-width: 767px) {
   input:not([type="checkbox"]):not([type="radio"]),
   select,
   textarea {
@@ -1723,22 +1724,27 @@ div[style*="Edit with Lovable"],
   letter-spacing: .045em;
 }
 
+/* `--app-gutter` espelha o padding lateral do `main` em cada faixa, para faixas
+   que precisam encostar na borda da tela (.app-edge-strip) sem estourar. */
+.app-content { --app-gutter: 1rem; }
+.app-edge-strip { margin-inline: calc(var(--app-gutter) * -1); padding-inline: var(--app-gutter); }
+
 @media (max-width: 359px) {
-  .app-content { padding-inline: .625rem !important; }
+  .app-content { --app-gutter: .625rem; padding-inline: .625rem !important; }
   .app-content h1 { font-size: 1.42rem; }
   .app-content :where(.glass-card, .surface-card, .premium-card) { border-radius: .875rem; }
 }
 
 @media (min-width: 360px) and (max-width: 767px) {
-  .app-content { padding-inline: .875rem !important; }
+  .app-content { --app-gutter: .875rem; padding-inline: .875rem !important; }
 }
 
 @media (min-width: 768px) and (max-width: 1099px) {
-  .app-content { padding-inline: 1.25rem !important; }
+  .app-content { --app-gutter: 1.25rem; padding-inline: 1.25rem !important; }
 }
 
 @media (min-width: 1800px) {
-  .app-content { max-width: 1760px; padding-inline: 2.5rem !important; }
+  .app-content { --app-gutter: 2.5rem; max-width: 1760px; padding-inline: 2.5rem !important; }
 }
 
 /* Collections command center */
@@ -1824,7 +1830,7 @@ div[style*="Edit with Lovable"],
   min-width: 0;
 }
 
-@media (min-width: 640px) and (max-width: 1279px) {
+@media (min-width: 768px) and (max-width: 1279px) {
   .collection-sort-actions { width: 100%; }
 }
 
@@ -1851,7 +1857,7 @@ div[style*="Edit with Lovable"],
 
 .collection-account-card > .h-1 { height: 2px; opacity: .72; }
 
-@media (max-width: 639px) {
+@media (max-width: 767px) {
   .quick-payment-row { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; gap: .5rem; padding-inline: .75rem; }
   .quick-payment-info { grid-column: 3; }
   .quick-payment-amount { grid-column: 4; max-width: 7rem; }
@@ -1887,7 +1893,7 @@ div[style*="Edit with Lovable"],
   .collection-installment-actions > button { flex: 1 1 0; min-height: 42px; min-width: 0; justify-content: center; padding-inline: .5rem; }
   .collection-installment-actions .collection-action-label { display: inline; overflow: hidden; text-overflow: ellipsis; }
   .collection-card-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .collection-bulk-bar { bottom: max(.75rem, env(safe-area-inset-bottom)); padding: .75rem; }
+  .collection-bulk-bar { bottom: calc(4.75rem + env(safe-area-inset-bottom, 0px)); padding: .75rem; }
   .collection-bulk-summary { justify-content: space-between; gap: .5rem; }
   .collection-bulk-summary > span:nth-child(2) { margin-left: auto; }
   .collection-bulk-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }

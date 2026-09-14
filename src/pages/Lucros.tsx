@@ -677,7 +677,7 @@ const Lucros = () => {
 
       {/* Sticky bulk bar */}
       {selected.size > 0 && (
-        <div className="fixed bottom-3 left-3 right-3 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 z-40 flex flex-wrap items-center justify-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 rounded-2xl bg-popover border border-border shadow-2xl animate-fade-in">
+        <div className="mobile-dock fixed bottom-3 left-3 right-3 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 z-30 flex flex-wrap items-center justify-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 rounded-2xl bg-popover border border-border shadow-2xl animate-fade-in">
           <span className="text-xs font-semibold text-foreground">{selected.size} selecionado(s)</span>
           <span className="text-xs text-success font-bold">R$ {fmt(selectedTotal)}</span>
           <div className="h-5 w-px bg-border" />

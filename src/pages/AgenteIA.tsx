@@ -1370,7 +1370,7 @@ const AgenteIA = () => {
   return (
     <div className="space-y-6">
       <div className="page-hero animate-fade-in">
-        <div className="page-hero-content flex items-center justify-between gap-3">
+        <div className="page-hero-content flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="page-hero-icon">
               <CredinhoAvatar size={44} />

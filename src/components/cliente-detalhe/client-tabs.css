@@ -42,5 +42,6 @@
 .client-profile-tab-strip button b { display: grid; min-width: 20px; height: 20px; place-items: center; margin-left: auto; border-radius: 999px; color: hsl(var(--foreground)); background: hsl(0 0% 100% / .1); font-size: 9px; }
 .client-profile-tab-strip button.is-active b { color: hsl(var(--primary-foreground)); background: hsl(var(--primary)); }
 
-@media (max-width: 900px) { .client-profile-tab-strip { grid-template-columns: repeat(7, minmax(132px, 1fr)); } }
+@media (max-width: 900px) { .client-profile-tab-strip { grid-template-columns: repeat(7, minmax(132px, 1fr)); scroll-snap-type: x proximity; scroll-padding-inline: 8px; } .client-profile-tab-strip > * { scroll-snap-align: start; } }
+@media (max-width: 767px) { .client-profile-tab-strip { grid-template-columns: repeat(7, minmax(118px, 1fr)); gap: 6px; padding: 6px; margin-bottom: 14px; } }
 @media (prefers-reduced-motion: reduce) { .client-profile-tab-strip button { transition: none; } }

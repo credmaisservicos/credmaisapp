@@ -135,7 +135,7 @@ const Metas = () => {
               <p className="text-muted-foreground text-sm mt-0.5">Defina e acompanhe suas metas financeiras</p>
             </div>
           </div>
-          <button onClick={() => setShowForm(!showForm)} className="btn-premium">
+          <button onClick={() => setShowForm(!showForm)} className="btn-premium w-full sm:w-auto justify-center">
             <Plus size={16} /> Nova Meta
           </button>
         </div>

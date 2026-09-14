@@ -528,15 +528,16 @@ const Configuracoes = () => {
     <div className="settings-page max-w-6xl mx-auto pb-20">
       {/* Header sticky */}
       {/* A margem negativa serve para a faixa encostar nas bordas da tela, e por
-          isso precisa bater com o padding do `main`, que é `px-3` (12px). Com
-          `-mx-4` ela ficava 4px mais larga de cada lado e a página inteira
-          passava a ter 364px num celular de 360. */}
-      <div className="sticky top-0 z-30 -mx-3 px-3 py-3 mb-4 bg-background/80 backdrop-blur-xl border-b border-border/30">
-        <div className="flex items-center gap-3">
+          isso precisa bater exatamente com o padding do `main`. Esse padding
+          muda por faixa de largura (10px, 14px, 20px...), então a faixa lê o
+          mesmo valor pela variável `--app-gutter` em vez de fixar `-mx-3`:
+          qualquer diferença vira rolagem horizontal no celular. */}
+      <div className="app-edge-strip sticky top-0 z-30 py-3 mb-4 bg-background/80 backdrop-blur-xl border-b border-border/30">
+        <div className="flex flex-wrap items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
             <Settings size={18} className="text-primary" />
           </div>
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 basis-[11rem]">
             <h1 className="text-lg font-bold text-foreground truncate">Configurações</h1>
             <p className="text-[11px] text-muted-foreground truncate">
               {activeItem ? activeItem.label : "Personalize o sistema"}
@@ -554,6 +555,7 @@ const Configuracoes = () => {
             <Settings size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/50 pointer-events-none" />
             <kbd className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-mono px-1.5 py-0.5 rounded border border-border/50 bg-muted/30 text-muted-foreground/70 pointer-events-none">⌘K</kbd>
           </div>
+          <div className="ml-auto flex items-center gap-2">
           <button
             type="button"
             onClick={() => void handleInstallApp()}
@@ -570,6 +572,7 @@ const Configuracoes = () => {
             }`}>
             {saved ? <><Check size={15} /> Salvo</> : saving ? "Salvando..." : <><Save size={15} /> Salvar</>}
           </button>
+          </div>
         </div>
 
         {/* Mobile search */}

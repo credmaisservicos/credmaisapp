@@ -237,7 +237,7 @@ export default function Investidores() {
 
   return (
     <>
-      <div className="space-y-5 p-3 sm:p-4 md:p-6">
+      <div className="space-y-5 md:p-6">
 
         {/* Header */}
         <header className="rounded-2xl border border-border/60 bg-card/65 p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4 backdrop-blur-xl">

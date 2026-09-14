@@ -414,8 +414,8 @@ const Clientes = () => {
 
       {/* Search bar + view toggle */}
       <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 basis-[12rem] min-w-0">
             <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
               ref={searchRef}
@@ -510,7 +510,7 @@ const Clientes = () => {
 
       {/* Bulk action bar */}
       {selected.size > 0 && (
-        <div className="sticky top-4 z-30 flex items-center justify-between gap-3 px-4 py-3 rounded-2xl bg-primary/10 border border-primary/30 backdrop-blur-md shadow-lg shadow-primary/10 animate-fade-in">
+        <div className="sticky top-4 z-30 flex flex-wrap items-center justify-between gap-3 px-4 py-3 rounded-2xl bg-primary/10 border border-primary/30 backdrop-blur-md shadow-lg shadow-primary/10 animate-fade-in">
           <div className="flex items-center gap-3">
             <span className="text-sm font-semibold text-primary">{selected.size} selecionado(s)</span>
             <button onClick={clearSelection} className="text-xs text-muted-foreground hover:text-foreground">Limpar</button>
@@ -531,7 +531,7 @@ const Clientes = () => {
         <SkeletonCards
           count={8}
           height={viewMode === "cards" ? "h-44" : "h-16"}
-          className={viewMode === "cards" ? "grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3" : "space-y-2"}
+          className={viewMode === "cards" ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3" : "space-y-2"}
         />
       ) : clientsError ? (
         <ErrorState error={clientsError} onRetry={() => refetchClients()} />
@@ -695,7 +695,7 @@ const Clientes = () => {
                   <span className="text-muted-foreground ml-auto">{importPreview.length} total</span>
                 </div>
                 <div className="flex-1 overflow-auto">
-                  <table className="w-full text-xs">
+                  <table className="w-full min-w-[640px] text-xs">
                     <thead className="sticky top-0 bg-muted/60 backdrop-blur z-10">
                       <tr>
                         <th className="text-left px-3 py-2 font-semibold text-muted-foreground">#</th>

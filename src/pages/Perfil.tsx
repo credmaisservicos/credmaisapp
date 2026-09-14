@@ -284,7 +284,7 @@ const Perfil = () => {
       </div>
 
       {/* Actions */}
-      <div className="sticky bottom-4 z-10 flex items-center justify-between gap-3 p-4 rounded-2xl glass-strong border border-border/50">
+      <div className="mobile-dock sticky bottom-4 z-10 flex flex-wrap items-center justify-between gap-3 p-4 rounded-2xl glass-strong border border-border/50">
         <button onClick={handleSignOut} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm text-destructive hover:bg-destructive/10 transition-colors focus-ring">
           <LogOut size={16} /> Sair
         </button>

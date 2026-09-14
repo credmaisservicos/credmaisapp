@@ -170,7 +170,7 @@ const Notificacoes = () => {
   const fmtDate = (s: string) => new Date(s).toLocaleString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 
   return (
-    <div className="notifications-page p-3 lg:p-6 space-y-5">
+    <div className="notifications-page lg:p-6 space-y-5">
       {/* Header */}
       <div className="page-hero animate-fade-in">
         <div className="page-hero-content flex items-start sm:items-center justify-between gap-3 flex-wrap">
