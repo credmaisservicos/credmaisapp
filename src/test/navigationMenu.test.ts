@@ -46,6 +46,11 @@ describe("menu compartilhado (sidebar + celular)", () => {
     expect(paths).toContain("/perfil");
     expect(paths).toContain("/admin?secao=logs");
   });
+  it("prioriza uma rota filha em vez de ativar o pai junto", () => {
+    const paths = ["/comunicacao", "/comunicacao/inbox"];
+    expect(isMenuPathActive("/comunicacao", "/comunicacao/inbox", "", paths)).toBe(false);
+    expect(isMenuPathActive("/comunicacao/inbox", "/comunicacao/inbox", "", paths)).toBe(true);
+  });
 });
 
 describe("isMenuPathActive", () => {

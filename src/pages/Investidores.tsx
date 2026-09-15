@@ -298,7 +298,7 @@ export default function Investidores() {
             ))}
             <div className="ml-1 flex items-center gap-1 rounded-full border border-border bg-background/40 px-2 py-1 text-xs">
               <ArrowUpDown size={12} className="text-muted-foreground" />
-              <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} className="bg-transparent text-xs font-medium outline-none">
+              <select name="investors-sort" aria-label="Ordenar investidores" value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} className="bg-transparent text-xs font-medium outline-none">
                 <option value="total">Maior saldo</option>
                 <option value="prox">Próximo vencimento</option>
                 <option value="name">Nome (A→Z)</option>

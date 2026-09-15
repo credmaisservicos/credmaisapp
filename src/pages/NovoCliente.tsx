@@ -920,7 +920,7 @@ const NovoCliente = () => {
       <div className="space-y-2">
         <div className="flex gap-2">
           {(isNewContractOnly ? [2, 3] : [1, 2, 3]).map((s) => (
-            <button key={s} onClick={() => { if (s < step && (!isNewContractOnly || s >= 2)) setStep(s); }}
+            <button key={s} type="button" aria-label={`Ir para etapa ${s}`} aria-current={s === step ? "step" : undefined} onClick={() => { if (s < step && (!isNewContractOnly || s >= 2)) setStep(s); }}
               className={`h-2 flex-1 rounded-full transition-colors ${s < step ? "bg-success cursor-pointer" : s === step ? "bg-primary" : "bg-border"}`} />
           ))}
         </div>
@@ -1037,8 +1037,8 @@ const NovoCliente = () => {
                 <label htmlFor="loan-cep" className="text-xs font-semibold text-foreground mb-1.5 block">CEP</label>
                 <input id="loan-cep" aria-label="CEP" type="text" placeholder="00000-000" value={cep} onChange={(e) => handleCepChange(e.target.value)} className={INPUT} inputMode="numeric" />
               </div>
-              <button onClick={() => buscarCep()} disabled={cepLoading} className="self-end rounded-xl border border-border bg-accent px-4 py-2.5 text-foreground transition-colors hover:bg-accent/70 disabled:opacity-50">
-                {cepLoading ? <Loader2 size={18} className="animate-spin" /> : <Search size={18} />}
+              <button type="button" aria-label="Buscar endereço pelo CEP" onClick={() => buscarCep()} disabled={cepLoading} className="self-end rounded-xl border border-border bg-accent px-4 py-2.5 text-foreground transition-colors hover:bg-accent/70 disabled:opacity-50">
+                {cepLoading ? <Loader2 aria-hidden="true" size={18} className="animate-spin" /> : <Search aria-hidden="true" size={18} />}
               </button>
             </div>
             {rua && (

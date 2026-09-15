@@ -28,7 +28,7 @@ Retorne APENAS um JSON válido no formato:
 Regras:
 - bug = erro técnico, tela quebrada, função não funciona
 - duvida = como faço X, onde fica Y
-- financeiro = cobrança, assinatura, plano, Hubla, pagamento
+- financeiro = cobrança, assinatura, plano, Mercado Pago, pagamento
 - whatsapp = bot, Evolution API, mensagens não entregam, instância
 - outro = qualquer outra coisa
 - severity high = sistema parado/perda de dados/cobrança indevida; med = bloqueio parcial; low = dúvida/sugestão

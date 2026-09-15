@@ -1894,8 +1894,6 @@ export type Database = {
           created_at: string | null
           current_period_end: string | null
           email: string
-          hubla_order_id: string | null
-          hubla_subscription_id: string | null
           id: string
           mercadopago_payment_id: string | null
           plan_name: string | null
@@ -1910,8 +1908,6 @@ export type Database = {
           created_at?: string | null
           current_period_end?: string | null
           email: string
-          hubla_order_id?: string | null
-          hubla_subscription_id?: string | null
           id?: string
           mercadopago_payment_id?: string | null
           plan_name?: string | null
@@ -1926,8 +1922,6 @@ export type Database = {
           created_at?: string | null
           current_period_end?: string | null
           email?: string
-          hubla_order_id?: string | null
-          hubla_subscription_id?: string | null
           id?: string
           mercadopago_payment_id?: string | null
           plan_name?: string | null

@@ -97,7 +97,7 @@ describe("módulo de configurações — todas as seções", () => {
 });
 
 describe("campos salvos precisam ter onde ser editados", () => {
-  // Regressão do bug que derrubou o cadastro de novos clientes: `hubla_checkout_url`
+  // Regressão do bug que derrubou o cadastro de novos clientes: `checkout_url`
   // era gravado sem existir campo na tela, então o formulário lia "" e salvava nulo
   // por cima do link real — e ninguém percebia.
   //

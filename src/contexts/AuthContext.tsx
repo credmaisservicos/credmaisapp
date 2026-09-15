@@ -41,6 +41,10 @@ const AuthContext = createContext<AuthContextType>({
 
 export const useAuth = () => useContext(AuthContext);
 
+const isSupabaseConfigured = Boolean(
+  import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+);
+
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -96,6 +100,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     mounted.current = true;
+    if (!isSupabaseConfigured) {
+      setAuthError("Serviço de autenticação não configurado. Defina as variáveis do Supabase e tente novamente.");
+      setLoading(false);
+      return () => { mounted.current = false; };
+    }
     let disposed = false;
     let receivedAuthEvent = false;
     let initialized = false;

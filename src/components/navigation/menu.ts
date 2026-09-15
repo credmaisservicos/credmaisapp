@@ -174,10 +174,15 @@ export function filterMenuSections(sections: MenuSection[], v: MenuVisibility): 
  * Item ativo pela rota atual. Itens do painel apontam para /admin?secao=x, então
  * a comparação leva a query em conta — senão todos ficariam ativos juntos.
  */
-export function isMenuPathActive(path: string, pathname: string, search: string): boolean {
+export function isMenuPathActive(path: string, pathname: string, search: string, menuPaths?: string[]): boolean {
   const [p, q] = path.split("?");
   const samePath = pathname === p || pathname.startsWith(p + "/");
   if (!samePath) return false;
+  if (pathname !== p && menuPaths?.some((candidate) => {
+    const [candidatePath, candidateQuery] = candidate.split("?");
+    return candidatePath !== p && candidatePath.startsWith(p + "/") && pathname === candidatePath
+      && (!candidateQuery || new URLSearchParams(search).get("secao") === new URLSearchParams(candidateQuery).get("secao"));
+  })) return false;
   const current = new URLSearchParams(search).get("secao");
   if (!q) return !current;
   return current === new URLSearchParams(q).get("secao");

@@ -645,8 +645,8 @@ const Chat = () => {
                 <Sparkles size={16} className="text-primary" /> Chat
               </h1>
               {isMobile && (
-                <button onClick={() => setShowSidebar(false)} className="p-1.5 rounded-lg hover:bg-muted/50">
-                  <X size={16} />
+                <button type="button" onClick={() => setShowSidebar(false)} aria-label="Fechar lista de conversas" className="p-1.5 rounded-lg hover:bg-muted/50">
+                  <X aria-hidden="true" size={16} />
                 </button>
               )}
             </div>
@@ -847,8 +847,8 @@ const Chat = () => {
             <div className="h-14 px-3 lg:px-4 border-b border-border flex items-center justify-between gap-3 bg-card/50 backdrop-blur-sm">
               <div className="flex items-center gap-2 min-w-0">
                 {isMobile && (
-                  <button onClick={() => setShowSidebar(true)} className="p-1.5 rounded-lg hover:bg-muted/50">
-                    <ArrowLeft size={16} />
+                  <button type="button" onClick={() => setShowSidebar(true)} aria-label="Voltar para lista de conversas" className="p-1.5 rounded-lg hover:bg-muted/50">
+                    <ArrowLeft aria-hidden="true" size={16} />
                   </button>
                 )}
                 {currentChannel ? (

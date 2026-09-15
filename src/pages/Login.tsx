@@ -300,7 +300,7 @@ const Login = () => {
       <div className="relative z-10 w-full max-w-[500px] mx-auto animate-scale-in">
         <div className="rounded-[26px] overflow-hidden border border-amber-200/20 bg-[#101010]/90 shadow-[0_0_0_1px_rgba(245,189,89,.08),0_30px_90px_rgba(0,0,0,.55),0_0_35px_rgba(245,189,89,.22)] backdrop-blur-2xl">
           <div className="flex flex-col items-center px-6 pt-7 sm:pt-8">
-            <img src={logoSrc} alt={brandTitle} className="h-16 w-16 rounded-2xl object-cover ring-1 ring-amber-400/60 shadow-[0_0_28px_rgba(245,189,89,.35)]" />
+            <img src={logoSrc} alt={brandTitle} width={64} height={64} className="h-16 w-16 rounded-2xl object-cover ring-1 ring-amber-400/60 shadow-[0_0_28px_rgba(245,189,89,.35)]" />
             <p className="mt-3 text-xl font-bold tracking-tight text-white">CREDMAIS <span className="text-amber-400">APP</span></p>
             <p className="mt-1 text-[9px] tracking-[0.18em] text-white/40">{brandSubtitle}</p>
           </div>
@@ -309,8 +309,8 @@ const Login = () => {
               {/* Form de Login */}
               <div className="flex-1 p-6 sm:p-8 md:p-10 bg-white/[0.025]">
                 <div className="mb-7 grid grid-cols-2 border-b border-white/15">
-                  <button type="button" onClick={() => setIsRegister(false)} className="relative pb-3 text-sm font-semibold text-white after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-amber-400">Entrar</button>
-                  <button type="button" onClick={() => platform.allow_new_registrations && setIsRegister(true)} className="pb-3 text-sm font-semibold text-white/45 transition hover:text-white/80">Criar conta</button>
+                  <button type="button" role="tab" aria-selected="true" aria-label="Aba de login" onClick={() => setIsRegister(false)} className="relative pb-3 text-sm font-semibold text-white after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-amber-400">Entrar</button>
+                  <button type="button" role="tab" aria-selected="false" aria-label="Aba de criação de conta" onClick={() => platform.allow_new_registrations && setIsRegister(true)} className="pb-3 text-sm font-semibold text-white/45 transition hover:text-white/80">Criar conta</button>
                 </div>
                 <h2 className="font-display text-xl font-semibold text-white mb-1">Bem-vindo</h2>
                 <p className="text-white/40 text-sm mb-6">Acesse sua conta para continuar</p>

@@ -220,13 +220,13 @@ const Perfil = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="text-label mb-1.5 block">Nome</label>
-            <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputCls} />
+            <input type="text" name="profile-name" autoComplete="name" aria-label="Nome" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputCls} />
           </div>
           <div>
             <label className="text-label mb-1.5 block">Email</label>
             <div className="relative">
               <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input type="email" value={form.email} disabled className={`${inputCls} pl-9 bg-muted/30 cursor-not-allowed opacity-60`} />
+              <input type="email" name="profile-email" autoComplete="email" aria-label="Email" value={form.email} disabled className={`${inputCls} pl-9 bg-muted/30 cursor-not-allowed opacity-60`} />
             </div>
           </div>
         </div>
@@ -241,13 +241,13 @@ const Perfil = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="text-label mb-1.5 block">Tipo</label>
-            <select value={form.pix_key_type} onChange={(e) => setForm({ ...form, pix_key_type: e.target.value })} className={inputCls}>
+            <select name="profile-pix-key-type" aria-label="Tipo da chave PIX" value={form.pix_key_type} onChange={(e) => setForm({ ...form, pix_key_type: e.target.value })} className={inputCls}>
               <option value="cpf">CPF</option><option value="cnpj">CNPJ</option><option value="email">Email</option><option value="phone">Telefone</option><option value="random">Chave Aleatória</option>
             </select>
           </div>
           <div>
             <label className="text-label mb-1.5 block">Chave</label>
-            <input type="text" value={form.pix_key} onChange={(e) => setForm({ ...form, pix_key: e.target.value })} placeholder="Sua chave PIX" className={inputCls} />
+            <input type="text" name="profile-pix-key" aria-label="Chave PIX" value={form.pix_key} onChange={(e) => setForm({ ...form, pix_key: e.target.value })} placeholder="Sua chave PIX" className={inputCls} />
           </div>
         </div>
       </div>

@@ -55,7 +55,7 @@ const Configuracoes = () => {
     queryKey: ["settings", user?.id],
     queryFn: async () => {
       // Sem `as any`: é justamente esse cast que deixava o form ler/gravar colunas
-      // que não existem no banco (foi assim que `hubla_checkout_url` passou batido
+      // que não existem no banco (foi assim que `checkout_url` passou batido
       // e o salvamento quebrou o link de cadastro).
       const { data, error } = await supabase.from("settings_safe").select("*").eq("user_id", user!.id).maybeSingle();
       if (error) throw error;
@@ -301,7 +301,7 @@ const Configuracoes = () => {
       portal_contact_phone: form.portal_contact_phone,
       portal_contact_email: form.portal_contact_email,
       custom_contract_template: form.custom_contract_template?.trim() || null,
-      // Nada de hubla_* aqui: a view `settings_safe` não expõe essas colunas, então
+      // Nada de colunas de checkout da plataforma aqui: a view `settings_safe` não expõe essas colunas, então
       // o form as lia como "" e o save gravava NULL — apagando o link de checkout
       // que `get_signup_checkout_url()` usava e derrubando novos cadastros.
       // O link agora mora em `platform_settings` (/admin → Plataforma).

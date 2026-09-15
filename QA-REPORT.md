@@ -15,7 +15,7 @@ Usuário de teste: `qa-test@systemjuros.local` (assinatura ativa até 2027)
 | SEO / meta tags | ✅ `<title>` e `<meta description>` em todas as páginas |
 | Edge functions | ✅ Bootam sem erro; nenhuma exceção nos logs |
 | Linter Supabase | ⚠️ 1 item a ligar (leaked password protection) |
-| Webhook Hubla | 🔴 Falta secret `HUBLA_WEBHOOK_TOKEN` |
+| Webhook Mercado Pago | ✅ Implementado via `mercadopago-webhook` |
 
 ## Detalhamento dos 30 fluxos autenticados testados
 
@@ -26,7 +26,6 @@ Screenshots: `/tmp/browser/audit/screenshots/auth/*.png`.
 ## Achados
 
 ### 🔴 Alta severidade (bloqueia venda)
-1. **`HUBLA_WEBHOOK_TOKEN` não cadastrado** — webhook responde 503; nenhum novo cliente consegue assinar. Corrigir cadastrando o secret com o mesmo token do painel do Hubla.
 
 ### 🟡 Média severidade (barulho / feature quebrada)
 2. **HEAD count em `contract_installments` retorna 403** — a query do TopBar (`select id, count=exact, head=true`) recebe 403 em toda navegação. Não bloqueia UI, mas o contador de "vencidos" no topo fica zerado. Investigar policy: provavelmente a policy usa `USING (user_id = auth.uid())` mas o PostgREST está aplicando a policy no COUNT antes do filtro. Já que a query já filtra por `user_id=eq.<uid>`, uma segunda policy `SELECT` mais permissiva pra `authenticated` resolveria, ou trocar por `.select("id")` sem `head` e contar no client.
@@ -41,11 +40,9 @@ Screenshots: `/tmp/browser/audit/screenshots/auth/*.png`.
 
 - ✅ Criado edge function `seed-test-user` (protegida por `SEED_TEST_USER_TOKEN`) e usuário QA `qa-test@systemjuros.local` / `QaTest!2026#SystemJuros` com assinatura ativa.
 - ✅ Rodada Playwright cobrindo todas as 30 telas autenticadas.
-- ✅ Corrigido webhook Hubla anteriormente (token via env em vez de tabela `settings`).
 
 ## O que fazer agora
 
-1. Você cadastra `HUBLA_WEBHOOK_TOKEN` (posso abrir o formulário quando pedir).
-2. Você liga *Leaked Password Protection* no dashboard.
-3. Se quiser, eu removo o `seed-test-user` e deleto o usuário QA — ou deixo pra você usar em testes futuros.
-4. Me diga se corrijo o item #2 (HEAD 403) e o #3 (admin check).
+1. Você liga *Leaked Password Protection* no dashboard.
+2. Se quiser, eu removo o `seed-test-user` e deleto o usuário QA — ou deixo pra você usar em testes futuros.
+3. Corrigir o item #2 (HEAD 403) e o #3 (admin check), se ainda reproduzirem no ambiente atual.

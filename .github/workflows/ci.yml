@@ -117,13 +117,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Este repositório já vazou CRON_SECRET, token do Hubla e a API key da
+      # Este repositório já vazou CRON_SECRET e APIs de provedores no passado.
       # Evolution dentro de arquivos de migration. Esta verificação existe para
       # que não aconteça de novo pelo mesmo caminho.
       - name: Procurar padrões de segredo nos arquivos versionados
         run: |
           set -uo pipefail
-          PADROES='(ghp_[A-Za-z0-9]{20,}|sbp_[a-f0-9]{40,}|service_role.{0,40}eyJ|SUPABASE_SERVICE_ROLE_KEY\s*=\s*["'"'"']?eyJ|x-cron-secret"\s*:\s*"[a-f0-9]{32,}|hubla_webhook_token\s*=\s*'"'"'[A-Za-z0-9]{20,})'
+          PADROES='(ghp_[A-Za-z0-9]{20,}|sbp_[a-f0-9]{40,}|service_role.{0,40}eyJ|SUPABASE_SERVICE_ROLE_KEY\s*=\s*["'"'"']?eyJ|x-cron-secret"\s*:\s*"[a-f0-9]{32,})'
           # O próprio arquivo é excluído: ele contém os padrões escritos por
           # extenso e casaria consigo mesmo em toda execução.
           if grep -rInE "$PADROES" \

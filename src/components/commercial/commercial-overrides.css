@@ -3,7 +3,7 @@
 .commercial-modal h2{font-size:21px;font-weight:750;letter-spacing:-.03em}
 
 .commercial-subnav{display:flex;gap:8px;align-items:center;overflow-x:auto;padding:6px;border:1px solid hsl(214 70% 72%/.18);border-radius:18px;background:linear-gradient(135deg,hsl(214 70% 55%/.11),hsl(230 30% 10%/.58));box-shadow:inset 0 1px 0 hsl(0 0% 100%/.1),0 14px 34px -26px hsl(214 90% 55%/.65);backdrop-filter:blur(18px) saturate(150%)}
-.commercial-subnav a,.commercial-tabs a{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;border:1px solid transparent;border-radius:12px;padding:10px 14px;color:hsl(var(--muted-foreground));font-size:13px;font-weight:650;transition:all .2s ease}
+.commercial-subnav a,.commercial-tabs a{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;border:1px solid transparent;border-radius:12px;padding:10px 14px;color:hsl(var(--muted-foreground));font-size:13px;font-weight:650;transition:color .2s ease,background-color .2s ease,border-color .2s ease,box-shadow .2s ease}
 .commercial-subnav a:hover,.commercial-tabs a:hover{color:hsl(var(--foreground));background:hsl(214 86% 62%/.12);border-color:hsl(214 86% 62%/.22)}
 .commercial-subnav a.is-active,.commercial-tabs a.is-active{color:hsl(var(--foreground));background:linear-gradient(135deg,hsl(214 86% 62%/.27),hsl(266 84% 68%/.13));border-color:hsl(214 86% 62%/.46);box-shadow:inset 0 1px 0 hsl(0 0% 100%/.16),0 8px 22px -16px hsl(214 90% 62%/.8)}
 .commercial-module-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}

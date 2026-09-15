@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import defaultLogo from "@/assets/credmais-mark.svg";
 import {
   ChevronDown, ChevronLeft, LogOut, Plus, Search, User,
@@ -45,8 +45,12 @@ const Sidebar = ({ collapsed = false, onToggleCollapse }: SidebarProps) => {
 
   // Em modo plataforma o menu de operação some por inteiro.
   const visibleSections = mode === "platform" ? platformSections : operationSections;
+  const visibleMenuPaths = useMemo(
+    () => visibleSections.flatMap((section) => section.items.map((item) => item.path)),
+    [visibleSections],
+  );
 
-  const isActive = (path: string) => isMenuPathActive(path, location.pathname, location.search);
+  const isActive = (path: string) => isMenuPathActive(path, location.pathname, location.search, visibleMenuPaths);
 
   const openGlobalSearch = () => {
     // dispara o atalho global Cmd/Ctrl+K (GlobalSearch escuta esse evento)
@@ -59,13 +63,14 @@ const Sidebar = ({ collapsed = false, onToggleCollapse }: SidebarProps) => {
     const badge = item.path === "/chat" && chatUnread > 0 ? chatUnread : item.badge || 0;
 
     return (
-      <button
+      <Link
         key={item.path}
-        onClick={() => navigate(item.path)}
+        to={item.path}
+        aria-current={active ? "page" : undefined}
         title={collapsed ? item.label : undefined}
           className={`
           group relative w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium
-          transition-all duration-200 ease-out will-change-transform
+          transition-[color,background-color,box-shadow,transform] duration-200 ease-out will-change-transform
           ${active
             ? "text-[#201a10] bg-gradient-to-r from-[#e3a33e] via-[#ffdc91] to-[#e3a33e] shadow-[0_8px_20px_rgba(245,189,89,.16)]"
             : "text-slate-300/75 hover:text-white hover:bg-white/[.07]"
@@ -74,7 +79,7 @@ const Sidebar = ({ collapsed = false, onToggleCollapse }: SidebarProps) => {
         `}
       >
         <div className={`menu-app-icon menu-app-icon-${menuIconTone[item.path] || "slate"} ${active ? "is-active" : ""}`}>
-          <Icon size={16} strokeWidth={active ? 2.5 : 2.1} />
+          <Icon aria-hidden="true" size={16} strokeWidth={active ? 2.5 : 2.1} />
           {item.highlight && !active && !collapsed && (
             <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-amber-400 shadow-[0_0_6px_hsl(45_95%_55%/0.8)]" />
           )}
@@ -100,7 +105,7 @@ const Sidebar = ({ collapsed = false, onToggleCollapse }: SidebarProps) => {
             {item.label}
           </div>
         )}
-      </button>
+      </Link>
     );
   };
 
@@ -120,10 +125,12 @@ const Sidebar = ({ collapsed = false, onToggleCollapse }: SidebarProps) => {
 
     return (
       <div key={section.title} className={index > 0 ? "mt-4" : ""}>
-        {!collapsed && (
+        {!collapsed && isCollapsible ? (
           <button
             type="button"
             onClick={isCollapsible ? () => toggleSection(section.title) : undefined}
+            aria-expanded={isOpen}
+            aria-controls={`sidebar-section-${index}`}
             className={`
               w-full flex items-center gap-2 px-3 py-1.5 mb-1 rounded-md
               ${isCollapsible ? "hover:bg-accent/25 cursor-pointer" : "cursor-default"}
@@ -135,15 +142,23 @@ const Sidebar = ({ collapsed = false, onToggleCollapse }: SidebarProps) => {
             <div className="flex-1 h-px bg-gradient-to-r from-white/10 to-transparent ml-1" />
             {isCollapsible && (
               <ChevronDown
+                aria-hidden="true"
                 size={11}
                 className={`text-muted-foreground/50 transition-transform ${isOpen ? "rotate-0" : "-rotate-90"}`}
               />
             )}
           </button>
-        )}
+        ) : !collapsed ? (
+          <div className="w-full flex items-center gap-2 px-3 py-1.5 mb-1 rounded-md">
+            <p className={`text-[10px] font-bold uppercase tracking-[0.16em] transition-colors ${sectionHasActive ? "text-orange-300" : "text-slate-400/55"}`}>
+              {section.title}
+            </p>
+            <div className="flex-1 h-px bg-gradient-to-r from-white/10 to-transparent ml-1" />
+          </div>
+        ) : null}
 
         {isOpen && (
-          <div className="space-y-1 animate-fade-in">
+          <div id={`sidebar-section-${index}`} className="space-y-1 animate-fade-in">
             {section.items.map(renderItem)}
           </div>
         )}
@@ -195,12 +210,14 @@ const Sidebar = ({ collapsed = false, onToggleCollapse }: SidebarProps) => {
 
       {/* Botão colapsar */}
       <button
+        type="button"
         onClick={onToggleCollapse}
+        aria-label={collapsed ? "Expandir menu lateral" : "Minimizar menu lateral"}
         className="absolute -right-3 top-14 w-7 h-7 rounded-full bg-zinc-950 border border-white/15 shadow-xl flex items-center justify-center text-zinc-400 hover:text-white hover:border-white/35 transition-colors z-10"
         title={collapsed ? "Expandir" : "Minimizar"}
       >
         <span className={`transition-transform duration-300 ${collapsed ? "rotate-0" : "rotate-180"}`}>
-          <ChevronLeft size={12} />
+          <ChevronLeft aria-hidden="true" size={12} />
         </span>
       </button>
 
@@ -231,6 +248,7 @@ const Sidebar = ({ collapsed = false, onToggleCollapse }: SidebarProps) => {
           <button
             onClick={openGlobalSearch}
             title="Buscar (⌘K)"
+            aria-label="Buscar (⌘K)"
             className="w-full h-9 rounded-lg bg-accent/30 hover:bg-accent/50 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
           >
             <Search size={15} />
@@ -238,6 +256,7 @@ const Sidebar = ({ collapsed = false, onToggleCollapse }: SidebarProps) => {
           <button
             onClick={() => navigate("/clientes/novo")}
             title="Novo cliente"
+            aria-label="Novo cliente"
             className="w-full h-9 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 flex items-center justify-center transition-colors"
           >
             <Plus size={15} />
@@ -257,7 +276,9 @@ const Sidebar = ({ collapsed = false, onToggleCollapse }: SidebarProps) => {
       <div className={`shrink-0 border-t border-border/10 p-2.5 bg-background/20 ${collapsed ? "flex flex-col items-center gap-2" : ""}`}>
         {!collapsed ? (
           <div className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-accent/30 transition-colors group">
-            <div
+            <button
+              type="button"
+              aria-label="Abrir meu perfil"
               className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 ring-1 ring-primary/15 cursor-pointer"
               onClick={() => navigate("/perfil")}
             >
@@ -266,13 +287,13 @@ const Sidebar = ({ collapsed = false, onToggleCollapse }: SidebarProps) => {
               ) : (
                 <User size={15} className="text-primary" />
               )}
-            </div>
-            <div className="flex-1 min-w-0 cursor-pointer" onClick={() => navigate("/perfil")}>
+            </button>
+            <button type="button" className="flex-1 min-w-0 cursor-pointer text-left" onClick={() => navigate("/perfil")}>
               <p className="text-[12px] font-semibold text-foreground truncate leading-tight">
                 {profile?.name || "Usuário"}
               </p>
               <p className="text-[10px] text-muted-foreground/50 truncate">{profile?.email || ""}</p>
-            </div>
+            </button>
             <button
               onClick={(e) => { e.stopPropagation(); handleSignOut(); }}
               className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
@@ -285,23 +306,26 @@ const Sidebar = ({ collapsed = false, onToggleCollapse }: SidebarProps) => {
           </div>
         ) : (
           <>
-            <button
-              onClick={() => navigate("/perfil")}
-              className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center hover:bg-primary/15 transition-colors"
+          <button
+            onClick={() => navigate("/perfil")}
+            aria-label="Abrir meu perfil"
+            className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center hover:bg-primary/15 transition-colors"
               title={profile?.name || "Perfil"}
             >
               {profile?.avatar_url ? (
                 <img src={profile.avatar_url} alt="" className="w-9 h-9 rounded-lg object-cover" />
               ) : (
-                <User size={15} className="text-primary" />
+                <User aria-hidden="true" size={15} className="text-primary" />
               )}
             </button>
             <button
+              type="button"
               onClick={handleSignOut}
+              aria-label="Sair da conta"
               className="p-1.5 rounded-md text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors"
               title="Sair"
             >
-              <LogOut size={13} />
+              <LogOut aria-hidden="true" size={13} />
             </button>
           </>
         )}

@@ -1,4 +1,4 @@
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import {
   LayoutDashboard, Users, Receipt, MoreHorizontal, ClipboardList, Settings,
   MessageCircle, X, Sparkles, Plus, UserPlus, Wallet as WalletIcon, StickyNote,
@@ -88,7 +88,11 @@ const MobileBottomNav = ({ onQuickPayment }: MobileBottomNavProps) => {
     return allItems.filter((i) => normalize(i.label).includes(q));
   }, [query, allItems]);
 
-  const isActive = (path: string) => isMenuPathActive(path, location.pathname, location.search);
+  const activeMenuPaths = useMemo(
+    () => [...visibleTabs.map((tab) => tab.path), ...allItems.map((item) => item.path)],
+    [visibleTabs, allItems],
+  );
+  const isActive = (path: string) => isMenuPathActive(path, location.pathname, location.search, activeMenuPaths);
   const isInMoreSection = allItems.some((i) => isActive(i.path));
 
   // Trocar de tela fecha o menu e o botão flutuante; nada fica sobrando por cima da página nova.
@@ -117,17 +121,17 @@ const MobileBottomNav = ({ onQuickPayment }: MobileBottomNavProps) => {
     const active = isActive(item.path);
     const badge = item.path === "/chat" && chatUnread > 0 ? chatUnread : item.badge || 0;
     return (
-      <button
+      <Link
         key={item.path}
-        type="button"
-        onClick={() => go(item.path)}
+        to={item.path}
+        onClick={() => setShowMore(false)}
         aria-current={active ? "page" : undefined}
-        className={`mobile-menu-item relative flex flex-col items-center gap-1.5 p-2 rounded-xl transition-all duration-200 active:scale-95 ${
+        className={`mobile-menu-item relative flex flex-col items-center gap-1.5 p-2 rounded-xl transition-[color,background-color,box-shadow,transform] duration-200 active:scale-95 ${
           active ? "bg-primary/15 shadow-[0_0_12px_hsl(var(--primary)/0.15)]" : "hover:bg-accent/40"
         }`}
       >
         <span className={`mobile-app-icon mobile-app-icon-${menuIconTone[item.path] || "slate"}`}>
-          <item.icon size={19} strokeWidth={active ? 2.5 : 2} />
+          <item.icon aria-hidden="true" size={19} strokeWidth={active ? 2.5 : 2} />
         </span>
         {badge > 0 && (
           <span className="absolute top-1 right-2 min-w-[16px] h-4 px-1 rounded-full bg-destructive text-destructive-foreground text-[9px] font-bold flex items-center justify-center ring-2 ring-background">
@@ -137,7 +141,7 @@ const MobileBottomNav = ({ onQuickPayment }: MobileBottomNavProps) => {
         <span className={`mobile-menu-label text-[10px] font-semibold leading-tight text-center ${active ? "text-primary" : "text-muted-foreground"}`}>
           {item.label}
         </span>
-      </button>
+      </Link>
     );
   };
 
@@ -181,7 +185,7 @@ const MobileBottomNav = ({ onQuickPayment }: MobileBottomNavProps) => {
                       <span className="block text-[13px] font-bold text-foreground truncate leading-tight">{profile?.name || "Usuário"}</span>
                       <span className="block text-[11px] text-muted-foreground truncate">{profile?.email || "Meu perfil"}</span>
                     </span>
-                    <ChevronRight size={15} className="text-muted-foreground/60 shrink-0" />
+                    <ChevronRight aria-hidden="true" size={15} className="text-muted-foreground/60 shrink-0" />
                   </button>
                   <button
                     type="button"
@@ -201,6 +205,8 @@ const MobileBottomNav = ({ onQuickPayment }: MobileBottomNavProps) => {
                     onChange={(e) => setQuery(e.target.value)}
                     placeholder="Buscar no menu…"
                     aria-label="Buscar no menu"
+                    name="menu-search"
+                    autoComplete="off"
                     className="flex-1 min-w-0 bg-transparent text-[13px] text-foreground placeholder:text-muted-foreground/70 outline-none"
                   />
                   {query && (
@@ -241,7 +247,7 @@ const MobileBottomNav = ({ onQuickPayment }: MobileBottomNavProps) => {
                   className="mobile-menu-pref flex flex-col items-center gap-1 py-2 rounded-xl hover:bg-accent/40 text-muted-foreground"
                   aria-label={theme === "dark" ? "Ativar modo claro" : "Ativar modo escuro"}
                 >
-                  {theme === "dark" ? <Sun size={17} className="text-amber-400" /> : <Moon size={17} className="text-primary" />}
+                  {theme === "dark" ? <Sun aria-hidden="true" size={17} className="text-amber-400" /> : <Moon aria-hidden="true" size={17} className="text-primary" />}
                   <span className="text-[10px] font-semibold">{theme === "dark" ? "Claro" : "Escuro"}</span>
                 </button>
                 <button
@@ -250,23 +256,25 @@ const MobileBottomNav = ({ onQuickPayment }: MobileBottomNavProps) => {
                   className="mobile-menu-pref flex flex-col items-center gap-1 py-2 rounded-xl hover:bg-accent/40 text-muted-foreground"
                   aria-label={`Idioma: ${currentLang.label}. Trocar para ${nextLang.label}`}
                 >
-                  <Globe size={17} />
+                  <Globe aria-hidden="true" size={17} />
                   <span className="text-[10px] font-semibold">{currentLang.flag} {currentLang.code.split("-")[0].toUpperCase()}</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => go("/notificacoes")}
+                  aria-label="Abrir avisos"
                   className="mobile-menu-pref flex flex-col items-center gap-1 py-2 rounded-xl hover:bg-accent/40 text-muted-foreground"
                 >
-                  <Bell size={17} />
+                  <Bell aria-hidden="true" size={17} />
                   <span className="text-[10px] font-semibold">Avisos</span>
                 </button>
                 <button
                   type="button"
                   onClick={async () => { setShowMore(false); await signOut(); navigate("/"); }}
+                  aria-label="Sair da conta"
                   className="mobile-menu-pref flex flex-col items-center gap-1 py-2 rounded-xl hover:bg-destructive/10 text-destructive"
                 >
-                  <LogOut size={17} />
+                  <LogOut aria-hidden="true" size={17} />
                   <span className="text-[10px] font-semibold">Sair</span>
                 </button>
               </div>
@@ -297,7 +305,7 @@ const MobileBottomNav = ({ onQuickPayment }: MobileBottomNavProps) => {
             style={{ animationDelay: `${i * 40}ms` }}
             className="animate-slide-up flex items-center gap-2.5 pl-3 pr-4 py-2.5 rounded-full bg-card border border-border/40 shadow-xl text-foreground text-[13px] font-semibold hover:scale-105 transition-transform"
           >
-            <a.icon size={16} className="text-primary" />
+            <a.icon aria-hidden="true" size={16} className="text-primary" />
             {a.label}
           </button>
         ))}
@@ -308,7 +316,7 @@ const MobileBottomNav = ({ onQuickPayment }: MobileBottomNavProps) => {
           aria-expanded={showFab}
           className={`w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-2xl shadow-primary/30 flex items-center justify-center transition-transform active:scale-90 ${showFab ? "rotate-45" : ""}`}
         >
-          <Plus size={26} strokeWidth={2.5} />
+          <Plus aria-hidden="true" size={26} strokeWidth={2.5} />
         </button>
       </div>
 
@@ -321,33 +329,36 @@ const MobileBottomNav = ({ onQuickPayment }: MobileBottomNavProps) => {
         <div className="flex items-stretch justify-around px-1.5 pt-1 pb-1">
           {visibleTabs.map((tab) => {
             const active = tab.path === MORE ? showMore || isInMoreSection : isActive(tab.path);
-            return (
-              <button
-                key={tab.label}
-                type="button"
-                onClick={() => {
-                  if (tab.path === MORE) setShowMore((v) => !v);
-                  else go(tab.path);
-                }}
-                aria-current={active && tab.path !== MORE ? "page" : undefined}
-                aria-expanded={tab.path === MORE ? showMore : undefined}
-                className={`relative flex flex-col items-center justify-center gap-0.5 flex-1 min-h-[52px] rounded-xl transition-all duration-200 active:scale-95 ${
-                  active ? "text-primary" : "text-muted-foreground"
-                }`}
-              >
+            const className = `relative flex flex-col items-center justify-center gap-0.5 flex-1 min-h-[52px] rounded-xl transition-[color,transform,background-color] duration-200 active:scale-95 ${
+              active ? "text-primary" : "text-muted-foreground"
+            }`;
+            const content = (
+              <>
                 {active && (
                   <div className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-[3px] rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary)/0.5)] animate-scale-in" />
                 )}
-                <div className={`p-1 rounded-xl transition-all duration-200 ${active ? "scale-105" : ""}`}>
+                <div className={`p-1 rounded-xl transition-transform duration-200 ${active ? "scale-105" : ""}`}>
                   <span className={`mobile-app-icon mobile-app-icon-${menuIconTone[tab.path] || "slate"}`}>
-                    <tab.icon size={20} strokeWidth={active ? 2.5 : 2} />
+                    <tab.icon aria-hidden="true" size={20} strokeWidth={active ? 2.5 : 2} />
                   </span>
                 </div>
                 <span className={`text-[10px] font-semibold leading-none ${active ? "text-primary" : "text-muted-foreground"}`}>
                   {tab.label}
                 </span>
+              </>
+            );
+            if (tab.path === MORE) return (
+              <button
+                key={tab.label}
+                type="button"
+                onClick={() => setShowMore((v) => !v)}
+                aria-expanded={showMore}
+                className={className}
+              >
+                {content}
               </button>
             );
+            return <Link key={tab.label} to={tab.path} aria-current={active ? "page" : undefined} className={className}>{content}</Link>;
           })}
         </div>
       </nav>

@@ -31,9 +31,10 @@ const AppModeSwitcher = ({ collapsed = false }: { collapsed?: boolean }) => {
         <button
           onClick={() => go(other.value)}
           title={`Ir para ${other.label}`}
+          aria-label={`Ir para ${other.label}`}
           className="w-full h-9 rounded-lg bg-accent/30 hover:bg-accent/60 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
         >
-          <OtherIcon size={15} />
+          <OtherIcon aria-hidden="true" size={15} />
         </button>
       </div>
     );
@@ -61,7 +62,7 @@ const AppModeSwitcher = ({ collapsed = false }: { collapsed?: boolean }) => {
                   : "text-muted-foreground hover:text-foreground hover:bg-accent/40"
               }`}
             >
-              <Icon size={12} />
+              <Icon aria-hidden="true" size={12} />
               {opt.short}
             </button>
           );

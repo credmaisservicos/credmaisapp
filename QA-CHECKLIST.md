@@ -60,8 +60,8 @@ Checklist manual de validação dos fluxos críticos. Marque cada item ao testar
 - [ ] Cobrador vê apenas clientes atribuídos (`collector_assignments`)
 - [ ] Pode registrar pagamento
 
-## 10. Pagamento de Assinatura (Hubla)
-- [ ] Botão "Assinar" abre checkout Hubla
+## 10. Pagamento de Assinatura (Mercado Pago)
+- [ ] Botão "Assinar" abre checkout Mercado Pago
 - [ ] Webhook atualiza `subscriptions.status=active` e `current_period_end`
 - [ ] `subscription_expires_at` no perfil é atualizado
 - [ ] Conta sai do estado "Acesso Restrito"
