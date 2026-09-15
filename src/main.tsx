@@ -5,6 +5,7 @@ import "./glass-overrides.css";
 import "./workspace-overrides.css";
 import "./mobile-overrides.css";
 import "./menu-icons.css";
+import { isNativeApp, iniciarShellNativo } from "./lib/native";
 
 // Identifica esta publicação e garante um novo arquivo de entrada quando o CDN
 // precisar se recuperar de um artefato antigo armazenado em cache.
@@ -23,12 +24,24 @@ const MARKETING_PATHS = new Set([
 const rootElement = document.getElementById("root");
 if (!rootElement) throw new Error("Elemento raiz da aplicação não encontrado");
 
-const appModule = MARKETING_PATHS.has(window.location.pathname)
+// O Capacitor serve o `index.html` a partir da raiz, então dentro do APK/IPA o
+// `pathname` é sempre "/" — que está na lista de marketing acima. O app nativo
+// abria no site institucional e a única saída era um link da landing. Aqui a
+// raiz do app nativo passa a ser a área logada; quem não tem sessão o
+// `ProtectedRoute` manda para o login.
+if (isNativeApp() && window.location.pathname === "/") {
+  window.history.replaceState(null, "", "/dashboard");
+}
+
+const appModule = !isNativeApp() && MARKETING_PATHS.has(window.location.pathname)
   ? import("./MarketingApp.tsx")
   : import("./App.tsx");
 
 void appModule.then(({ default: RootApp }) => {
   createRoot(rootElement).render(<RootApp />);
+
+  // Splash nativo sai agora que existe interface montada por baixo dele.
+  void iniciarShellNativo();
 
   // A telemetria não compete com a primeira pintura. O ErrorBoundary ainda a
   // carrega imediatamente sob demanda se um componente falhar antes daqui.
@@ -67,7 +80,11 @@ const isPreviewHost =
   location.hostname.includes("lovableproject.com") ||
   location.hostname.includes("lovable.app") && location.hostname.startsWith("id-");
 
-if (isInIframe || isPreviewHost) {
+// No app nativo os assets já vêm dentro do pacote e a WebView serve tudo de
+// `localhost`. Um service worker ali não acrescenta offline nenhum e ainda
+// reintroduz o par "controllerchange → reload" sobre arquivos locais, que não
+// mudam sem uma nova instalação do app.
+if (isInIframe || isPreviewHost || isNativeApp()) {
   // Em preview, desregistra qualquer SW pré-existente para evitar conteúdo stale
   navigator.serviceWorker?.getRegistrations().then((regs) => regs.forEach((r) => r.unregister()));
 } else if ("serviceWorker" in navigator) {

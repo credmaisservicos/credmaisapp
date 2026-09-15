@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { isNativeApp } from "@/lib/native";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -16,6 +17,10 @@ const publish = () => subscribers.forEach((subscriber) => subscriber());
 
 const isStandalone = (): boolean => {
   if (typeof window === "undefined") return false;
+  // Dentro do APK/IPA o app já está instalado. Sem isto o aviso "instale o
+  // aplicativo" aparece dentro do próprio aplicativo — e o botão não faz nada,
+  // porque a WebView nunca dispara `beforeinstallprompt`.
+  if (isNativeApp()) return true;
   return (
     window.matchMedia?.("(display-mode: standalone)").matches ||
     (window.navigator as Navigator & { standalone?: boolean }).standalone === true

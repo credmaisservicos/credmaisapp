@@ -78,3 +78,23 @@
 @media (prefers-reduced-motion: reduce) {
   .mobile-bottom-nav *, .mobile-more-sheet * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
 }
+
+/* ---------------------------------------------------------------------------
+   Teclado aberto no app nativo.
+
+   A classe e a variável são postas por `src/lib/native.ts` ao ouvir o teclado
+   do Capacitor; no navegador nada disto é aplicado. O `capacitor.config.ts`
+   usa `resize: 'body'`, então a viewport encolhe — mas a barra inferior e o
+   botão flutuante são `position: fixed` e pousavam exatamente em cima do campo
+   que a pessoa estava preenchendo.
+--------------------------------------------------------------------------- */
+html.keyboard-open .mobile-bottom-nav,
+html.keyboard-open .mobile-fab { display: none !important; }
+
+/* O menu "Mais" tem busca própria: ele não pode sumir quando o teclado abre.
+   Como a barra saiu, ele desce e ocupa o espaço que sobrou. */
+html.keyboard-open .mobile-more-sheet { bottom: .5rem !important; }
+
+/* Sem a barra na tela, o respiro reservado para ela viraria espaço morto
+   entre o último campo e o teclado. */
+html.keyboard-open .app-content { padding-bottom: 1rem !important; }

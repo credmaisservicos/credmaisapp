@@ -22,6 +22,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import SuspenseWatchdog from "./components/SuspenseWatchdog";
 import { ConfirmProvider } from "./components/ConfirmProvider";
 import PortalSessionGuard from "./components/PortalSessionGuard";
+import NativeShell from "./components/NativeShell";
 
 import Index from "./pages/Index";
 const SiteInteligencia = lazy(() => import("./pages/site/Inteligencia"));
@@ -136,6 +137,7 @@ const App = () => (
           <BrowserRouter>
             <AppModeProvider>
             <ErrorBoundary>
+              <NativeShell />
               <PortalSessionGuard />
               <Suspense fallback={<PageLoader />}>
                 <Routes>
