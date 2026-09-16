@@ -12,6 +12,7 @@ import {
   , ChevronDown, ChevronRight, Layers, ListTree
 } from "lucide-react";
 import { computeLateFee, computeLateFeeBreakdown } from "@/lib/lateFee";
+import { applyInterestOnlyRenewalFallback, isMissingRpcError } from "@/lib/interestOnly";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -286,8 +287,25 @@ const Cobrancas = () => {
         _origin: "cobrancas",
       });
       if (error) {
-        toast({ title: "Erro ao renovar vencimento", description: error.message, variant: "destructive" });
-        throw error;
+        // Banco ainda sem a migração da RPC: renova direto pelas tabelas
+        // protegidas por RLS, do mesmo jeito que o detalhe do cliente já faz.
+        if (!isMissingRpcError(error) || !user?.id) {
+          toast({ title: "Erro ao renovar vencimento", description: error.message, variant: "destructive" });
+          throw error;
+        }
+        try {
+          await applyInterestOnlyRenewalFallback(supabase, {
+            userId: user.id,
+            installment: inst,
+            nextDueDate: options.nextDueDate,
+            received: Math.max(0, safeNumber(paidValue)),
+            method: "pix",
+            origin: "cobrancas",
+          });
+        } catch (fallbackError: any) {
+          toast({ title: "Erro ao renovar vencimento", description: fallbackError.message, variant: "destructive" });
+          throw fallbackError;
+        }
       }
       setConfirmPayId(null);
       await Promise.all([

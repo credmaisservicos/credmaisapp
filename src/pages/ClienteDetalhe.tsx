@@ -650,9 +650,7 @@ const ClienteDetalhe = () => {
         });
       }
 
-      const { error } = await (supabase as any).rpc("update_contract_atomically", {
-        _contract_id: editContract.id,
-        _contract: {
+      const contractPatch = {
         capital: cap,
         interest_rate: rate,
         num_installments: n,
@@ -664,24 +662,43 @@ const ClienteDetalhe = () => {
         total_amount: totalAmount,
         total_interest: totalInterest,
         notes: f.notes || null,
-        },
+      };
+
+      const { error } = await (supabase as any).rpc("update_contract_atomically", {
+        _contract_id: editContract.id,
+        _contract: contractPatch,
         _regenerate: editContractRegen,
         _installments: newInst.map(({ user_id: _userId, contract_id: _contractId, client_id: _clientId, status: _status, ...installment }) => installment),
       });
-      if (error) throw error;
+      if (error) {
+        // Banco ainda sem a migração da RPC: aplica a mesma mudança direto
+        // nas tabelas, protegidas por RLS, do mesmo jeito que a exclusão de
+        // contrato já faz enquanto a migração não é aplicada.
+        const missingRpc = error.code === "PGRST202" || /schema cache|could not find the function/i.test(error.message || "");
+        if (!missingRpc) throw error;
 
-      /*
-        // Apaga apenas parcelas não pagas e regera mantendo as pagas
-        const existing = installments.filter((i: any) => i.contract_id === editContract.id);
-        const paid = existing.filter((i: any) => i.status === "paid");
-        const paidNumbers = new Set(paid.map((i: any) => Number(i.installment_number)));
-        if (paid.length > n || [...paidNumbers].some((number) => number < 1 || number > n)) {
-          throw new Error("A nova quantidade não pode excluir parcelas que já foram pagas.");
+        const { error: contractError } = await supabase
+          .from("contracts")
+          .update(contractPatch)
+          .eq("id", editContract.id)
+          .eq("user_id", user.id);
+        if (contractError) throw contractError;
+
+        if (editContractRegen) {
+          const { error: deleteError } = await supabase
+            .from("contract_installments")
+            .delete()
+            .eq("contract_id", editContract.id)
+            .eq("user_id", user.id)
+            .neq("status", "paid");
+          if (deleteError) throw deleteError;
+
+          if (newInst.length > 0) {
+            const { error: insertError } = await supabase.from("contract_installments").insert(newInst as any);
+            if (insertError) throw insertError;
+          }
         }
-
       }
-
-      */
 
       toast({ title: "Contrato atualizado!", description: editContractRegen ? "Parcelas pendentes regeneradas." : undefined });
       setEditContract(null);
@@ -721,7 +738,8 @@ const ClienteDetalhe = () => {
           ["profits", "contract_id"],
           ["transactions", "contract_id"],
           ["loan_collateral", "contract_id"],
-          ["contract_events", "contract_id"],
+          // contract_events tem ON DELETE CASCADE e o authenticated só tem
+          // SELECT nela — tentar apagar aqui falharia por falta de privilégio.
           ["contract_installments", "contract_id"],
         ] as const;
         for (const [table, column] of dependentDeletes) {

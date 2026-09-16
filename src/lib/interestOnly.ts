@@ -48,6 +48,66 @@ export function interestOnlyAmount(
   return Math.round(Math.min(value, instAmount + extra) * 100) / 100;
 }
 
+/** true quando o erro do PostgREST é "RPC não existe no schema cache". */
+export function isMissingRpcError(error: { code?: string; message?: string } | null | undefined): boolean {
+  if (!error) return false;
+  return error.code === "PGRST202" || /schema cache|could not find the function/i.test(error.message || "");
+}
+
+/**
+ * Reproduz `renew_installment_interest` direto nas tabelas, para quando essa
+ * migração ainda não chegou no banco (RPC ausente no schema cache). Mantém
+ * "pagar só juros" funcionando sem depender do push da migração.
+ */
+export async function applyInterestOnlyRenewalFallback(
+  supabase: any,
+  params: {
+    userId: string;
+    installment: { id: string; client_id?: string | null; contract_id?: string | null; due_date?: string | null; late_fee?: number | string | null; installment_number?: number | string | null };
+    nextDueDate: string;
+    received: number;
+    method?: string;
+    origin?: string;
+  },
+): Promise<void> {
+  const { userId, installment, nextDueDate, received, method = "pix", origin } = params;
+  if (!(received > 0)) throw new Error("invalid_renewal_amount");
+
+  const previousDueDate = installment.due_date;
+  const { error: updateError } = await supabase
+    .from("contract_installments")
+    .update({ due_date: nextDueDate, late_fee: 0, paid_amount: 0, paid_at: null, status: "pending", payment_method: method })
+    .eq("id", installment.id)
+    .eq("user_id", userId);
+  if (updateError) throw updateError;
+
+  const lateFeeAmount = Math.max(0, Number(installment.late_fee || 0));
+  const { error: transactionError } = await supabase.from("transactions").insert({
+    user_id: userId,
+    amount: received,
+    type: "payment",
+    category: "interest_renewal",
+    description: `Renovação por pagamento somente dos juros${origin ? ` (${origin})` : ""}`,
+    client_id: installment.client_id,
+    contract_id: installment.contract_id,
+    installment_id: installment.id,
+    principal_amount: 0,
+    interest_amount: Math.max(0, received - lateFeeAmount),
+    fee_amount: lateFeeAmount,
+  });
+  const { error: profitError } = transactionError ? { error: null } : await supabase.from("profits").insert({
+    user_id: userId,
+    amount: received,
+    description: `Juros de renovação · parcela #${installment.installment_number ?? "-"}`,
+    client_id: installment.client_id,
+    installment_id: null,
+  });
+  if (transactionError || profitError) {
+    await supabase.from("contract_installments").update({ due_date: previousDueDate }).eq("id", installment.id).eq("user_id", userId);
+    throw transactionError || profitError;
+  }
+}
+
 /** Próximo vencimento da renovação, respeitando a frequência do contrato. */
 export function nextInterestDueDate(
   currentDueDate: string,

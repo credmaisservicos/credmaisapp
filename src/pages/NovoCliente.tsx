@@ -1847,8 +1847,10 @@ const NovoCliente = () => {
 
       {/* Live summary stays in the form flow so it never covers fields or actions. */}
       {step === 2 && calc && parseFloat(capital) > 0 && (
-        <div className="relative z-10 mx-auto mt-5 w-full max-w-[520px] md:sticky md:top-4 md:ml-auto md:mr-0">
-          <div className="rounded-2xl border border-primary/25 bg-card/95 p-3 shadow-xl shadow-black/20 backdrop-blur">
+        <div className="relative z-0 mx-auto mt-5 w-full max-w-[520px] md:sticky md:top-4 md:ml-auto md:mr-0">
+          {/* Sem backdrop-blur: em WebViews mobile (Capacitor) esse filtro some com o
+              repaint ao rolar e o card passa a parecer "grudado" por cima do rodapé. */}
+          <div className="rounded-2xl border border-primary/25 bg-card p-3 shadow-xl shadow-black/20">
             <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-[0.16em] text-primary">Resumo ao vivo</p>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               <div className="rounded-xl bg-muted/50 px-2.5 py-2 text-center">
