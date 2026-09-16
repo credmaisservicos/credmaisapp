@@ -1,6 +1,7 @@
 -- Atomic, tenant-scoped mutations used by the client and contract screens.
 -- This migration only creates functions; it does not touch existing rows.
 
+DROP FUNCTION IF EXISTS public.update_contract_atomically(uuid, jsonb, boolean, jsonb);
 CREATE OR REPLACE FUNCTION public.update_contract_atomically(
   _contract_id uuid,
   _contract jsonb,
@@ -136,6 +137,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.delete_contract_atomically(uuid);
 CREATE OR REPLACE FUNCTION public.delete_contract_atomically(_contract_id uuid)
 RETURNS void
 LANGUAGE plpgsql
@@ -185,6 +187,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.delete_client_cascade(uuid);
 CREATE OR REPLACE FUNCTION public.delete_client_cascade(_client_id uuid)
 RETURNS void
 LANGUAGE plpgsql
