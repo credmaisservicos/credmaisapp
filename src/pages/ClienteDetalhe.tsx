@@ -708,7 +708,38 @@ const ClienteDetalhe = () => {
       const { error } = await (supabase as any).rpc("delete_contract_atomically", {
         _contract_id: contractId,
       });
-      if (error) throw error;
+      if (error) {
+        // Older self-hosted Supabase instances may not have the RPC in the
+        // PostgREST schema cache yet. Keep deletion usable while that
+        // migration is being applied, deleting dependents before the parent.
+        const missingRpc = error.code === "PGRST202" || /schema cache|could not find the function/i.test(error.message || "");
+        if (!missingRpc || !user?.id) throw error;
+
+        const dependentDeletes = [
+          ["client_notifications", "contract_id"],
+          ["collection_attempts", "contract_id"],
+          ["profits", "contract_id"],
+          ["transactions", "contract_id"],
+          ["loan_collateral", "contract_id"],
+          ["contract_events", "contract_id"],
+          ["contract_installments", "contract_id"],
+        ] as const;
+        for (const [table, column] of dependentDeletes) {
+          const { error: deleteError } = await (supabase as any)
+            .from(table)
+            .delete()
+            .eq(column, contractId)
+            .eq("user_id", user.id);
+          if (deleteError) throw deleteError;
+        }
+
+        const { error: contractDeleteError } = await supabase
+          .from("contracts")
+          .delete()
+          .eq("id", contractId)
+          .eq("user_id", user.id);
+        if (contractDeleteError) throw contractDeleteError;
+      }
       // Deleta transações ligadas ao contrato
       // Deleta o contrato
       toast({ title: "Empréstimo excluído com sucesso!" });
