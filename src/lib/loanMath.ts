@@ -420,7 +420,10 @@ export function evaluateLoanWarnings(
   const out: LoanWarning[] = [];
   if (!result) return out;
 
-  const rate = input.rate ?? result.derivedRate ?? 0;
+  const finite = (value: unknown) => Number.isFinite(Number(value)) ? Number(value) : 0;
+  const capital = finite(input.capital);
+  const totalInterest = finite(result.totalInterest);
+  const rate = finite(input.rate ?? result.derivedRate);
   const f = input.frequency;
   // Taxa equivalente mensal aproximada (juros simples) p/ comparar
   const monthlyEq =
@@ -443,11 +446,11 @@ export function evaluateLoanWarnings(
     });
   }
 
-  if (result.totalInterest > input.capital * 2) {
+  if (totalInterest > capital * 2) {
     out.push({
       level: "warn",
       title: "Juros maiores que 2× o capital",
-      message: `Cliente vai pagar R$ ${result.totalInterest.toFixed(2)} de juros sobre R$ ${input.capital.toFixed(2)}.`,
+      message: `Cliente vai pagar R$ ${totalInterest.toFixed(2)} de juros sobre R$ ${capital.toFixed(2)}.`,
     });
   }
 
@@ -463,7 +466,7 @@ export function evaluateLoanWarnings(
     out.push({
       level: "info",
       title: "Atenção: parcela final pesada",
-      message: `Última parcela inclui o capital — R$ ${result.schedule[result.schedule.length - 1].toFixed(2)}.`,
+      message: `Última parcela inclui o capital — R$ ${finite(result.schedule[result.schedule.length - 1]).toFixed(2)}.`,
     });
   }
 
@@ -476,7 +479,7 @@ export function evaluateLoanWarnings(
   }
 
   if (input.loanMode === "grace" && (input.gracePeriods ?? 0) > 0) {
-    const totalGraceInterest = input.capital * (rate / 100) * (input.gracePeriods ?? 0);
+    const totalGraceInterest = capital * (rate / 100) * finite(input.gracePeriods);
     out.push({
       level: "info",
       title: "Juros acumulam na carência",
@@ -484,7 +487,7 @@ export function evaluateLoanWarnings(
     });
   }
 
-  if (input.capital >= 10000) {
+  if (capital >= 10000) {
     out.push({
       level: "info",
       title: "Valor alto — exija garantia",

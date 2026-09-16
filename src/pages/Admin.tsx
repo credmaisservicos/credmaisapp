@@ -11,7 +11,7 @@ import PlatformSettingsPanel from "@/components/admin/PlatformSettingsPanel";
 import ClientErrorsPanel from "@/components/admin/ClientErrorsPanel";
 import { AdminFinancePanel, AdminOverviewPanel, AdminSecurityPanel } from "@/components/admin/AdminOperationsPanels";
 import { useQuery } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -29,7 +29,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
 } from "@/components/ui/alert-dialog";
-import { formatBR } from "@/lib/dateUtils";
+import { formatBR, formatBRDateTime, todayLocalISO } from "@/lib/dateUtils";
 import { PLANS, normalizeTier } from "@/lib/plans";
 import ErrorState from "@/components/feedback/ErrorState";
 import { fetchAll } from "@/lib/fetchAll";
@@ -40,6 +40,16 @@ const csvCell = (value: unknown) => {
   if (/^[=+\-@]/.test(text)) text = `'${text}`;
   return `"${text.replace(/"/g, '""')}"`;
 };
+
+const safeAdminMoney = (value: unknown) => {
+  const number = Number(value ?? 0);
+  return (Number.isFinite(number) ? number : 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+const safeAdminNumber = (value: unknown) => {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? number : 0;
+};
+const safeAdminDateTime = (value: unknown) => formatBRDateTime(typeof value === "string" ? value : null) || "data indisponível";
 
 type UserRow = {
   id: string;
@@ -176,8 +186,8 @@ const Admin = () => {
       const now = new Date();
       return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     }).length;
-    const totalLoaned = users.reduce((s, u) => s + Number(u.loan_balance || 0), 0);
-    const totalProfit = users.reduce((s, u) => s + Number(u.profit_balance || 0), 0);
+    const totalLoaned = users.reduce((s, u) => s + safeAdminNumber(u.loan_balance), 0);
+    const totalProfit = users.reduce((s, u) => s + safeAdminNumber(u.profit_balance), 0);
     return { total, blocked, admins, monthly, yearly, lifetime, expired, active, newThisMonth, totalLoaned, totalProfit, mrr, churn };
   }, [users]);
 
@@ -330,7 +340,7 @@ const Admin = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `usuarios-${new Date().toISOString().split("T")[0]}.csv`;
+    a.download = `usuarios-${todayLocalISO()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -380,13 +390,13 @@ const Admin = () => {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => setCreateOpen(true)} className="btn-ghost">
+            <button type="button" onClick={() => setCreateOpen(true)} className="btn-ghost">
               <UserCheck size={14} /> Liberar acesso
             </button>
-            <a href="/admin/bot-audit" className="btn-ghost">
+            <Link to="/admin/bot-audit" className="btn-ghost">
               <Activity size={14} /> Bot Audit
-            </a>
-            <button onClick={exportCSV} className="btn-ghost">
+            </Link>
+            <button type="button" onClick={exportCSV} className="btn-ghost">
               <Download size={14} /> Exportar CSV
             </button>
           </div>
@@ -792,15 +802,13 @@ const Admin = () => {
               <DetailRow
                 label="Expira em"
                 value={
-                  detailUser.subscription_expires_at
-                    ? new Date(detailUser.subscription_expires_at).toLocaleString("pt-BR")
-                    : "—"
+                  safeAdminDateTime(detailUser.subscription_expires_at)
                 }
               />
-              <DetailRow label="Cadastrado em" value={new Date(detailUser.created_at).toLocaleString("pt-BR")} />
-              <DetailRow label="Capital emprestado" value={`R$ ${Number(detailUser.loan_balance || 0).toFixed(2)}`} />
-              <DetailRow label="Lucro acumulado" value={`R$ ${Number(detailUser.profit_balance || 0).toFixed(2)}`} />
-              <DetailRow label="Despesas" value={`R$ ${Number(detailUser.expense_balance || 0).toFixed(2)}`} />
+              <DetailRow label="Cadastrado em" value={safeAdminDateTime(detailUser.created_at)} />
+              <DetailRow label="Capital emprestado" value={`R$ ${safeAdminMoney(detailUser.loan_balance)}`} />
+              <DetailRow label="Lucro acumulado" value={`R$ ${safeAdminMoney(detailUser.profit_balance)}`} />
+              <DetailRow label="Despesas" value={`R$ ${safeAdminMoney(detailUser.expense_balance)}`} />
               <div className="flex flex-wrap gap-2 pt-2">
                 {detailUser.is_admin && <Badge className="bg-primary/20 text-primary border-0">Admin</Badge>}
                 {detailUser.is_blocked && <Badge className="bg-destructive/20 text-destructive border-0">Bloqueado</Badge>}
@@ -882,6 +890,7 @@ const Admin = () => {
 // ============= sub components =============
 const NavButton = ({ active, onClick, icon: Icon, label, badge }: any) => (
   <button
+    type="button"
     onClick={onClick}
     className={`shrink-0 whitespace-nowrap px-3 sm:px-4 py-3 text-sm font-medium transition-colors flex items-center gap-2 border-b-2 -mb-px ${
       active
@@ -974,9 +983,9 @@ const AdminAutomacoesWrapper = () => {
         <div className="p-4 bg-muted/30 font-mono text-[11px] space-y-1.5 max-h-[400px] overflow-y-auto">
           {!loadError && logs.map((log) => (
             <div key={log.id} className="flex gap-3 border-b border-border/5 py-1 last:border-0">
-              <span className="text-muted-foreground shrink-0">{new Date(log.created_at).toLocaleTimeString()}</span>
+              <span className="text-muted-foreground shrink-0">{safeAdminDateTime(log.created_at)}</span>
               <span className={log.level === "error" ? "text-red-400" : log.level === "warning" ? "text-amber-400" : "text-emerald-400"}>
-                [{log.level.toUpperCase()}]
+                [{String(log.level || "info").toUpperCase()}]
               </span>
               <span className="text-foreground/80">{log.message}</span>
             </div>
@@ -1032,7 +1041,7 @@ const AdminLogs = () => {
              {!loadError && logs.map((log) => (
                <tr key={log.id} className="hover:bg-accent/20 transition-colors">
                  <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
-                   {new Date(log.created_at).toLocaleString("pt-BR")}
+                    {safeAdminDateTime(log.created_at)}
                  </td>
                  <td className="px-4 py-3 font-medium">
                    <Badge variant="outline" className={
@@ -1085,12 +1094,14 @@ const KpiCard = ({
 );
 
 const PlanBar = ({ label, value, total, color }: { label: string; value: number; total: number; color: string }) => {
-  const pct = total ? (value / total) * 100 : 0;
+  const safeTotal = Math.max(0, safeAdminNumber(total));
+  const safeValue = Math.max(0, safeAdminNumber(value));
+  const pct = safeTotal > 0 ? Math.min(100, (safeValue / safeTotal) * 100) : 0;
   return (
     <div>
       <div className="flex items-center justify-between text-xs mb-1.5">
         <span className="text-muted-foreground">{label}</span>
-        <span className="text-foreground font-medium">{value} ({pct.toFixed(0)}%)</span>
+        <span className="text-foreground font-medium">{safeValue} ({pct.toFixed(0)}%)</span>
       </div>
       <div className="h-2 rounded-full bg-muted overflow-hidden">
         <div className={`h-full ${color} transition-all`} style={{ width: `${pct}%` }} />

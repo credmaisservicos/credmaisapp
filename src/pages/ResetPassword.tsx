@@ -354,11 +354,14 @@ const ResetPassword = () => {
               </p>
               <form onSubmit={handleRequest} className="space-y-4">
                 <div>
-                  <label className="text-[11px] font-medium text-white/50 uppercase tracking-wider mb-1.5 block">E-mail</label>
+                  <label htmlFor="reset-email" className="text-[11px] font-medium text-white/50 uppercase tracking-wider mb-1.5 block">E-mail</label>
                   <div className="relative">
                     <Mail size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30" />
                     <input
+                      id="reset-email"
+                      name="email"
                       type="email"
+                      autoComplete="email"
                       required
                       placeholder="seu@email.com"
                       value={email}
@@ -383,11 +386,14 @@ const ResetPassword = () => {
               <p className="text-white/40 text-sm mb-6">Defina uma senha forte para sua conta.</p>
               <form onSubmit={handleUpdate} className="space-y-4">
                 <div>
-                  <label className="text-[11px] font-medium text-white/50 uppercase tracking-wider mb-1.5 block">Nova senha</label>
+                  <label htmlFor="reset-password" className="text-[11px] font-medium text-white/50 uppercase tracking-wider mb-1.5 block">Nova senha</label>
                   <div className="relative">
                     <Lock size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30" />
                     <input
+                      id="reset-password"
+                      name="password"
                       type={showPwd ? "text" : "password"}
+                      autoComplete="new-password"
                       required
                       minLength={6}
                       placeholder="Mínimo 6 caracteres"
@@ -401,11 +407,14 @@ const ResetPassword = () => {
                   </div>
                 </div>
                 <div>
-                  <label className="text-[11px] font-medium text-white/50 uppercase tracking-wider mb-1.5 block">Confirmar senha</label>
+                  <label htmlFor="reset-password-confirm" className="text-[11px] font-medium text-white/50 uppercase tracking-wider mb-1.5 block">Confirmar senha</label>
                   <div className="relative">
                     <Lock size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30" />
                     <input
+                      id="reset-password-confirm"
+                      name="password_confirmation"
                       type={showPwd ? "text" : "password"}
+                      autoComplete="new-password"
                       required
                       minLength={6}
                       placeholder="Repita a nova senha"

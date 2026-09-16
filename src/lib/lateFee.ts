@@ -2,6 +2,8 @@
 // aplicado sobre o valor acumulado (parcela + juros já acumulados).
 // Ex.: parcela 100 → 1 dia = 104 → 2 dias = 108,16 → 3 dias = 112,49...
 // Não existe mais "multa mensal/fixa": apenas o percentual diário.
+import { parseLocalDate } from "@/lib/dateUtils";
+
 export const DEFAULT_DAILY_LATE_RATE = 4; // % ao dia
 
 export interface LateFeeInput {
@@ -39,6 +41,11 @@ export interface LateFeeInput {
   } | null;
 }
 
+const finiteNumber = (value: unknown) => {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? number : 0;
+};
+
 /** Lê um campo do contrato, esteja ele achatado na parcela ou aninhado. */
 function doContrato(inst: LateFeeInput, campo: "daily_interest_percent" | "max_interest_cap_percent" | "daily_penalty_type" | "daily_penalty_value") {
   const direto = (inst as any)?.[campo];
@@ -48,9 +55,9 @@ function doContrato(inst: LateFeeInput, campo: "daily_interest_percent" | "max_i
 
 /** Teto em valor absoluto (R$), ou null quando o contrato não define teto. */
 export function interestCapOf(inst: LateFeeInput): number | null {
-  const pct = Number(doContrato(inst, "max_interest_cap_percent"));
+  const pct = finiteNumber(doContrato(inst, "max_interest_cap_percent"));
   if (!Number.isFinite(pct) || pct <= 0) return null;
-  const base = Number(inst?.amount || 0);
+  const base = Math.max(0, finiteNumber(inst?.amount));
   if (!base) return null;
   return Math.round(base * (pct / 100) * 100) / 100;
 }
@@ -58,8 +65,8 @@ export function interestCapOf(inst: LateFeeInput): number | null {
 /** Dias inteiros de atraso (0 se ainda não venceu). */
 export function daysLateOf(inst: LateFeeInput, now: Date = new Date()): number {
   if (!inst?.due_date) return 0;
-  const due = new Date(inst.due_date);
-  if (isNaN(due.getTime())) return 0;
+  const due = parseLocalDate(inst.due_date);
+  if (!due) return 0;
   const d0 = new Date(due.getFullYear(), due.getMonth(), due.getDate()).getTime();
   const n0 = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   return Math.max(0, Math.floor((n0 - d0) / 86400000));
@@ -67,19 +74,19 @@ export function daysLateOf(inst: LateFeeInput, now: Date = new Date()): number {
 
 /** Taxa diária efetiva do contrato (fallback 4% a.d.). */
 export function dailyRateOf(inst: LateFeeInput): number {
-  const pct = Number(doContrato(inst, "daily_interest_percent") || 0);
+  const pct = finiteNumber(doContrato(inst, "daily_interest_percent"));
   return pct > 0 ? pct : DEFAULT_DAILY_LATE_RATE;
 }
 
 /** Juros de atraso acumulados (composto diário). */
 export function computeLateFee(inst: LateFeeInput, now: Date = new Date()): number {
   if (!inst) return 0;
-  const stored = Number(inst.late_fee || 0);
+  const stored = Math.max(0, finiteNumber(inst.late_fee));
 
   // Já paga/cancelada: mostra o valor que foi efetivamente cobrado.
   if (inst.status === "paid" || inst.status === "cancelled") return stored;
 
-  const base = Number(inst.amount || 0);
+  const base = Math.max(0, finiteNumber(inst.amount));
   if (!base) return stored;
 
   const days = daysLateOf(inst, now);
@@ -87,7 +94,7 @@ export function computeLateFee(inst: LateFeeInput, now: Date = new Date()): numb
 
   const rate = dailyRateOf(inst) / 100;
   const interest = base * (Math.pow(1 + rate, days) - 1);
-  const penaltyValue = Math.max(0, Number(doContrato(inst, "daily_penalty_value")) || 0);
+  const penaltyValue = Math.max(0, finiteNumber(doContrato(inst, "daily_penalty_value")));
   const penalty = doContrato(inst, "daily_penalty_type") === "fixed"
     ? penaltyValue * days
     : base * (penaltyValue / 100) * days;
@@ -99,12 +106,12 @@ export function computeLateFee(inst: LateFeeInput, now: Date = new Date()): numb
 }
 
 export function totalDue(inst: LateFeeInput, now?: Date): number {
-  return Number(inst?.amount || 0) + computeLateFee(inst, now);
+  return Math.max(0, finiteNumber(inst?.amount)) + computeLateFee(inst, now);
 }
 
 /** Saldo realmente exigível, descontando pagamentos parciais já registrados. */
 export function outstandingDue(inst: LateFeeInput, now?: Date): number {
-  return Math.max(0, totalDue(inst, now) - Number(inst?.paid_amount || 0));
+  return Math.max(0, totalDue(inst, now) - Math.max(0, finiteNumber(inst?.paid_amount)));
 }
 
 export interface LateFeeBreakdown {
@@ -119,7 +126,8 @@ export interface LateFeeBreakdown {
 }
 
 export function computeLateFeeBreakdown(inst: LateFeeInput, now: Date = new Date()): LateFeeBreakdown {
-  const base = Number(inst?.amount || 0);
+  const baseValue = Number(inst?.amount ?? 0);
+  const base = Number.isFinite(baseValue) ? Math.max(0, baseValue) : 0;
   const total = computeLateFee(inst, now);
   const daysLate = daysLateOf(inst, now);
   const jurosPct = dailyRateOf(inst);
@@ -143,9 +151,12 @@ export function computeLateFeeBreakdown(inst: LateFeeInput, now: Date = new Date
 
 /** Calcula desconto somente sobre encargos ainda pendentes, nunca sobre o principal. */
 export function calculateFeeDiscount(remainingDue: number, totalFees: number, percent: number) {
-  const remaining = Math.max(0, Math.round(Number(remainingDue || 0) * 100) / 100);
-  const discountable = Math.max(0, Math.min(Number(totalFees || 0), remaining));
-  const safePercent = Math.max(0, Math.min(100, Number(percent || 0)));
+  const remainingValue = Number(remainingDue ?? 0);
+  const feesValue = Number(totalFees ?? 0);
+  const percentValue = Number(percent ?? 0);
+  const remaining = Math.max(0, Math.round((Number.isFinite(remainingValue) ? remainingValue : 0) * 100) / 100);
+  const discountable = Math.max(0, Math.min(Number.isFinite(feesValue) ? feesValue : 0, remaining));
+  const safePercent = Math.max(0, Math.min(100, Number.isFinite(percentValue) ? percentValue : 0));
   const discount = Math.round(discountable * safePercent) / 100;
   return {
     discountable,

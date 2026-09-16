@@ -5,9 +5,10 @@ import {
 import { formatBR, parseLocalDate } from "@/lib/dateUtils";
 import { computeLateFeeBreakdown } from "@/lib/lateFee";
 
-const fmt = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+const fmt = (v: number) => (Number.isFinite(v) ? v : 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
 const relTime = (iso: string) => {
   const d = new Date(iso).getTime();
+  if (!Number.isFinite(d)) return "agora";
   const diff = Math.max(0, Date.now() - d);
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return "agora";
@@ -38,15 +39,18 @@ const InstallmentRowInner = ({
   const isOverdue = inst.status === "overdue";
   const isPaid = inst.status === "paid";
   const now = new Date(); now.setHours(0, 0, 0, 0);
-  const dueDate = parseLocalDate(inst.due_date) ?? new Date(inst.due_date);
-  const daysDiff = Math.floor((now.getTime() - new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate()).getTime()) / 86400000);
-  const daysText = isOverdue ? `${daysDiff}d atrasada` : !isPaid ? (daysDiff < 0 ? `em ${Math.abs(daysDiff)}d` : daysDiff === 0 ? "vence hoje" : "") : "";
+  const dueDate = parseLocalDate(inst.due_date);
+  const daysDiff = dueDate
+    ? Math.floor((now.getTime() - new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate()).getTime()) / 86400000)
+    : 0;
+  const daysText = !dueDate ? "" : isOverdue ? `${daysDiff}d atrasada` : !isPaid ? (daysDiff < 0 ? `em ${Math.abs(daysDiff)}d` : daysDiff === 0 ? "vence hoje" : "") : "";
   const fee = computeLateFeeBreakdown(inst);
   const showFee = !isPaid && fee.total > 0;
 
   const persistedAt = inst.last_collected_at;
   const persistedCh = inst.last_collected_channel;
-  const count = Number(inst.collection_count || 0);
+  const rawCount = Number(inst.collection_count);
+  const count = Number.isFinite(rawCount) ? Math.max(0, rawCount) : 0;
   const channel = lastAttempt?.channel || persistedCh;
   const at = lastAttempt?.created_at || persistedAt;
   const showCollected = !isPaid && (lastAttempt || persistedAt);
@@ -78,6 +82,7 @@ const InstallmentRowInner = ({
     >
       {!isPaid && (
         <button
+          type="button"
           onClick={(e) => { e.stopPropagation(); onToggleSelect(inst.id); }}
           className="shrink-0 p-1 rounded hover:bg-accent transition-colors focus-ring"
           title="Selecionar" aria-label="Selecionar parcela"
@@ -111,6 +116,7 @@ const InstallmentRowInner = ({
           )}
           {showCollected && at && (
             <button
+              type="button"
               onClick={(e) => { e.stopPropagation(); onShowHistory(inst.id, inst.client_name); }}
               className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-warning/15 text-warning hover:bg-warning/25 text-[10px] font-medium border border-warning/25"
               title={`Cobrado via ${channel}${count > 0 ? ` • ${count}x` : ""} — clique para ver histórico`}
@@ -137,6 +143,7 @@ const InstallmentRowInner = ({
         {!isPaid && (
           <>
             <button
+              type="button"
               onClick={(e) => { e.stopPropagation(); onWhatsApp(inst); }}
               className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-lg bg-gradient-to-br from-success to-success/85 text-success-foreground text-xs font-semibold hover:shadow-md hover:shadow-success/30 transition-all active:scale-95 focus-ring"
               title="Cobrar via WhatsApp" aria-label="Cobrar via WhatsApp"
@@ -145,6 +152,7 @@ const InstallmentRowInner = ({
             </button>
             {hasPixKey && (
               <button
+                type="button"
                 onClick={(e) => { e.stopPropagation(); onCopyPix(inst); }}
                 className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-lg bg-primary/10 text-primary border border-primary/25 text-xs font-semibold hover:bg-primary/20 transition-all active:scale-95 focus-ring"
                 title="Copiar chave PIX" aria-label="Copiar chave PIX"
@@ -153,16 +161,18 @@ const InstallmentRowInner = ({
               </button>
             )}
             {inst.client_email && (
-              <button
-                onClick={(e) => { e.stopPropagation(); onEmail(inst); }}
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onEmail(inst); }}
                 className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-2 rounded-lg bg-primary/10 text-primary border border-primary/25 text-xs font-semibold hover:bg-primary/20 transition-all active:scale-95 focus-ring"
                 title="Cobrar via E-mail" aria-label="Cobrar via E-mail"
               >
                 <Mail size={13} />
               </button>
             )}
-            <button
-              onClick={(e) => { e.stopPropagation(); onMarkPaid(inst.id); }}
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onMarkPaid(inst.id); }}
               className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-lg bg-success/12 text-success border border-success/25 text-xs font-semibold hover:bg-success/20 transition-all active:scale-95 focus-ring"
               title="Marcar como paga" aria-label="Marcar como paga"
             >

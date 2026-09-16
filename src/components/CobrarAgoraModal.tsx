@@ -33,8 +33,13 @@ interface Props {
   installments: CobrarInstallment[];
 }
 
-const fmtBRL = (v: number) =>
-  v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const safeNumber = (value: unknown) => {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? number : 0;
+};
+
+const fmtBRL = (v: unknown) =>
+  safeNumber(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const METHODS = [
   { id: "pix", label: "PIX", icon: Smartphone, hint: "Confirmação instantânea" },
@@ -223,10 +228,10 @@ const CobrarAgoraModal = ({ open, onClose, title = "Cobrar agora", installments 
                   </div>
                 )}
                 {installments.map((inst) => {
-                  const due = parseLocalDate(inst.due_date) ?? new Date(inst.due_date);
-                  const isOverdue = due < today;
+                  const due = parseLocalDate(inst.due_date);
+                  const isOverdue = !!due && due < today;
                   const t0 = new Date(); t0.setHours(0,0,0,0);
-                  const isToday = new Date(due.getFullYear(), due.getMonth(), due.getDate()).getTime() === t0.getTime();
+                  const isToday = !!due && new Date(due.getFullYear(), due.getMonth(), due.getDate()).getTime() === t0.getTime();
                   const checked = selected.has(inst.id);
                   return (
                     <label

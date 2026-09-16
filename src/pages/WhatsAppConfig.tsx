@@ -178,7 +178,8 @@ const WhatsAppConfig = () => {
     try {
       const data = await invokeEvolution({ action: "connectInstance", instanceName });
 
-      const qr = data?.base64 || data?.qrcode?.base64 || data?.qrcode?.code || data?.code;
+      const qrRaw = data?.base64 || data?.qrcode?.base64 || data?.qrcode?.code || data?.code;
+      const qr = typeof qrRaw === "string" && qrRaw.trim() ? qrRaw : null;
       
       if (qr) {
         const src = qr.startsWith("data:") ? qr : `data:image/png;base64,${qr.replace(/^data:image\/[a-z]+;base64,/, "")}`;

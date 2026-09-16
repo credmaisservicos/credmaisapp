@@ -11,7 +11,16 @@ import { formatBR } from "@/lib/dateUtils";
 import { reportableInstallments, summarizeReportInstallments } from "@/lib/reportMetrics";
 import { buildMonthlyReportRange } from "@/lib/reportPeriod";
 
-const fmt = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const safeNumber = (value: unknown) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+};
+const fmt = (v: number) => safeNumber(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const boundedRatio = (value: unknown, total: unknown) => {
+  const denominator = safeNumber(total);
+  if (denominator <= 0) return 0;
+  return Math.min(100, Math.max(0, (safeNumber(value) / denominator) * 100));
+};
 const csvCell = (value: unknown) => {
   const raw = value == null ? "" : String(value);
   const safe = /^[=+\-@]/.test(raw.trimStart()) ? `'${raw}` : raw;
@@ -63,9 +72,9 @@ const Relatorios = () => {
     // assim o último pagamento não desaparece depois da quitação.
     const installmentData = reportableInstallments(installmentDataRaw, contractsRaw);
 
-    const totalProfit = profitData.reduce((a: number, p: any) => a + Number(p.amount), 0);
-    const totalExpense = expenseData.reduce((a: number, e: any) => a + Number(e.amount), 0);
-    const totalReceived = receivedInstallments.reduce((a: number, i: any) => a + Number(i.paid_amount || i.amount), 0);
+    const totalProfit = profitData.reduce((a: number, p: any) => a + safeNumber(p.amount), 0);
+    const totalExpense = expenseData.reduce((a: number, e: any) => a + safeNumber(e.amount), 0);
+    const totalReceived = receivedInstallments.reduce((a: number, i: any) => a + safeNumber(i.paid_amount ?? i.amount), 0);
     const installmentSummary = summarizeReportInstallments(installmentData);
 
     setData({
@@ -112,19 +121,19 @@ const Relatorios = () => {
     if (!data) return;
     let csv = "RELATÓRIO MENSAL;" + csvCell(monthLabel.toUpperCase()) + "\r\n\r\n";
     csv += "RESUMO\r\n";
-    csv += `Lucro Total;${data.totalProfit.toFixed(2).replace(".", ",")}\r\n`;
-    csv += `Gastos Total;${data.totalExpense.toFixed(2).replace(".", ",")}\r\n`;
-    csv += `Saldo;${data.balance.toFixed(2).replace(".", ",")}\r\n`;
-    csv += `Recebido (parcelas);${data.totalReceived.toFixed(2).replace(".", ",")}\r\n`;
-    csv += `Em atraso;${data.totalOverdue.toFixed(2).replace(".", ",")}\r\n\r\n`;
+    csv += `Lucro Total;${safeNumber(data.totalProfit).toFixed(2).replace(".", ",")}\r\n`;
+    csv += `Gastos Total;${safeNumber(data.totalExpense).toFixed(2).replace(".", ",")}\r\n`;
+    csv += `Saldo;${safeNumber(data.balance).toFixed(2).replace(".", ",")}\r\n`;
+    csv += `Recebido (parcelas);${safeNumber(data.totalReceived).toFixed(2).replace(".", ",")}\r\n`;
+    csv += `Em atraso;${safeNumber(data.totalOverdue).toFixed(2).replace(".", ",")}\r\n\r\n`;
 
     csv += "LUCROS\r\nData;Descrição;Valor\r\n";
-    data.profitData.forEach((p: any) => {
-      csv += `${csvCell(formatBR(p.date))};${csvCell(p.description)};${Number(p.amount).toFixed(2).replace(".", ",")}\r\n`;
+    (data.profitData || []).forEach((p: any) => {
+      csv += `${csvCell(formatBR(p.date))};${csvCell(p.description)};${safeNumber(p.amount).toFixed(2).replace(".", ",")}\r\n`;
     });
     csv += "\r\nGASTOS\r\nData;Descrição;Categoria;Valor\r\n";
-    data.expenseData.forEach((e: any) => {
-      csv += `${csvCell(formatBR(e.date))};${csvCell(e.description)};${csvCell(e.category || "-")};${Number(e.amount).toFixed(2).replace(".", ",")}\r\n`;
+    (data.expenseData || []).forEach((e: any) => {
+      csv += `${csvCell(formatBR(e.date))};${csvCell(e.description)};${csvCell(e.category || "-")};${safeNumber(e.amount).toFixed(2).replace(".", ",")}\r\n`;
     });
 
     const blob = new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8" });
@@ -277,15 +286,15 @@ const Relatorios = () => {
           <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:gap-3">
             <div className="col-span-2 flex min-w-0 items-center gap-3 rounded-xl border border-border/40 bg-card/60 px-3 py-2.5 sm:col-span-1">
               <Calendar size={16} className="text-primary shrink-0" />
-              <input type="month" value={month} onChange={(e) => setMonth(e.target.value)}
+              <input id="report-month" name="report_month" type="month" value={month} onChange={(e) => setMonth(e.target.value)}
                 aria-label="Mês do relatório" className="min-w-0 flex-1 bg-transparent text-sm font-bold text-foreground focus:outline-none [color-scheme:dark]" />
             </div>
             <div className="h-10 w-px bg-border/20 hidden sm:block mx-1" />
             <div className="contents sm:flex sm:items-center sm:gap-2">
-              <button onClick={handleExportCSV} disabled={!data || loading} className="flex items-center justify-center gap-2 rounded-xl border border-border/40 bg-muted/40 px-4 py-2.5 text-xs font-bold hover:bg-muted/60 disabled:opacity-50">
+              <button type="button" onClick={handleExportCSV} disabled={!data || loading} className="flex items-center justify-center gap-2 rounded-xl border border-border/40 bg-muted/40 px-4 py-2.5 text-xs font-bold hover:bg-muted/60 disabled:opacity-50">
                 <Download size={15} /> CSV
               </button>
-              <button onClick={handleExportPDF} disabled={!data || loading} className="flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+              <button type="button" onClick={handleExportPDF} disabled={!data || loading} className="flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
                 <FileDown size={15} /> PDF
               </button>
             </div>
@@ -303,7 +312,7 @@ const Relatorios = () => {
           <AlertTriangle className="mx-auto h-10 w-10 text-destructive" />
           <p className="mt-3 font-semibold text-foreground">Não foi possível gerar o relatório</p>
           <p className="mx-auto mt-1 max-w-lg text-sm text-muted-foreground">{reportError}</p>
-          <button onClick={() => void fetchReport()} className="mt-4 rounded-xl border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-muted">
+          <button type="button" onClick={() => void fetchReport()} className="mt-4 rounded-xl border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-muted">
             Tentar novamente
           </button>
         </div>
@@ -361,9 +370,9 @@ const Relatorios = () => {
             {data.installmentData.length > 0 && (
               <div className="mt-4">
                 <div className="h-2 rounded-full bg-muted overflow-hidden flex">
-                  <div className="h-full bg-success transition-all duration-500" style={{ width: `${(data.paidCount / data.installmentData.length) * 100}%` }} />
-                  <div className="h-full bg-destructive/60 transition-all duration-500" style={{ width: `${(data.overdueCount / data.installmentData.length) * 100}%` }} />
-                  <div className="h-full bg-warning/40 transition-all duration-500" style={{ width: `${(data.pendingCount / data.installmentData.length) * 100}%` }} />
+                  <div className="h-full bg-success transition-all duration-500" style={{ width: `${boundedRatio(data.paidCount, data.installmentData.length)}%` }} />
+                  <div className="h-full bg-destructive/60 transition-all duration-500" style={{ width: `${boundedRatio(data.overdueCount, data.installmentData.length)}%` }} />
+                  <div className="h-full bg-warning/40 transition-all duration-500" style={{ width: `${boundedRatio(data.pendingCount, data.installmentData.length)}%` }} />
                 </div>
                 <div className="flex justify-between mt-1.5 text-[10px] text-muted-foreground">
                   <span>{data.paidCount} pagas</span>

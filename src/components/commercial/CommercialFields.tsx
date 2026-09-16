@@ -5,10 +5,10 @@ import type { CollateralInput } from '@/lib/commercial';
 import { toast } from 'sonner';
 
 export function Field({ label, ...props }: InputHTMLAttributes<HTMLInputElement> & { label: string }) {
-  return <label className="commercial-field"><span>{label}</span><input {...props} /></label>;
+  return <label className="commercial-field"><span>{label}</span><input aria-label={props["aria-label"] ?? label} {...props} /></label>;
 }
 export function SelectField({label,value,onChange,children,required=false}:{label:string;value:string;onChange:(value:string)=>void;children:ReactNode;required?:boolean}) {
-  return <label className="commercial-field"><span>{label}</span><select value={value} onChange={e=>onChange(e.target.value)} required={required}>{children}</select></label>;
+  return <label className="commercial-field"><span>{label}</span><select aria-label={label} value={value} onChange={e=>onChange(e.target.value)} required={required}>{children}</select></label>;
 }
 export function Photos({value,onChange}:{value:string[];onChange:(photos:string[])=>void}) {
   const {user}=useAuth();const [busy,setBusy]=useState(false);

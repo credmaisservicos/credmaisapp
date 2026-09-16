@@ -3,7 +3,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { TrendingUp, TrendingDown, Landmark, Wallet, AlertTriangle } from "lucide-react";
 import { Link } from "react-router-dom";
 
-const brl = (n: number) => (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const safeNumber = (value: unknown) => {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? number : 0;
+};
+const brl = (n: number) => safeNumber(n).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 type Data = {
   ativo_capital: number;
@@ -43,13 +47,18 @@ export default function AtivoPassivoCard() {
 
   if (loading || !data) return null;
 
-  const spread = data.ativo_a_receber - data.passivo_a_pagar;
+  const ativoCapital = safeNumber(data.ativo_capital);
+  const ativoReceber = safeNumber(data.ativo_a_receber);
+  const passivoCaptado = safeNumber(data.passivo_captado);
+  const passivoPagar = safeNumber(data.passivo_a_pagar);
+  const alocadoCapital = safeNumber(data.alocado_capital);
+  const spread = ativoReceber - passivoPagar;
   const spreadPositive = spread >= 0;
-  const cobertura = data.ativo_capital > 0 ? (data.alocado_capital / data.ativo_capital) * 100 : 0;
-  const alerta = data.passivo_captado > data.ativo_capital && data.passivo_captado > 0;
+  const cobertura = ativoCapital > 0 ? (alocadoCapital / ativoCapital) * 100 : 0;
+  const alerta = passivoCaptado > ativoCapital && passivoCaptado > 0;
 
   // Nada a mostrar se o usuário ainda não tem investidores nem contratos
-  if (data.ativo_capital === 0 && data.passivo_captado === 0) return null;
+  if (ativoCapital === 0 && passivoCaptado === 0) return null;
 
   return (
     <div className="rounded-2xl border border-white/[.08] bg-card/55 p-5 backdrop-blur-xl">
@@ -72,8 +81,8 @@ export default function AtivoPassivoCard() {
           <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-emerald-300">
             <TrendingUp className="h-3.5 w-3.5" /> Ativo (na rua)
           </div>
-          <p className="mt-2 font-mono text-2xl font-bold text-white">{brl(data.ativo_capital)}</p>
-          <p className="mt-1 text-[11px] text-white/50">A receber: <b className="text-emerald-300">{brl(data.ativo_a_receber)}</b></p>
+          <p className="mt-2 font-mono text-2xl font-bold text-white">{brl(ativoCapital)}</p>
+          <p className="mt-1 text-[11px] text-white/50">A receber: <b className="text-emerald-300">{brl(ativoReceber)}</b></p>
         </div>
 
         {/* Passivo */}
@@ -81,8 +90,8 @@ export default function AtivoPassivoCard() {
           <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-amber-300">
             <TrendingDown className="h-3.5 w-3.5" /> Passivo (captado)
           </div>
-          <p className="mt-2 font-mono text-2xl font-bold text-white">{brl(data.passivo_captado)}</p>
-          <p className="mt-1 text-[11px] text-white/50">A pagar: <b className="text-amber-300">{brl(data.passivo_a_pagar)}</b></p>
+          <p className="mt-2 font-mono text-2xl font-bold text-white">{brl(passivoCaptado)}</p>
+          <p className="mt-1 text-[11px] text-white/50">A pagar: <b className="text-amber-300">{brl(passivoPagar)}</b></p>
         </div>
 
         {/* Spread */}
@@ -98,7 +107,7 @@ export default function AtivoPassivoCard() {
       </div>
 
       {/* Cobertura */}
-      {data.passivo_captado > 0 && (
+      {passivoCaptado > 0 && (
         <div className="mt-4">
           <div className="mb-1.5 flex justify-between text-[11px] text-white/60">
             <span className="flex items-center gap-1"><Landmark className="h-3 w-3" /> Capital lastreado por investidores</span>
@@ -117,7 +126,7 @@ export default function AtivoPassivoCard() {
         <div className="mt-3 flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-200">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
-            Alerta: seu passivo com investidores ({brl(data.passivo_captado)}) é maior que seu capital ativo na rua ({brl(data.ativo_capital)}).
+            Alerta: seu passivo com investidores ({brl(passivoCaptado)}) é maior que seu capital ativo na rua ({brl(ativoCapital)}).
             Considere reduzir captação ou aumentar empréstimos.
           </span>
         </div>

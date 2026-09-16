@@ -33,6 +33,9 @@ const BotSection = ({ ctx }: SectionProps) => {
             {/* Toggle principal */}
             <div className={`flex items-center gap-3 p-4 rounded-2xl border transition-all ${form.bot_enabled ? "border-primary/30 bg-primary/5" : "border-border bg-muted/20"}`}>
               <button
+                type="button"
+                aria-label={form.bot_enabled ? "Desativar bot de cobranças" : "Ativar bot de cobranças"}
+                aria-pressed={form.bot_enabled}
                 onClick={() => setForm({ ...form, bot_enabled: !form.bot_enabled })}
                 className={`relative w-12 h-7 rounded-full transition-colors duration-300 ${form.bot_enabled ? "bg-primary" : "bg-muted"}`}
               >
@@ -59,6 +62,8 @@ const BotSection = ({ ctx }: SectionProps) => {
                     ].map((opt) => (
                       <button
                         key={String(opt.value)}
+                        type="button"
+                        aria-pressed={form.bot_auto_send === opt.value}
                         onClick={() => setForm({ ...form, bot_auto_send: opt.value })}
                         className={`text-left p-3 rounded-xl border transition-all ${
                           form.bot_auto_send === opt.value ? "border-primary/40 bg-primary/5" : "border-border hover:border-primary/20"
@@ -80,7 +85,7 @@ const BotSection = ({ ctx }: SectionProps) => {
                     <Volume2 size={14} className="text-info" />
                     <p className="text-label">Tom da Mensagem</p>
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 min-[400px]:grid-cols-3 gap-2">
                     {[
                       { value: "formal", label: "Formal", emoji: "👔" },
                       { value: "amigavel", label: "Amigável", emoji: "😊" },
@@ -88,6 +93,8 @@ const BotSection = ({ ctx }: SectionProps) => {
                     ].map((tone) => (
                       <button
                         key={tone.value}
+                        type="button"
+                        aria-pressed={form.bot_tone === tone.value}
                         onClick={() => setForm({ ...form, bot_tone: tone.value })}
                         className={`p-3 rounded-xl border text-center transition-all ${
                           form.bot_tone === tone.value ? "border-primary/40 bg-primary/5" : "border-border hover:border-primary/20"
@@ -114,6 +121,9 @@ const BotSection = ({ ctx }: SectionProps) => {
                         <p className="text-[10px] text-muted-foreground">Usa o Lovable AI para criar mensagens personalizadas e persuasivas</p>
                       </div>
                       <button
+                        type="button"
+                        aria-label="Alternar geração de mensagens com IA"
+                        aria-pressed={form.bot_use_ai}
                         onClick={() => setForm({ ...form, bot_use_ai: !form.bot_use_ai })}
                         className={`w-10 h-6 rounded-full transition-colors relative ${form.bot_use_ai ? "bg-primary" : "bg-muted"}`}
                       >
@@ -127,6 +137,9 @@ const BotSection = ({ ctx }: SectionProps) => {
                         <p className="text-[10px] text-muted-foreground">O bot envia áudios curtos personalizados (TTS)</p>
                       </div>
                       <button 
+                        type="button"
+                        aria-label="Alternar envio de áudio"
+                        aria-pressed={form.bot_send_audio}
                         onClick={() => setForm({ ...form, bot_send_audio: !form.bot_send_audio })}
                         className={`w-10 h-6 rounded-full transition-colors relative ${form.bot_send_audio ? "bg-primary" : "bg-muted"}`}
                       >
@@ -140,6 +153,9 @@ const BotSection = ({ ctx }: SectionProps) => {
                         <p className="text-[10px] text-muted-foreground">O bot transcreve e entende o que o cliente fala em áudio</p>
                       </div>
                       <button 
+                        type="button"
+                        aria-label="Alternar entendimento de áudios"
+                        aria-pressed={form.bot_process_audio}
                         onClick={() => setForm({ ...form, bot_process_audio: !form.bot_process_audio })}
                         className={`w-10 h-6 rounded-full transition-colors relative ${form.bot_process_audio ? "bg-primary" : "bg-muted"}`}
                       >
@@ -153,6 +169,9 @@ const BotSection = ({ ctx }: SectionProps) => {
                         <p className="text-[10px] text-muted-foreground">O bot analisa imagens para identificar comprovantes de pagamento</p>
                       </div>
                       <button 
+                        type="button"
+                        aria-label="Alternar reconhecimento de comprovantes"
+                        aria-pressed={form.bot_process_receipts}
                         onClick={() => setForm({ ...form, bot_process_receipts: !form.bot_process_receipts })}
                         className={`w-10 h-6 rounded-full transition-colors relative ${form.bot_process_receipts ? "bg-primary" : "bg-muted"}`}
                       >
@@ -166,6 +185,9 @@ const BotSection = ({ ctx }: SectionProps) => {
                         <p className="text-[10px] text-muted-foreground">Dá baixa na parcela automaticamente após validar o comprovante</p>
                       </div>
                       <button 
+                        type="button"
+                        aria-label="Alternar baixa automática de pagamentos"
+                        aria-pressed={form.bot_auto_confirm_payment}
                         onClick={() => setForm({ ...form, bot_auto_confirm_payment: !form.bot_auto_confirm_payment })}
                         className={`w-10 h-6 rounded-full transition-colors relative ${form.bot_auto_confirm_payment ? "bg-primary" : "bg-muted"}`}
                       >
@@ -184,7 +206,7 @@ const BotSection = ({ ctx }: SectionProps) => {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="text-[11px] text-muted-foreground mb-1 block">Hora</label>
-                      <select value={form.bot_send_hour} onChange={(e) => setForm({ ...form, bot_send_hour: parseInt(e.target.value) })} className={inputCls}>
+                      <select id="bot-send-hour" name="bot_send_hour" aria-label="Hora de envio" value={form.bot_send_hour} onChange={(e) => setForm({ ...form, bot_send_hour: parseInt(e.target.value) })} className={inputCls}>
                         {Array.from({ length: 24 }, (_, i) => (
                           <option key={i} value={i}>{String(i).padStart(2, "0")}h</option>
                         ))}
@@ -192,7 +214,7 @@ const BotSection = ({ ctx }: SectionProps) => {
                     </div>
                     <div>
                       <label className="text-[11px] text-muted-foreground mb-1 block">Minuto</label>
-                      <select value={form.bot_send_minute} onChange={(e) => setForm({ ...form, bot_send_minute: parseInt(e.target.value) })} className={inputCls}>
+                      <select id="bot-send-minute" name="bot_send_minute" aria-label="Minuto de envio" value={form.bot_send_minute} onChange={(e) => setForm({ ...form, bot_send_minute: parseInt(e.target.value) })} className={inputCls}>
                         {[0, 15, 30, 45].map(m => (
                           <option key={m} value={m}>{String(m).padStart(2, "0")}min</option>
                         ))}
@@ -214,6 +236,9 @@ const BotSection = ({ ctx }: SectionProps) => {
                       return (
                         <button
                           key={day.key}
+                          type="button"
+                          aria-pressed={active}
+                          aria-label={`${active ? "Remover" : "Adicionar"} ${day.label} dos dias de funcionamento`}
                           onClick={() => {
                             const days = active
                               ? form.bot_work_days.filter(d => d !== day.key)
@@ -237,11 +262,11 @@ const BotSection = ({ ctx }: SectionProps) => {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="text-[11px] text-muted-foreground mb-1 block">Máx. mensagens/dia</label>
-                      <input type="number" value={form.bot_max_messages_per_day} onChange={(e) => setForm({ ...form, bot_max_messages_per_day: parseInt(e.target.value) || 50 })} className={inputCls} min={1} max={500} />
+                          <input id="bot-max-messages" name="bot_max_messages_per_day" type="number" aria-label="Máximo de mensagens por dia" value={form.bot_max_messages_per_day} onChange={(e) => setForm({ ...form, bot_max_messages_per_day: parseInt(e.target.value) || 50 })} className={inputCls} min={1} max={500} />
                     </div>
                     <div>
                       <label className="text-[11px] text-muted-foreground mb-1 block">Intervalo entre cobranças (h)</label>
-                      <input type="number" value={form.bot_retry_interval_hours} onChange={(e) => setForm({ ...form, bot_retry_interval_hours: parseInt(e.target.value) || 24 })} className={inputCls} min={1} max={168} />
+                          <input id="bot-retry-interval" name="bot_retry_interval_hours" type="number" aria-label="Intervalo entre cobranças em horas" value={form.bot_retry_interval_hours} onChange={(e) => setForm({ ...form, bot_retry_interval_hours: parseInt(e.target.value) || 24 })} className={inputCls} min={1} max={168} />
                     </div>
                   </div>
                 </div>
@@ -267,7 +292,7 @@ const BotSection = ({ ctx }: SectionProps) => {
                         <div className="w-8 h-8 rounded-lg bg-warning/10 flex items-center justify-center shrink-0">
                           <span className="text-xs font-bold text-warning">{idx + 1}</span>
                         </div>
-                        <div className="flex-1 grid grid-cols-3 gap-2">
+                        <div className="flex-1 grid grid-cols-1 min-[420px]:grid-cols-3 gap-2 min-w-0">
                           <div>
                             <label className="text-[9px] text-muted-foreground">Dias atraso</label>
                             <input
@@ -277,7 +302,7 @@ const BotSection = ({ ctx }: SectionProps) => {
                                 rules[idx] = { ...rules[idx], days: parseInt(e.target.value) || 0 };
                                 setForm({ ...form, bot_escalation_rules: rules });
                               }}
-                              className="w-full px-2 py-1.5 rounded-lg bg-card border border-border text-xs text-foreground"
+                              name={`bot_escalation_days_${idx}`} aria-label={`Dias de atraso da etapa ${idx + 1}`} className="w-full px-2 py-1.5 rounded-lg bg-card border border-border text-xs text-foreground"
                             />
                           </div>
                           <div>
@@ -289,7 +314,7 @@ const BotSection = ({ ctx }: SectionProps) => {
                                 rules[idx] = { ...rules[idx], template: e.target.value };
                                 setForm({ ...form, bot_escalation_rules: rules });
                               }}
-                              className="w-full px-2 py-1.5 rounded-lg bg-card border border-border text-xs text-foreground"
+                              name={`bot_escalation_template_${idx}`} aria-label={`Template da etapa ${idx + 1}`} className="w-full px-2 py-1.5 rounded-lg bg-card border border-border text-xs text-foreground"
                             >
                               <option value="">Selecionar...</option>
                               {templates.map((t: any) => (
@@ -312,7 +337,7 @@ const BotSection = ({ ctx }: SectionProps) => {
                                 rules[idx] = { ...rules[idx], channel: e.target.value };
                                 setForm({ ...form, bot_escalation_rules: rules });
                               }}
-                              className="w-full px-2 py-1.5 rounded-lg bg-card border border-border text-xs text-foreground"
+                              name={`bot_escalation_channel_${idx}`} aria-label={`Canal da etapa ${idx + 1}`} className="w-full px-2 py-1.5 rounded-lg bg-card border border-border text-xs text-foreground"
                             >
                               <option value="whatsapp">WhatsApp</option>
                               <option value="sms">SMS</option>

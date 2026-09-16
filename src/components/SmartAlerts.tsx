@@ -11,6 +11,7 @@ import {
   X, Sparkles, TrendingDown, FileSignature, Loader2, RotateCcw
 } from "lucide-react";
 import CobrarAgoraModal, { CobrarInstallment } from "./CobrarAgoraModal";
+import { formatBRDateTime, parseLocalDate } from "@/lib/dateUtils";
 
 // Persisted-dismiss helpers (localStorage, per-user, with TTL)
 const DISMISS_KEY = (uid?: string) => `smart-alerts:dismissed:${uid || "anon"}`;
@@ -56,7 +57,15 @@ const groupStyles = {
   system:   { border: "border-border/40", bg: "bg-muted/20", chip: "bg-muted/40 text-muted-foreground", icon: "text-muted-foreground" },
 };
 
-const fmtBRL = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const safeNumber = (value: unknown) => {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? number : 0;
+};
+const fmtBRL = (v: number) => safeNumber(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const daysLate = (value: unknown) => {
+  const date = parseLocalDate(typeof value === "string" ? value : null);
+  return date ? Math.floor((Date.now() - date.getTime()) / DAY_MS) : 0;
+};
 
 interface Props {
   overdue: any[];
@@ -100,7 +109,8 @@ const SmartAlerts = ({ overdue, dueToday, notifications }: Props) => {
       const today = new Date();
       return (data || []).filter((c: any) => {
         if (!c.birth_date) return false;
-        const d = new Date(c.birth_date);
+        const d = parseLocalDate(c.birth_date);
+        if (!d) return false;
         return d.getDate() === today.getDate() && d.getMonth() === today.getMonth();
       });
     },
@@ -138,11 +148,11 @@ const SmartAlerts = ({ overdue, dueToday, notifications }: Props) => {
 
     // 1) Critical: overdue >7 days (high-risk bucket)
     const critOverdue = overdue.filter((i: any) => {
-      const days = Math.floor((Date.now() - new Date(i.due_date).getTime()) / 86400000);
+      const days = daysLate(i.due_date);
       return days >= 7;
     });
     if (critOverdue.length > 0) {
-      const total = critOverdue.reduce((s, i: any) => s + Number(i.amount), 0);
+      const total = critOverdue.reduce((s, i: any) => s + safeNumber(i.amount), 0);
       list.push({
         id: "crit-overdue",
         group: "critical",
@@ -160,11 +170,11 @@ const SmartAlerts = ({ overdue, dueToday, notifications }: Props) => {
 
     // 2) Warning: recent overdue (<7d)
     const lightOverdue = overdue.filter((i: any) => {
-      const days = Math.floor((Date.now() - new Date(i.due_date).getTime()) / 86400000);
+      const days = daysLate(i.due_date);
       return days < 7;
     });
     if (lightOverdue.length > 0) {
-      const total = lightOverdue.reduce((s, i: any) => s + Number(i.amount), 0);
+      const total = lightOverdue.reduce((s, i: any) => s + safeNumber(i.amount), 0);
       list.push({
         id: "light-overdue",
         group: "warning",
@@ -179,7 +189,7 @@ const SmartAlerts = ({ overdue, dueToday, notifications }: Props) => {
 
     // 3) Info: due today
     if (dueToday.length > 0) {
-      const total = dueToday.reduce((s, i: any) => s + Number(i.amount), 0);
+      const total = dueToday.reduce((s, i: any) => s + safeNumber(i.amount), 0);
       list.push({
         id: "due-today",
         group: "info",
@@ -214,7 +224,7 @@ const SmartAlerts = ({ overdue, dueToday, notifications }: Props) => {
         title: `${pendingSigs!.length} contrato${pendingSigs!.length !== 1 ? "s" : ""} sem assinatura`,
         description: "Aguardando assinatura do cliente",
         count: pendingSigs!.length,
-        action: { label: "Revisar", onClick: () => navigate("/contratos") },
+        action: { label: "Revisar", onClick: () => navigate("/clientes") },
       });
     }
 
@@ -227,12 +237,13 @@ const SmartAlerts = ({ overdue, dueToday, notifications }: Props) => {
     Object.entries(byType).forEach(([type, arr]) => {
       if (arr.length === 1) {
         const n = arr[0];
+        const message = String(n.message || "");
         list.push({
           id: `notif-${n.id}`,
           group: "system",
           icon: Bell,
-          title: n.message.length > 60 ? n.message.slice(0, 60) + "..." : n.message,
-          description: new Date(n.sent_at).toLocaleString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }),
+          title: message.length > 60 ? message.slice(0, 60) + "..." : message || "Notificação sem mensagem",
+          description: formatBRDateTime(n.sent_at) || "Data indisponível",
           action: n.link ? { label: "Abrir", onClick: () => navigate(n.link) } : undefined,
           dismissIds: [n.id],
         });
@@ -242,7 +253,7 @@ const SmartAlerts = ({ overdue, dueToday, notifications }: Props) => {
           group: "system",
           icon: Bell,
           title: `${arr.length} notificações · ${type}`,
-          description: arr[0].message.slice(0, 50) + "...",
+          description: String(arr[0].message || "Notificação sem mensagem").slice(0, 50) + "...",
           count: arr.length,
           action: { label: "Ver todas", onClick: () => navigate("/notificacoes") },
           dismissIds: arr.map((n: any) => n.id),

@@ -85,7 +85,7 @@ const GrantAccessDialog = ({ open, onClose, onDone }: {
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-2">
             {([
               { v: "trial" as const, label: "Por tempo", desc: "acesso de teste" },
               { v: "lifetime" as const, label: "Vitalício", desc: "sem vencimento" },

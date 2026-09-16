@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { loadEnv } from "vite";
 
 /**
  * Configuração autossuficiente do Playwright.
@@ -11,6 +12,14 @@ import { defineConfig, devices } from "@playwright/test";
  * Alvo padrão: o site publicado. Para apontar para o app local, rode
  * `npm run dev` e use E2E_BASE_URL=http://localhost:8080.
  */
+// Make local/CI runs use the same public Supabase configuration as the app
+// when the explicit E2E variables are not provided. This avoids silently
+// probing the retired EasyPanel host with an empty API key.
+const viteEnv = loadEnv("production", process.cwd(), "");
+for (const key of ["VITE_SUPABASE_URL", "VITE_SUPABASE_PUBLISHABLE_KEY"]) {
+  if (!process.env[key] && viteEnv[key]) process.env[key] = viteEnv[key];
+}
+
 const baseURL = process.env.E2E_BASE_URL || "https://www.credmaisapp.com.br";
 
 export default defineConfig({

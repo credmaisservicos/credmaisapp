@@ -20,9 +20,18 @@ import { friendlyError } from "@/lib/friendlyError";
 import RiskBadge from "@/components/clients/RiskBadge";
 import { ClientRow } from "@/components/clients/ClientRow";
 import { ClientCard } from "@/components/clients/ClientCard";
+import { parseLocalDate, todayLocalISO, toDateInputValue } from "@/lib/dateUtils";
 
 type SortKey = "recent" | "name" | "score_desc" | "score_asc" | "overdue";
 type ScoreBand = "all" | "high" | "mid" | "low";
+
+const safeNumber = (value: unknown) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+};
+const safeExportDate = (value: unknown) => {
+  return toDateInputValue(String(value ?? ""));
+};
 
 const scoreColor = (s: number) =>
   s >= 75 ? "text-success bg-success/10 ring-success/20"
@@ -71,7 +80,7 @@ const Clientes = () => {
   const dSearch = useDebounced(search, 180);
   const [statusFilter, setStatusFilter] = useState<"all" | "Ativo" | "Inativo">("all");
   const [scoreBand, setScoreBand] = useState<ScoreBand>("all");
-  const [sort, setSort] = useState<SortKey>("recent");
+  const [sort, setSort] = useState<SortKey>("name");
   const [showFilters, setShowFilters] = useState(false);
   const [page, setPage] = useState(1);
 
@@ -114,7 +123,7 @@ const Clientes = () => {
   const { data: clients = [], isLoading, error: clientsError, refetch: refetchClients } = useQuery({
     queryKey: ["clients", user?.id],
     queryFn: async () => {
-      const data = await fetchAll((f, t) => supabase.from("clients").select("*").eq("user_id", user!.id).order("created_at", { ascending: false }).range(f, t));
+      const data = await fetchAll((f, t) => supabase.from("clients").select("*").eq("user_id", user!.id).order("name", { ascending: true }).range(f, t));
       return data;
     },
     enabled: !!user,
@@ -139,7 +148,8 @@ const Clientes = () => {
       });
       (ins || []).forEach((i: any) => {
         const k = i.client_id; if (!k) return;
-        if (new Date(i.due_date).getTime() < now) {
+        const dueTime = parseLocalDate(i.due_date)?.getTime() ?? NaN;
+        if (Number.isFinite(dueTime) && dueTime < now) {
           if (!map[k]) map[k] = { contracts: 0, active: 0, overdue: 0 };
           map[k].overdue++;
         }
@@ -165,7 +175,7 @@ const Clientes = () => {
     });
     let arr = derived.filter((c: any) => {
       if (statusFilter !== "all" && c.status !== statusFilter) return false;
-      const sc = Number(c.credit_score || 0);
+      const sc = safeNumber(c.credit_score);
       if (scoreBand === "high" && sc < 75) return false;
       if (scoreBand === "mid" && (sc < 50 || sc >= 75)) return false;
       if (scoreBand === "low" && sc >= 50) return false;
@@ -180,8 +190,8 @@ const Clientes = () => {
     });
 
     if (sort === "name") arr = [...arr].sort((a, b) => (a.name || "").localeCompare(b.name || "", "pt-BR"));
-    else if (sort === "score_desc") arr = [...arr].sort((a, b) => (b.credit_score || 0) - (a.credit_score || 0));
-    else if (sort === "score_asc") arr = [...arr].sort((a, b) => (a.credit_score || 0) - (b.credit_score || 0));
+    else if (sort === "score_desc") arr = [...arr].sort((a, b) => safeNumber(b.credit_score) - safeNumber(a.credit_score));
+    else if (sort === "score_asc") arr = [...arr].sort((a, b) => safeNumber(a.credit_score) - safeNumber(b.credit_score));
     else if (sort === "overdue") arr = [...arr].sort((a, b) => (contractMap[b.id]?.overdue || 0) - (contractMap[a.id]?.overdue || 0));
 
     return {
@@ -274,13 +284,13 @@ const Clientes = () => {
         r.email || "",
         r.status || "",
         r.credit_score ?? "",
-        r.created_at ? new Date(r.created_at).toISOString().split("T")[0] : "",
+        safeExportDate(r.created_at),
       ].join(",")),
     ].join("\n");
     const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url; a.download = `clientes-${new Date().toISOString().split("T")[0]}.csv`; a.click();
+    a.href = url; a.download = `clientes-${todayLocalISO()}.csv`; a.click();
     URL.revokeObjectURL(url);
     toast({ title: `${rows.length} cliente(s) exportado(s)` });
   }, [selected, clients, filtered, toast]);
@@ -383,13 +393,13 @@ const Clientes = () => {
             </div>
           </div>
           <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
-            <button onClick={handleBulkExport} className="btn-ghost justify-center sm:flex-none" title="Exportar lista atual / selecionados" aria-label="Exportar lista atual / selecionados">
+            <button type="button" onClick={handleBulkExport} className="btn-ghost justify-center sm:flex-none" title="Exportar lista atual / selecionados" aria-label="Exportar lista atual / selecionados">
               <Download size={15} /> Exportar
             </button>
-            <button onClick={() => setImportOpen(true)} className="btn-ghost justify-center sm:flex-none">
+            <button type="button" onClick={() => setImportOpen(true)} className="btn-ghost justify-center sm:flex-none">
               <Upload size={15} /> Importar CSV
             </button>
-            <button onClick={() => navigate("/clientes/novo")} className="btn-premium col-span-2 justify-center sm:flex-none">
+            <button type="button" onClick={() => navigate("/clientes/novo")} className="btn-premium col-span-2 justify-center sm:flex-none">
               <Plus size={16} /> Novo Cliente
             </button>
           </div>
@@ -418,6 +428,10 @@ const Clientes = () => {
           <div className="relative flex-1 basis-[12rem] min-w-0">
             <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
+              id="clients-search"
+              name="clients_search"
+              aria-label="Buscar clientes"
+              autoComplete="off"
               ref={searchRef}
               type="text"
               placeholder="Buscar por nome, CPF, telefone ou email…"
@@ -429,7 +443,7 @@ const Clientes = () => {
               {search ? (
                 <>
                   <span className="text-[10px] text-muted-foreground">{filtered.length}</span>
-                <button onClick={() => setSearch("")} aria-label="Limpar busca" className="p-1 rounded-md hover:bg-accent text-muted-foreground"><X size={14} /></button>
+                <button type="button" onClick={() => setSearch("")} aria-label="Limpar busca" className="p-1 rounded-md hover:bg-accent text-muted-foreground"><X size={14} /></button>
                 </>
               ) : (
                 <kbd className="hidden md:inline-flex items-center px-1.5 py-0.5 rounded-md border border-border/40 bg-muted/40 text-[10px] font-mono text-muted-foreground">/</kbd>
@@ -438,6 +452,7 @@ const Clientes = () => {
           </div>
 
           <button
+            type="button"
             onClick={() => setShowFilters(v => !v)}
             className={`relative shrink-0 rounded-xl border px-3.5 py-3.5 transition-colors ${activeFilters > 0 ? "border-primary/40 bg-primary/5 text-primary" : "border-border/20 bg-card/40 text-muted-foreground hover:text-foreground"}`}
             title="Filtros e ordenação"
@@ -450,12 +465,12 @@ const Clientes = () => {
           </button>
 
           <div className="flex shrink-0 items-center rounded-xl border border-border/20 bg-card/40 p-1">
-            <button onClick={() => toggleView("list")}
+            <button type="button" onClick={() => toggleView("list")}
               className={`p-2.5 rounded-xl transition-colors ${viewMode === "list" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"}`}
               title="Lista" aria-label="Ver como lista" aria-pressed={viewMode === "list"}>
               <List size={16} />
             </button>
-            <button onClick={() => toggleView("cards")}
+            <button type="button" onClick={() => toggleView("cards")}
               className={`p-2.5 rounded-xl transition-colors ${viewMode === "cards" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"}`}
               title="Cards" aria-label="Ver como cards" aria-pressed={viewMode === "cards"}>
               <LayoutGrid size={16} />
@@ -486,6 +501,9 @@ const Clientes = () => {
                 <ArrowUpDown size={13} className="text-muted-foreground" />
                 <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mr-1">Ordenar</span>
                 <select
+                  id="clients-sort"
+                  name="clients_sort"
+                  aria-label="Ordenar clientes"
                   value={sort}
                   onChange={(e) => setSort(e.target.value as SortKey)}
                   className="px-3 py-1.5 rounded-xl text-xs font-medium bg-muted/30 text-foreground border border-border/10 focus:outline-none focus:ring-1 focus:ring-primary/40"
@@ -568,7 +586,7 @@ const Clientes = () => {
                   <th className="w-10 px-4 py-2.5">
                     <input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible}
                       ref={(el) => { if (el) el.indeterminate = !allVisibleSelected && selected.size > 0; }}
-                      className="check-premium" />
+                      className="check-premium" aria-label="Selecionar todos os clientes visíveis" />
                   </th>
                   <th className="text-left px-5 py-2.5 text-[10px] font-bold text-muted-foreground/70 uppercase tracking-[0.14em]">Cliente</th>
                   <th className="text-left px-5 py-2.5 text-[10px] font-bold text-muted-foreground/70 uppercase tracking-[0.14em]">Contato</th>

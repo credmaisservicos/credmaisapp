@@ -14,7 +14,7 @@ import {
   Search, Sparkles, Copy, Trash2, Users, DollarSign, TrendingUp, Filter, X,
   Image as ImageIcon, Mic, Video, File as FileIcon, MapPin, Sticker, Check, CheckCheck
 } from "lucide-react";
-import { formatBR, parseLocalDate } from "@/lib/dateUtils";
+import { formatBR, formatBRDateTime, parseLocalDate, todayLocalISO } from "@/lib/dateUtils";
 import { SafeMessageContent } from "@/components/agent/SafeMessageContent";
 import { useNavigate } from "react-router-dom";
 
@@ -126,9 +126,17 @@ const extractWhatsAppText = (value: unknown, depth = 0): string => {
 const getJidLabel = (jid?: string | null) => (jid ? jid.split("@")[0] : undefined);
 
 const getTimestampValue = (value?: string | number | null) => {
-  if (typeof value === "number") return value;
-  if (typeof value === "string" && value) return new Date(value).getTime();
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (typeof value === "string" && value) {
+    const timestamp = new Date(value).getTime();
+    return Number.isFinite(timestamp) ? timestamp : 0;
+  }
   return 0;
+};
+
+const safeAgentNumber = (value: unknown) => {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? number : 0;
 };
 
 const getChatPhone = (chat: EvolutionChatRecord): string | undefined => {
@@ -958,7 +966,7 @@ const AgenteIA = () => {
     const now = new Date(); now.setHours(0,0,0,0);
     const overdueInstallments = installments.filter((i: any) => isEmAtraso(i, now));
     const activeContracts = contracts.filter((c: any) => c.status === "active" || c.status === "overdue");
-    const todayStr = now.toISOString().split("T")[0];
+    const todayStr = todayLocalISO();
     const dueToday = installments.filter((i: any) => isEmAberto(i) && i.due_date?.startsWith(todayStr));
     return {
       totalClients: clients.length,
@@ -966,12 +974,12 @@ const AgenteIA = () => {
       totalContracts: contracts.length,
       activeContracts: activeContracts.length,
       overdueCount: overdueInstallments.length,
-      overdueAmount: overdueInstallments.reduce((s: number, i: any) => s + Number(i.amount), 0).toFixed(2),
-      capitalOnStreet: computeOutstandingPrincipal(activeContracts, installments).toFixed(2),
-      totalProfit: dashData.profits.reduce((s: number, p: any) => s + Number(p.amount || 0), 0).toFixed(2),
+      overdueAmount: overdueInstallments.reduce((s: number, i: any) => s + safeAgentNumber(i.amount), 0).toFixed(2),
+      capitalOnStreet: safeAgentNumber(computeOutstandingPrincipal(activeContracts, installments)).toFixed(2),
+      totalProfit: dashData.profits.reduce((s: number, p: any) => s + safeAgentNumber(p.amount), 0).toFixed(2),
       dueTodayCount: dueToday.length,
       clientsList: clients.slice(0, 20).map((c: any) => `- ${c.name} (Score: ${c.credit_score}, Status: ${c.status})`).join("\n"),
-      overdueDetails: overdueInstallments.slice(0, 15).map((i: any) => `- Parcela ${i.installment_number}: R$ ${Number(i.amount).toFixed(2)} venc. ${formatBR(i.due_date)}`).join("\n"),
+      overdueDetails: overdueInstallments.slice(0, 15).map((i: any) => `- Parcela ${i.installment_number}: R$ ${safeAgentNumber(i.amount).toFixed(2)} venc. ${formatBR(i.due_date)}`).join("\n"),
     };
   };
 
@@ -1048,15 +1056,15 @@ const AgenteIA = () => {
   const overdue = dashData?.installments.filter((i: any) => isEmAtraso(i, now)).length || 0;
   const overdueAmount = dashData?.installments
     .filter((i: any) => isEmAtraso(i, now))
-    .reduce((s: number, i: any) => s + Number(i.amount), 0) || 0;
+    .reduce((s: number, i: any) => s + safeAgentNumber(i.amount), 0) || 0;
   const capitalOnStreet = dashData
     ? computeOutstandingPrincipal(dashData.contracts as any, dashData.installments as any)
     : 0;
-  const totalProfit = dashData?.profits.reduce((s: number, p: any) => s + Number(p.amount || 0), 0) || 0;
+  const totalProfit = dashData?.profits.reduce((s: number, p: any) => s + safeAgentNumber(p.amount), 0) || 0;
   const unreadCount = whatsappChats.reduce((s, c) => s + (c.unreadCount || 0), 0);
 
   const fmt = (n: number) =>
-    n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+    safeAgentNumber(n).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 
   const filteredChats = whatsappChats.filter((c) => {
     if (chatFilter === "human" && !c.needsHuman) return false;
@@ -1204,6 +1212,7 @@ const AgenteIA = () => {
   };
 
   const formatDateLabel = (ts: number) => {
+    if (!Number.isFinite(ts) || ts <= 0) return "Data indisponível";
     const d = new Date(ts * 1000);
     const today = new Date();
     const yesterday = new Date(); yesterday.setDate(today.getDate() - 1);
@@ -1412,7 +1421,7 @@ const AgenteIA = () => {
               { label: "Aguardando humano", value: String(agentHealth?.handoffs || 0), alert: (agentHealth?.handoffs || 0) > 0 },
               { label: "Comprovantes", value: String(agentHealth?.pendingReceipts || 0), alert: (agentHealth?.pendingReceipts || 0) > 0 },
               { label: "Falhas em 24h", value: String(agentHealth?.failures24h || 0), alert: (agentHealth?.failures24h || 0) > 0 },
-              { label: "Última atividade", value: agentHealth?.lastActionAt ? new Date(agentHealth.lastActionAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "Sem registro", alert: false },
+              { label: "Última atividade", value: formatBRDateTime(agentHealth?.lastActionAt) || "Sem registro", alert: false },
             ].map((item) => (
               <div key={item.label} className={`rounded-xl border p-4 ${item.alert ? "border-amber-500/30 bg-amber-500/5" : "border-border bg-card"}`}>
                 <p className="text-xs text-muted-foreground">{item.label}</p><p className="mt-1 text-sm font-semibold text-foreground">{item.value}</p>
@@ -1438,7 +1447,7 @@ const AgenteIA = () => {
                     <div>
                       <p className="font-semibold text-foreground">{item.clients?.name || "Cliente"}</p>
                       <p className="text-sm text-muted-foreground">
-                        Parcela #{item.contract_installments?.installment_number || "não identificada"} · {Number(item.amount || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                        Parcela #{item.contract_installments?.installment_number || "não identificada"} · {safeAgentNumber(item.amount).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
                       </p>
                       <p className="mt-1 text-xs text-muted-foreground">Correspondência: {item.match_type || "revisão manual"}</p>
                     </div>
@@ -1708,7 +1717,7 @@ const AgenteIA = () => {
                     const fromMe = msg.key?.fromMe;
                     const ts = Number(msg.messageTimestamp) || 0;
                     const prevTs = i > 0 ? Number(chatMessages[i - 1].messageTimestamp) || 0 : 0;
-                    const showDate = i === 0 || new Date(ts * 1000).toDateString() !== new Date(prevTs * 1000).toDateString();
+                    const showDate = i === 0 || (ts > 0 && prevTs > 0 && new Date(ts * 1000).toDateString() !== new Date(prevTs * 1000).toDateString());
                     const prevMsg = i > 0 ? chatMessages[i - 1] : null;
                     const sameSender = !!prevMsg && prevMsg.key?.fromMe === fromMe && (prevMsg.key as any)?.participant === (msg.key as any)?.participant && !showDate;
                     const isGroup = selectedChat?.remoteJid.endsWith("@g.us");
@@ -1718,7 +1727,7 @@ const AgenteIA = () => {
                     const kind = detectMediaKind(msg);
                     const text = getMessageText(msg);
                     const quoted = getQuotedInfo(msg);
-                    const time = ts ? new Date(ts * 1000).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "";
+                    const time = ts > 0 ? new Date(ts * 1000).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "—";
                     const imageUrl = kind === "image" ? getMediaUrl(msg, "image") : null;
                     const stickerUrl = kind === "sticker" ? getMediaUrl(msg, "sticker") : null;
                     const audioUrl = kind === "audio" ? getMediaUrl(msg, "audio") : null;

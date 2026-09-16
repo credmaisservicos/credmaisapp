@@ -1,6 +1,6 @@
 import { Credinho } from "@/components/brand/Credinho";
 import { useEffect, useMemo, useState } from "react";
-import { formatBR } from "@/lib/dateUtils";
+import { formatBR, isOverdue as isDateOverdue, parseLocalDate } from "@/lib/dateUtils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowRight, CalendarDays, Clock, CreditCard, FileText, Lock, Shield, User, Phone, Mail, TrendingUp, Wallet, AlertTriangle, CheckCircle2, Sparkles, ChevronRight, LogOut, BadgeCheck, HelpCircle, X, MessageCircle, RefreshCw, Download } from "lucide-react";
@@ -81,8 +81,29 @@ type PortalData = {
   };
 };
 
+function normalizePortalData(payload: unknown): PortalData | null {
+  if (!payload || typeof payload !== "object") return null;
+  const raw = payload as Record<string, any>;
+  if (!raw.client || typeof raw.client !== "object") return null;
+  return {
+    ...raw,
+    client: { ...raw.client, id: String(raw.client.id || ""), name: String(raw.client.name || "Cliente") },
+    contracts: (Array.isArray(raw.contracts) ? raw.contracts : []).map((contract: any) => ({
+      ...contract,
+      id: String(contract?.id || ""),
+      installments: Array.isArray(contract?.installments) ? contract.installments : [],
+    })),
+    owner: raw.owner && typeof raw.owner === "object" ? raw.owner : {},
+    branding: raw.branding && typeof raw.branding === "object" ? raw.branding : {},
+  };
+}
+
 const money = (value: number | string | null | undefined) =>
-  Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  (Number.isFinite(Number(value ?? 0)) ? Number(value ?? 0) : 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const safeNumber = (value: unknown) => {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? number : 0;
+};
 
 const date = (value: string | null | undefined) => {
   if (!value) return "—";
@@ -162,7 +183,7 @@ const PortalCliente = () => {
           try {
             const { data } = await (supabase as any).rpc("portal_login_by_token", { _token: token });
             if (data) {
-              setPortalData(data as unknown as PortalData);
+              setPortalData(normalizePortalData(data));
               const sessionToken = (data as any)?.session_token;
               if (sessionToken) sessionStorage.setItem(SESSION_KEY, JSON.stringify({ token: sessionToken }));
               // Limpa o token da URL pra evitar reuso/histórico
@@ -185,7 +206,7 @@ const PortalCliente = () => {
       if (token) {
         void (async () => {
           const { data } = await (supabase as any).rpc("portal_login_by_token", { _token: token });
-          if (data) setPortalData(data as PortalData);
+          if (data) setPortalData(normalizePortalData(data));
           else sessionStorage.removeItem(SESSION_KEY);
         })();
       }
@@ -207,7 +228,7 @@ const PortalCliente = () => {
             const token = portalData.session_token;
             if (token) void (async () => {
               const { data } = await (supabase as any).rpc("portal_login_by_token", { _token: token });
-              if (data) setPortalData(data as PortalData);
+              if (data) setPortalData(normalizePortalData(data));
             })();
           },
       )
@@ -264,7 +285,7 @@ const PortalCliente = () => {
     );
     const paid = rows.filter(({ i }) => i.status === "paid");
     const open = rows.filter(({ i }) => i.status !== "paid");
-    const overdue = open.filter(({ i }) => new Date(i.due_date) < now);
+    const overdue = open.filter(({ i }) => isDateOverdue(i.due_date, now));
 
     return {
       activeContracts: contracts.filter((contract) => contract.status === "active").length,
@@ -279,7 +300,7 @@ const PortalCliente = () => {
           paid_amount: i.paid_amount,
         }, now);
       }, 0),
-      paidAmount: paid.reduce((sum, { i }) => sum + Number(i.paid_amount || i.amount || 0), 0),
+      paidAmount: paid.reduce((sum, { i }) => sum + safeNumber(i.paid_amount ?? i.amount), 0),
       overdueCount: overdue.length,
       openCount: open.length,
       paidCount: paid.length,
@@ -332,7 +353,7 @@ const PortalCliente = () => {
         return;
       }
 
-      setPortalData(data as unknown as PortalData);
+      setPortalData(normalizePortalData(data));
       const token = (data as unknown as PortalData).session_token;
       if (token) sessionStorage.setItem(SESSION_KEY, JSON.stringify({ token }));
       if (!silent) {
@@ -418,14 +439,14 @@ const PortalCliente = () => {
     const rows: Array<{ contract: PortalContract; installment: PortalInstallment; isOverdue: boolean }> = [];
     for (const c of portalData?.contracts || []) {
       for (const i of c.installments || []) {
-        const isOverdue = i.status !== "paid" && new Date(i.due_date) < new Date();
+        const isOverdue = i.status !== "paid" && isDateOverdue(i.due_date);
         if (tab === "paid" && i.status !== "paid") continue;
         if (tab === "open" && i.status === "paid") continue;
         if (tab === "overdue" && !isOverdue) continue;
         rows.push({ contract: c, installment: i, isOverdue });
       }
     }
-    return rows.sort((a, b) => +new Date(a.installment.due_date) - +new Date(b.installment.due_date));
+    return rows.sort((a, b) => (parseLocalDate(a.installment.due_date)?.getTime() ?? Number.MAX_SAFE_INTEGER) - (parseLocalDate(b.installment.due_date)?.getTime() ?? Number.MAX_SAFE_INTEGER));
   }, [portalData, tab]);
 
   // Próxima parcela em aberto para destaque no hero
@@ -435,12 +456,12 @@ const PortalCliente = () => {
     for (const c of portalData?.contracts || []) {
       for (const i of c.installments || []) {
         if (i.status === "paid") continue;
-        const due = new Date(i.due_date);
-        const daysDiff = Math.floor((+due - +now) / 86400000);
-        pending.push({ contract: c, installment: i, isOverdue: due < now, daysDiff });
+        const due = parseLocalDate(i.due_date);
+        const daysDiff = due ? Math.floor((due.getTime() - now.getTime()) / 86400000) : 0;
+        pending.push({ contract: c, installment: i, isOverdue: isDateOverdue(i.due_date, now), daysDiff });
       }
     }
-    pending.sort((a, b) => +new Date(a.installment.due_date) - +new Date(b.installment.due_date));
+    pending.sort((a, b) => (parseLocalDate(a.installment.due_date)?.getTime() ?? Number.MAX_SAFE_INTEGER) - (parseLocalDate(b.installment.due_date)?.getTime() ?? Number.MAX_SAFE_INTEGER));
     return pending[0] || null;
   }, [portalData]);
 
@@ -837,6 +858,8 @@ const PortalCliente = () => {
                 </div>
               ) : (
                 filtered.map(({ contract, installment, isOverdue }) => {
+                  const dueDate = parseLocalDate(installment.due_date);
+                  const overdueDays = dueDate ? Math.max(0, Math.floor((Date.now() - dueDate.getTime()) / 86400000)) : 0;
                   const fee = computeLateFee({
                     amount: installment.amount,
                     due_date: installment.due_date,
@@ -867,7 +890,7 @@ const PortalCliente = () => {
                         daily_interest_percent: contract.daily_interest_percent,
                         max_interest_cap_percent: contract.max_interest_cap_percent,
                       } as PortalInstallment)}
-                      aria-label={`${installment.status === "paid" ? "Ver pagamento" : "Abrir detalhes e pagar"} a parcela ${installment.installment_number} do contrato ${contract.id.slice(0, 8).toUpperCase()}`}
+                      aria-label={`${installment.status === "paid" ? "Ver pagamento" : "Abrir detalhes e pagar"} a parcela ${installment.installment_number} do contrato ${String(contract.id || "").slice(0, 8).toUpperCase()}`}
                       className="bento-tile group flex w-full items-center gap-4 text-left"
                     >
                       <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-sm font-black ${
@@ -882,7 +905,7 @@ const PortalCliente = () => {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <p className="truncate text-sm font-semibold text-white">
-                            Contrato {contract.id.slice(0, 8).toUpperCase()}
+                            Contrato {String(contract.id || "").slice(0, 8).toUpperCase()}
                           </p>
                           <span className="portal-chip">
                             {formatFrequency(contract.frequency)}
@@ -893,7 +916,7 @@ const PortalCliente = () => {
                           {installment.status === "paid" ? `Pago em ${date(installment.paid_at)}` : `Vence em ${date(installment.due_date)}`}
                           {isOverdue && (
                             <span className="ml-1 font-semibold text-warning">
-                              · {Math.floor((Date.now() - +new Date(installment.due_date)) / 86400000)} dia(s)
+                              · {overdueDays} dia(s)
                             </span>
                           )}
                         </p>
@@ -926,7 +949,7 @@ const PortalCliente = () => {
                   const signature = signatureInfo.find((item) => item.id === contract.id);
                   return <article key={contract.id} className="bento-tile">
                     <div className="flex items-center justify-between">
-                      <p className="font-mono text-sm font-bold text-white">{contract.id.slice(0, 8).toUpperCase()}</p>
+                      <p className="font-mono text-sm font-bold text-white">{String(contract.id || "").slice(0, 8).toUpperCase()}</p>
                       <span className={`portal-chip ${contract.status === "completed" ? "ok" : contract.status === "cancelled" ? "warn" : ""}`}>
                         {statusLabel(contract.status)}
                       </span>
@@ -942,7 +965,7 @@ const PortalCliente = () => {
                       </div>
                       <div>
                         <p className="text-white/40">Juros</p>
-                        <p className="mt-0.5 font-bold text-white">{Number(contract.interest_rate || 0)}%</p>
+                        <p className="mt-0.5 font-bold text-white">{safeNumber(contract.interest_rate)}%</p>
                       </div>
                     </div>
                     <p className="mt-3 text-[11px] text-white/40">
@@ -1000,20 +1023,20 @@ const PortalCliente = () => {
         <div className="fixed inset-0 z-[110] flex items-end justify-center bg-black/80 p-4 backdrop-blur-sm sm:items-center" role="dialog" aria-modal="true" onClick={() => !signatureLoading && setSigningContract(null)}>
           <div className="portal-card max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-3xl p-6" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between">
-              <div><p className="text-[10px] font-bold uppercase tracking-widest text-primary">Assinatura eletrônica</p><h3 className="mt-1 text-xl font-bold text-white">Contrato {signingContract.id.slice(0, 8).toUpperCase()}</h3></div>
+              <div><p className="text-[10px] font-bold uppercase tracking-widest text-primary">Assinatura eletrônica</p><h3 className="mt-1 text-xl font-bold text-white">Contrato {String(signingContract.id || "").slice(0, 8).toUpperCase()}</h3></div>
               <button onClick={() => setSigningContract(null)} className="rounded-full p-2 text-white/50 hover:bg-white/5" aria-label="Fechar"><X size={18} /></button>
             </div>
             <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-white/70">
               <p><strong className="text-white">Capital:</strong> {money(signingContract.capital)}</p>
               <p><strong className="text-white">Total:</strong> {money(signingContract.total_amount)}</p>
-              <p><strong className="text-white">Condição:</strong> {signingContract.num_installments}x de {money(signingContract.installment_amount)} · juros de {Number(signingContract.interest_rate)}%</p>
+              <p><strong className="text-white">Condição:</strong> {safeNumber(signingContract.num_installments)}x de {money(signingContract.installment_amount)} · juros de {safeNumber(signingContract.interest_rate)}%</p>
               <p><strong className="text-white">Início:</strong> {date(signingContract.start_date)}</p>
             </div>
             <div className="mt-4 space-y-3">
-              <div><label className="mb-1 block text-xs font-semibold text-white/60">Nome completo</label><input value={signerName} onChange={(e) => setSignerName(e.target.value)} className="h-11 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white outline-none focus:border-primary" /></div>
-              <div><label className="mb-1 block text-xs font-semibold text-white/60">Confirme seu CPF</label><input value={signerCpf} onChange={(e) => setSignerCpf(formatCpf(e.target.value))} inputMode="numeric" className="h-11 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white outline-none focus:border-primary" placeholder="000.000.000-00" /></div>
+              <div><label htmlFor="portal-signer-name" className="mb-1 block text-xs font-semibold text-white/60">Nome completo</label><input id="portal-signer-name" name="signer_name" autoComplete="name" value={signerName} onChange={(e) => setSignerName(e.target.value)} className="h-11 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white outline-none focus:border-primary" /></div>
+              <div><label htmlFor="portal-signer-cpf" className="mb-1 block text-xs font-semibold text-white/60">Confirme seu CPF</label><input id="portal-signer-cpf" name="signer_cpf" autoComplete="off" value={signerCpf} onChange={(e) => setSignerCpf(formatCpf(e.target.value))} inputMode="numeric" className="h-11 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white outline-none focus:border-primary" placeholder="000.000.000-00" /></div>
             </div>
-            <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 p-3 text-xs text-white/70"><input type="checkbox" checked={signatureAccepted} onChange={(e) => setSignatureAccepted(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[var(--portal-primary)]" /><span>Li e concordo com os valores, vencimentos e condições deste contrato. Confirmo que este aceite representa minha assinatura eletrônica.</span></label>
+            <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 p-3 text-xs text-white/70"><input type="checkbox" name="signature_accepted" aria-label="Aceitar os termos e assinar eletronicamente" checked={signatureAccepted} onChange={(e) => setSignatureAccepted(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[var(--portal-primary)]" /><span>Li e concordo com os valores, vencimentos e condições deste contrato. Confirmo que este aceite representa minha assinatura eletrônica.</span></label>
             <button onClick={signContract} disabled={signatureLoading || !signatureAccepted || onlyDigits(signerCpf).length !== 11 || signerName.trim().length < 3} className="mt-4 w-full rounded-xl bg-primary px-4 py-3 text-sm font-bold text-white disabled:opacity-40">{signatureLoading ? "Registrando assinatura..." : "Assinar contrato"}</button>
           </div>
         </div>

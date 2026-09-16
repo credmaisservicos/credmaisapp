@@ -46,16 +46,16 @@ const PortalSection = ({ ctx }: SectionProps) => {
                 <p className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
                   <Zap size={12} /> Link de Acesso ao Portal
                 </p>
-                <button onClick={() => void copyPortalLink()} className="text-[10px] font-bold text-primary hover:underline flex items-center gap-1">
-                  <Copy size={10} /> Copiar Link
+                <button type="button" onClick={() => void copyPortalLink()} className="text-[10px] font-bold text-primary hover:underline flex items-center gap-1">
+                  <Copy size={10} aria-hidden="true" /> Copiar Link
                 </button>
               </div>
               <div className="flex items-center gap-2 bg-card border border-border rounded-xl px-3 py-2">
                 <p className="text-xs text-muted-foreground truncate flex-1 font-mono">
                   {window.location.origin}/portal-cliente
                 </p>
-                <button onClick={() => window.open(`${window.location.origin}/portal-cliente`, "_blank")} className="p-1 rounded-lg hover:bg-accent text-muted-foreground transition-colors" title="Abrir link">
-                  <ExternalLink size={14} />
+                <button type="button" onClick={() => window.open(`${window.location.origin}/portal-cliente`, "_blank", "noopener,noreferrer")} className="p-1 rounded-lg hover:bg-accent text-muted-foreground transition-colors" title="Abrir link do portal" aria-label="Abrir link do portal">
+                  <ExternalLink size={14} aria-hidden="true" />
                 </button>
               </div>
               <p className="text-[10px] text-muted-foreground leading-relaxed">
@@ -78,18 +78,18 @@ const PortalSection = ({ ctx }: SectionProps) => {
                 <p className="text-xs font-semibold text-foreground uppercase tracking-wider">Textos e Identidade</p>
                 
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Título do Portal</label>
-                  <input value={form.portal_title} onChange={(e) => setForm({ ...form, portal_title: e.target.value })} placeholder="Portal do Cliente" className={inputCls} />
+                  <label htmlFor="portal-title" className="text-xs font-medium text-muted-foreground mb-1.5 block">Título do Portal</label>
+                  <input id="portal-title" name="portal_title" value={form.portal_title} onChange={(e) => setForm({ ...form, portal_title: e.target.value })} placeholder="Portal do Cliente" className={inputCls} />
                 </div>
 
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Subtítulo do Portal</label>
-                  <input value={form.portal_subtitle} onChange={(e) => setForm({ ...form, portal_subtitle: e.target.value })} placeholder="Acompanhe seus contratos e pagamentos" className={inputCls} />
+                  <label htmlFor="portal-subtitle" className="text-xs font-medium text-muted-foreground mb-1.5 block">Subtítulo do Portal</label>
+                  <input id="portal-subtitle" name="portal_subtitle" value={form.portal_subtitle} onChange={(e) => setForm({ ...form, portal_subtitle: e.target.value })} placeholder="Acompanhe seus contratos e pagamentos" className={inputCls} />
                 </div>
 
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Mensagem de Boas-vindas</label>
-                  <textarea value={form.portal_welcome_message} onChange={(e) => setForm({ ...form, portal_welcome_message: e.target.value })} placeholder="Olá, seja bem-vindo ao seu portal financeiro." className={`${inputCls} min-h-[80px] resize-none`} />
+                  <label htmlFor="portal-welcome-message" className="text-xs font-medium text-muted-foreground mb-1.5 block">Mensagem de Boas-vindas</label>
+                  <textarea id="portal-welcome-message" name="portal_welcome_message" value={form.portal_welcome_message} onChange={(e) => setForm({ ...form, portal_welcome_message: e.target.value })} placeholder="Olá, seja bem-vindo ao seu portal financeiro." className={`${inputCls} min-h-[80px] resize-none`} />
                 </div>
               </div>
 
@@ -97,20 +97,20 @@ const PortalSection = ({ ctx }: SectionProps) => {
                 <p className="text-xs font-semibold text-foreground uppercase tracking-wider">Canais de Contato</p>
                 
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Telefone de Suporte</label>
-                  <input value={form.portal_contact_phone} onChange={(e) => setForm({ ...form, portal_contact_phone: e.target.value })} placeholder="(00) 00000-0000" className={inputCls} />
+                  <label htmlFor="portal-contact-phone" className="text-xs font-medium text-muted-foreground mb-1.5 block">Telefone de Suporte</label>
+                  <input id="portal-contact-phone" name="portal_contact_phone" autoComplete="tel" value={form.portal_contact_phone} onChange={(e) => setForm({ ...form, portal_contact_phone: e.target.value })} placeholder="(00) 00000-0000" className={inputCls} />
                 </div>
 
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block">E-mail de Contato</label>
-                  <input value={form.portal_contact_email} onChange={(e) => setForm({ ...form, portal_contact_email: e.target.value })} placeholder="suporte@empresa.com" className={inputCls} />
+                  <label htmlFor="portal-contact-email" className="text-xs font-medium text-muted-foreground mb-1.5 block">E-mail de Contato</label>
+                  <input id="portal-contact-email" name="portal_contact_email" autoComplete="email" type="email" value={form.portal_contact_email} onChange={(e) => setForm({ ...form, portal_contact_email: e.target.value })} placeholder="suporte@empresa.com" className={inputCls} />
                 </div>
 
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Cor Primária do Portal</label>
+                  <label htmlFor="portal-primary-color" className="text-xs font-medium text-muted-foreground mb-1.5 block">Cor Primária do Portal</label>
                   <div className="flex gap-2">
-                    <input type="color" value={portalColor} onChange={(e) => setForm({ ...form, portal_primary_color: e.target.value })} aria-label="Cor primária do portal" className="h-10 w-10 shrink-0 rounded-lg border border-border bg-transparent cursor-pointer" />
-                    <input value={form.portal_primary_color || form.primary_color} onChange={(e) => setForm({ ...form, portal_primary_color: e.target.value })} placeholder="#f59e0b" aria-label="Cor primária em hexadecimal" className={inputCls} />
+                    <input id="portal-primary-color-picker" name="portal_primary_color_picker" type="color" value={portalColor} onChange={(e) => setForm({ ...form, portal_primary_color: e.target.value })} aria-label="Cor primária do portal" className="h-10 w-10 shrink-0 rounded-lg border border-border bg-transparent cursor-pointer" />
+                    <input id="portal-primary-color" name="portal_primary_color" value={form.portal_primary_color || form.primary_color} onChange={(e) => setForm({ ...form, portal_primary_color: e.target.value })} placeholder="#f59e0b" aria-label="Cor primária em hexadecimal" className={inputCls} />
                   </div>
                 </div>
               </div>

@@ -46,7 +46,14 @@ interface ContractData {
   companyPhone?: string;
 }
 
-const fmt = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmt = (v: unknown) => {
+  const number = Number(v ?? 0);
+  return (Number.isFinite(number) ? number : 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+const safeNumber = (value: unknown) => {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? number : 0;
+};
 
 const ContractTemplate = ({ data }: { data: ContractData }) => {
   const today = formatBR(new Date(), { day: "2-digit", month: "long", year: "numeric" });
@@ -168,7 +175,7 @@ const ContractTemplate = ({ data }: { data: ContractData }) => {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
           {[
             { label: "Capital", value: `R$ ${fmt(data.capital)}` },
-            { label: "Taxa", value: `${data.interestRate}% / ${data.frequency.toLowerCase()}` },
+            { label: "Taxa", value: `${data.interestRate}% / ${String(data.frequency || "").toLowerCase()}` },
             { label: "Parcelas", value: `${data.numInstallments}x` },
             { label: "Valor Parcela", value: `R$ ${fmt(data.installmentAmount)}` },
             { label: "Custo Financeiro", value: `R$ ${fmt(data.totalInterest)}` },
@@ -190,7 +197,8 @@ const ContractTemplate = ({ data }: { data: ContractData }) => {
           <h2 className="text-xs font-bold text-foreground uppercase tracking-[0.15em] print:text-black border-l-4 border-primary pl-2">
             4. Cronograma de Pagamentos
           </h2>
-          <table className="w-full text-xs border-collapse">
+          <div className="w-full overflow-x-auto" role="region" aria-label="Cronograma de pagamentos" tabIndex={0}>
+          <table className="w-full min-w-[640px] text-xs border-collapse">
             <thead>
               <tr className="bg-muted/30 print:bg-gray-100">
                 <th className="text-left px-3 py-2 border border-border print:border-gray-300 text-foreground print:text-black font-semibold">Parcela</th>
@@ -222,6 +230,7 @@ const ContractTemplate = ({ data }: { data: ContractData }) => {
               </tr>
             </tbody>
           </table>
+          </div>
         </section>
       )}
 
@@ -245,10 +254,10 @@ const ContractTemplate = ({ data }: { data: ContractData }) => {
           <ul className="list-disc pl-5 space-y-1">
             <li>
               Multa diária de <span className="font-bold">
-                {data.dailyPenaltyType === "fixed" ? `R$ ${fmt(data.lateFeePercent)}` : `${data.lateFeePercent}%`}
+                {data.dailyPenaltyType === "fixed" ? `R$ ${fmt(data.lateFeePercent)}` : `${safeNumber(data.lateFeePercent)}%`}
               </span> por dia de atraso.
             </li>
-            {Number(data.maxInterestCapPercent || 0) > 0 && <li>Os juros de atraso ficam limitados a <span className="font-bold">{data.maxInterestCapPercent}%</span> do valor original da parcela.</li>}
+            {safeNumber(data.maxInterestCapPercent) > 0 && <li>Os juros de atraso ficam limitados a <span className="font-bold">{safeNumber(data.maxInterestCapPercent)}%</span> do valor original da parcela.</li>}
           </ul>
         </div>
       </section>
@@ -260,7 +269,7 @@ const ContractTemplate = ({ data }: { data: ContractData }) => {
         </h2>
         <div className="text-sm text-foreground leading-relaxed space-y-2 print:text-black">
           <p><span className="font-semibold">7.1</span> O DEVEDOR(A) compromete-se a pagar as parcelas nas datas estabelecidas e a manter seus dados de contato atualizados.</p>
-          <p><span className="font-semibold">7.2</span> A quitação antecipada é permitida, com redução proporcional dos encargos futuros{Number(data.earlyPaymentDiscountPercent || 0) > 0 ? ` e desconto adicional de ${data.earlyPaymentDiscountPercent}%` : ""}.</p>
+          <p><span className="font-semibold">7.2</span> A quitação antecipada é permitida, com redução proporcional dos encargos futuros{safeNumber(data.earlyPaymentDiscountPercent) > 0 ? ` e desconto adicional de ${safeNumber(data.earlyPaymentDiscountPercent)}%` : ""}.</p>
           <p><span className="font-semibold">7.3</span> Todo pagamento deverá ser comprovado por recibo, comprovante bancário ou registro no portal do cliente.</p>
           <p><span className="font-semibold">7.4</span> Eventual tolerância de uma parte não implica renúncia, alteração contratual ou novação.</p>
           <p><span className="font-semibold">7.5</span> As partes poderão usar meios eletrônicos para avisos, comprovantes e assinatura, preservado o direito de solicitar confirmação.</p>

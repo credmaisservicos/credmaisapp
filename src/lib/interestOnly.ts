@@ -21,29 +21,31 @@ export function interestOnlyAmount(
   } | null,
   extraLateInterest = 0,
 ): number {
-  const instAmount = Number(inst?.amount || 0);
+  const finite = (value: unknown) => Number.isFinite(Number(value ?? 0)) ? Number(value ?? 0) : 0;
+  const instAmount = finite(inst?.amount);
   if (!contract) return 0;
 
   const mode = contract.loan_mode || "installments";
-  const n = Number(contract.num_installments || 0);
-  const capital = Number(contract.capital || 0);
-  const totalAmount = Number(contract.total_amount || 0);
+  const n = finite(contract.num_installments);
+  const capital = finite(contract.capital);
+  const totalAmount = finite(contract.total_amount);
   const totalInterest =
-    Number(contract.total_interest || 0) || Math.max(0, totalAmount - capital);
+    finite(contract.total_interest) || Math.max(0, totalAmount - capital);
 
   let base: number;
   if (mode === "bullet") {
     base = totalInterest;
   } else if (mode === "percentage" || mode === "interest_only") {
-    base = capital * (Number(contract.interest_rate || 0) / 100);
+    base = capital * (finite(contract.interest_rate) / 100);
   } else if (n <= 0) {
     base = Math.min(instAmount, totalInterest || instAmount);
   } else {
     base = totalInterest / n;
   }
 
-  const value = Math.max(0, base) + Math.max(0, Number(extraLateInterest || 0));
-  return Math.round(Math.min(value, instAmount + Math.max(0, extraLateInterest)) * 100) / 100;
+  const extra = Math.max(0, finite(extraLateInterest));
+  const value = Math.max(0, finite(base)) + extra;
+  return Math.round(Math.min(value, instAmount + extra) * 100) / 100;
 }
 
 /** Próximo vencimento da renovação, respeitando a frequência do contrato. */
@@ -61,8 +63,12 @@ export function nextInterestDueDate(
   const addCycle = () => {
     const freq = String(frequency || "monthly");
     if (freq === "weekly") next.setDate(next.getDate() + 7);
-    else if (freq === "biweekly" || freq === "fortnightly") next.setDate(next.getDate() + 15);
-    else if (freq.startsWith("daily")) next.setDate(next.getDate() + 1);
+    else if (freq === "biweekly" || freq === "fortnightly") next.setDate(next.getDate() + 14);
+    else if (freq === "daily_mon-fri" || freq === "daily-mon-fri") {
+      do { next.setDate(next.getDate() + 1); } while (next.getDay() === 0 || next.getDay() === 6);
+    } else if (freq === "daily_mon-sat" || freq === "daily-mon-sat") {
+      do { next.setDate(next.getDate() + 1); } while (next.getDay() === 0);
+    } else if (freq.startsWith("daily")) next.setDate(next.getDate() + 1);
     else {
       const originalDay = next.getDate();
       next.setDate(1);

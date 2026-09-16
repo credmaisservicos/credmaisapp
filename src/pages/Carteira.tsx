@@ -28,12 +28,19 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMultiTableRealtime } from "@/hooks/useRealtimeSubscription";
-import { formatBR } from "@/lib/dateUtils";
+import { formatBR, parseLocalDate } from "@/lib/dateUtils";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { fetchAll } from "@/lib/fetchAll";
 import { parseFinancialAmount } from "@/lib/financialEntry";
 
 type PeriodKey = "all" | "7d" | "30d" | "90d";
+const safeNumber = (value: unknown) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+};
+const safeDateMs = (value: unknown) => {
+  return parseLocalDate(typeof value === "string" || value instanceof Date ? value : null)?.getTime() ?? null;
+};
 
 const Carteira = () => {
   const confirm = useConfirm();
@@ -192,19 +199,19 @@ const Carteira = () => {
   // Na base de 2026-08-05 isso inflava o saldo em R$ 24.159,34.
   //
   // O lucro continua visível como composição: quanto do que entrou era juros.
-  const totalCapital = capital.reduce((a: number, c: any) => a + Number(c.amount), 0);
-  const totalWithdrawals = withdrawals.reduce((a: number, w: any) => a + Number(w.amount), 0);
-  const totalLucros = profits.reduce((a: number, p: any) => a + Number(p.amount), 0);
-  const totalParcelas = installments.reduce((a: number, i: any) => a + Number(i.paid_amount || i.amount), 0);
+  const totalCapital = capital.reduce((a: number, c: any) => a + safeNumber(c.amount), 0);
+  const totalWithdrawals = withdrawals.reduce((a: number, w: any) => a + safeNumber(w.amount), 0);
+  const totalLucros = profits.reduce((a: number, p: any) => a + safeNumber(p.amount), 0);
+  const totalParcelas = installments.reduce((a: number, i: any) => a + safeNumber(i.paid_amount || i.amount), 0);
   // Enquanto a migração ainda não chegou ao ambiente remoto, a diferença
   // recebimentos-lucro preserva compatibilidade. Após a migração, o razão
   // passa a fornecer a mesma composição de forma explícita.
   const principalRecebido = installments.some((i: any) => i.paid_principal != null)
-    ? installments.reduce((a: number, i: any) => a + Number(i.paid_principal || 0), 0)
+    ? installments.reduce((a: number, i: any) => a + safeNumber(i.paid_principal), 0)
     : Math.max(0, totalParcelas - totalLucros);
-  const totalEmprestimosLiberados = ledgerOutflows.filter((t: any) => t.type === "loan_disbursement").reduce((a: number, t: any) => a + Number(t.amount), 0);
-  const totalSaidasRazao = ledgerOutflows.filter((t: any) => t.type === "expense").reduce((a: number, t: any) => a + Number(t.amount), 0);
-  const totalGastos = expenses.reduce((a: number, e: any) => a + Number(e.amount), 0);
+  const totalEmprestimosLiberados = ledgerOutflows.filter((t: any) => t.type === "loan_disbursement").reduce((a: number, t: any) => a + safeNumber(t.amount), 0);
+  const totalSaidasRazao = ledgerOutflows.filter((t: any) => t.type === "expense").reduce((a: number, t: any) => a + safeNumber(t.amount), 0);
+  const totalGastos = expenses.reduce((a: number, e: any) => a + safeNumber(e.amount), 0);
   const totalEntradas = totalCapital + totalParcelas;
   const totalSaidas = totalGastos + totalWithdrawals + totalEmprestimosLiberados + totalSaidasRazao;
   const saldo = totalEntradas - totalSaidas;
@@ -213,7 +220,9 @@ const Carteira = () => {
   const periodDays: Record<PeriodKey, number | null> = { all: null, "7d": 7, "30d": 30, "90d": 90 };
   const withinPeriod = (dateStr: string, days: number | null) => {
     if (days == null) return true;
-    const diff = (Date.now() - new Date(dateStr).getTime()) / 86400000;
+    const timestamp = safeDateMs(dateStr);
+    if (timestamp == null) return false;
+    const diff = (Date.now() - timestamp) / 86400000;
     return diff <= days;
   };
 
@@ -222,15 +231,17 @@ const Carteira = () => {
 
   const sumIn = (arr: any[], key: string, from: number | null, to: number | null) =>
     arr.filter((r) => {
-      const d = (Date.now() - new Date(r.date || r.paid_at).getTime()) / 86400000;
+      const timestamp = safeDateMs(r.date || r.paid_at);
+      if (timestamp == null) return false;
+      const d = (Date.now() - timestamp) / 86400000;
       if (from != null && d > from) return false;
       if (to != null && d <= to) return false;
       return true;
-    }).reduce((a, r) => a + Number(r[key] ?? r.amount), 0);
+    }).reduce((a, r) => a + safeNumber(r[key] ?? r.amount), 0);
 
   const stats = useMemo(() => {
     // Sem o lucro na soma: ele já vem embutido na parcela (ver totais acima).
-    const received = installments.map((i: any) => ({ ...i, amount: Number(i.paid_amount || i.amount), date: i.paid_at }));
+    const received = installments.map((i: any) => ({ ...i, amount: safeNumber(i.paid_amount || i.amount), date: i.paid_at }));
     const inCur = sumIn(capital, "amount", days, null) + sumIn(received, "amount", days, null);
     const outCur = sumIn(expenses, "amount", days, null) + sumIn(withdrawals, "amount", days, null) + sumIn(ledgerOutflows, "amount", days, null);
     const inPrev = prevDays ? sumIn(capital, "amount", prevDays, days) + sumIn(received, "amount", prevDays, days) : 0;
@@ -254,31 +265,33 @@ const Carteira = () => {
     const now = new Date(); now.setHours(23, 59, 59, 999);
     const sumUntil = (daysAhead: number) => {
       const end = new Date(now.getTime() + daysAhead * 86400000);
-      return receivables.filter((i: any) => new Date(i.due_date) <= end)
-        .reduce((sum: number, i: any) => sum + Math.max(0, Number(i.amount || 0) - Number(i.paid_amount || 0)), 0);
+      return receivables.filter((i: any) => {
+        const due = safeDateMs(i.due_date);
+        return due != null && due <= end.getTime();
+      }).reduce((sum: number, i: any) => sum + Math.max(0, safeNumber(i.amount) - safeNumber(i.paid_amount)), 0);
     };
     return { d7: sumUntil(7), d30: sumUntil(30), d90: sumUntil(90) };
   }, [receivables]);
 
   const timeline = useMemo(() => {
     const all = [
-      ...capital.map((c: any) => ({ type: "in" as const, desc: c.description, amount: Number(c.amount), date: c.date, source: "Aporte", removable: true, id: c.id })),
-      ...withdrawals.map((w: any) => ({ type: "out" as const, desc: w.description, amount: Number(w.amount), date: w.date, source: "Retirada de capital", removable: true, id: w.id })),
+      ...capital.map((c: any) => ({ type: "in" as const, desc: c.description, amount: safeNumber(c.amount), date: c.date, source: "Aporte", removable: true, id: c.id })),
+      ...withdrawals.map((w: any) => ({ type: "out" as const, desc: w.description, amount: safeNumber(w.amount), date: w.date, source: "Retirada de capital", removable: true, id: w.id })),
       // O lucro NÃO entra na linha do tempo como movimento próprio: ele já está
       // dentro da parcela recebida logo abaixo. Aparecia duas vezes.
-      ...installments.map((i: any) => ({ type: "in" as const, desc: "Parcela recebida", amount: Number(i.paid_amount || i.amount), date: i.paid_at, source: "Parcela", removable: false, id: i.id })),
-      ...ledgerOutflows.map((t: any) => ({ type: "out" as const, desc: t.description, amount: Number(t.amount), date: t.date, source: t.type === "loan_disbursement" ? "Empréstimo liberado" : "Pagamento a investidor", removable: false, id: t.id })),
-      ...expenses.map((e: any) => ({ type: "out" as const, desc: e.description, amount: Number(e.amount), date: e.date, source: e.category || "Gasto", removable: false, id: e.id })),
-    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      ...installments.map((i: any) => ({ type: "in" as const, desc: "Parcela recebida", amount: safeNumber(i.paid_amount || i.amount), date: i.paid_at, source: "Parcela", removable: false, id: i.id })),
+      ...ledgerOutflows.map((t: any) => ({ type: "out" as const, desc: t.description, amount: safeNumber(t.amount), date: t.date, source: t.type === "loan_disbursement" ? "Empréstimo liberado" : "Pagamento a investidor", removable: false, id: t.id })),
+      ...expenses.map((e: any) => ({ type: "out" as const, desc: e.description, amount: safeNumber(e.amount), date: e.date, source: e.category || "Gasto", removable: false, id: e.id })),
+    ].sort((a, b) => (safeDateMs(b.date) ?? 0) - (safeDateMs(a.date) ?? 0));
 
     return all.filter((t) => {
       if (!withinPeriod(t.date, days)) return false;
-      if (searchTimeline && !t.desc.toLowerCase().includes(searchTimeline.toLowerCase()) && !t.source.toLowerCase().includes(searchTimeline.toLowerCase())) return false;
+      if (searchTimeline && !String(t.desc || "").toLowerCase().includes(searchTimeline.toLowerCase()) && !String(t.source || "").toLowerCase().includes(searchTimeline.toLowerCase())) return false;
       return true;
     });
   }, [expenses, installments, capital, withdrawals, ledgerOutflows, days, searchTimeline]);
 
-  const fmt = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+  const fmt = (v: number) => safeNumber(v).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
   const fmtCompact = (v: number) =>
     Math.abs(v) >= 1000 ? `R$ ${(v / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}k` : `R$ ${fmt(v)}`;
 
@@ -311,14 +324,16 @@ const Carteira = () => {
   }
 
   // === Composição de entradas (para barra segmentada) ===
-  const entradasTotal = totalCapital + totalParcelas || 1;
-  const capitalPct = (totalCapital / entradasTotal) * 100;
-  const lucrosPct = (totalLucros / entradasTotal) * 100;
-  const parcelasPct = (principalRecebido / entradasTotal) * 100;
+  const entradasTotal = totalCapital + totalParcelas;
+  const capitalPct = entradasTotal > 0 ? (totalCapital / entradasTotal) * 100 : 0;
+  const lucrosPct = entradasTotal > 0 ? (totalLucros / entradasTotal) * 100 : 0;
+  const parcelasPct = entradasTotal > 0 ? (principalRecebido / entradasTotal) * 100 : 0;
 
-  const saidasTotal = totalGastos + totalWithdrawals || 1;
-  const gastosPct = (totalGastos / saidasTotal) * 100;
-  const withdrawPct = (totalWithdrawals / saidasTotal) * 100;
+  const saidasTotal = totalSaidas;
+  const gastosPct = saidasTotal > 0 ? (totalGastos / saidasTotal) * 100 : 0;
+  const withdrawPct = saidasTotal > 0 ? (totalWithdrawals / saidasTotal) * 100 : 0;
+  const emprestimosPct = saidasTotal > 0 ? (totalEmprestimosLiberados / saidasTotal) * 100 : 0;
+  const razaoPct = saidasTotal > 0 ? (totalSaidasRazao / saidasTotal) * 100 : 0;
 
   const grouped = timeline.reduce((acc, t) => {
     const key = formatBR(t.date);
@@ -651,10 +666,14 @@ const Carteira = () => {
           <div className="h-3 rounded-full bg-muted overflow-hidden flex">
             <div className="h-full bg-destructive transition-all duration-700" style={{ width: `${gastosPct}%` }} title="Gastos" />
             <div className="h-full bg-warning transition-all duration-700" style={{ width: `${withdrawPct}%` }} title="Retiradas" />
+            <div className="h-full bg-orange-500 transition-all duration-700" style={{ width: `${emprestimosPct}%` }} title="Empréstimos liberados" />
+            <div className="h-full bg-muted-foreground transition-all duration-700" style={{ width: `${razaoPct}%` }} title="Movimentos da razão" />
           </div>
-          <div className="grid grid-cols-2 gap-2 mt-3 text-[11px]">
+          <div className="grid grid-cols-2 min-[520px]:grid-cols-4 gap-2 mt-3 text-[11px]">
             <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-destructive" /><span className="text-muted-foreground">Gastos</span><span className="ml-auto font-semibold text-foreground">{gastosPct.toFixed(0)}%</span></div>
             <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-warning" /><span className="text-muted-foreground">Retiradas</span><span className="ml-auto font-semibold text-foreground">{withdrawPct.toFixed(0)}%</span></div>
+            <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-orange-500" /><span className="text-muted-foreground">Liberados</span><span className="ml-auto font-semibold text-foreground">{emprestimosPct.toFixed(0)}%</span></div>
+            <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-muted-foreground" /><span className="text-muted-foreground">Razão</span><span className="ml-auto font-semibold text-foreground">{razaoPct.toFixed(0)}%</span></div>
           </div>
         </div>
       </div>
@@ -669,6 +688,10 @@ const Carteira = () => {
           <div className="relative w-full sm:w-auto">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
+              id="portfolio-timeline-search"
+              name="portfolio_timeline_search"
+              aria-label="Buscar no histórico da carteira"
+              autoComplete="off"
               type="text"
               placeholder="Buscar por descrição ou origem..."
               value={searchTimeline}
@@ -676,7 +699,7 @@ const Carteira = () => {
               className="w-full rounded-xl border border-border bg-accent/50 py-2 pl-9 pr-8 text-xs text-foreground placeholder:text-muted-foreground sm:w-72 input-enhanced"
             />
             {searchTimeline && (
-              <button onClick={() => setSearchTimeline("")} className="absolute right-2 top-1/2 -translate-y-1/2">
+              <button type="button" aria-label="Limpar busca do histórico" onClick={() => setSearchTimeline("")} className="absolute right-2 top-1/2 -translate-y-1/2">
                 <X size={12} className="text-muted-foreground" />
               </button>
             )}

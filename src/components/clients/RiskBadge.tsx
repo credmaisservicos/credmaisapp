@@ -4,9 +4,10 @@ export type RiskLevel = "baixo" | "medio" | "alto" | "critico";
 
 export function riskFromScore(score: number | null | undefined): RiskLevel {
   const s = Number(score ?? 0);
-  if (s >= 75) return "baixo";
-  if (s >= 50) return "medio";
-  if (s >= 25) return "alto";
+  const normalized = Number.isFinite(s) ? Math.max(0, Math.min(100, s)) : 0;
+  if (normalized >= 75) return "baixo";
+  if (normalized >= 50) return "medio";
+  if (normalized >= 25) return "alto";
   return "critico";
 }
 
@@ -19,11 +20,12 @@ const CFG: Record<RiskLevel, { label: string; cls: string; icon: React.Component
 
 /** Badge preditivo de inadimplência derivado do credit_score (0-100). */
 export default function RiskBadge({ score, compact = false }: { score: number | null | undefined; compact?: boolean }) {
-  const level = riskFromScore(score);
+  const normalizedScore = Number.isFinite(Number(score)) ? Math.max(0, Math.min(100, Number(score))) : 0;
+  const level = riskFromScore(normalizedScore);
   const { label, cls, icon: Icon } = CFG[level];
   return (
     <span
-      title={`${label} — score ${score ?? 0}/100`}
+      title={`${label} — score ${normalizedScore}/100`}
       className={`inline-flex items-center gap-1 rounded-md ring-1 font-semibold ${cls} ${compact ? "px-1.5 py-0.5 text-[9px]" : "px-2 py-0.5 text-[10px]"}`}
     >
       <Icon size={compact ? 9 : 10} />

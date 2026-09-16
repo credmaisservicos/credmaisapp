@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
 import ErrorState from "@/components/feedback/ErrorState";
 import type { Database } from "@/integrations/supabase/types";
+import { formatBRDateTime, todayLocalISO } from "@/lib/dateUtils";
 
 type AuditLog = Database["public"]["Tables"]["audit_logs"]["Row"];
 const PAGE_SIZE = 200;
@@ -16,6 +17,7 @@ const csvCell = (value: unknown) => {
   if (/^[=+\-@]/.test(text.trimStart())) text = `'${text}`;
   return `"${text.replace(/"/g, '""')}"`;
 };
+const auditDateTime = (value: unknown) => formatBRDateTime(typeof value === "string" ? value : null) || "data indisponível";
 
 const actionLabels: Record<string, string> = {
   create: "Criação",
@@ -94,7 +96,7 @@ const Auditoria = () => {
     const rows = [
       ["Data", "Ação", "Entidade", "ID", "Detalhes"],
       ...filteredLogs.map((l) => [
-        new Date(l.created_at).toLocaleString("pt-BR"),
+        auditDateTime(l.created_at),
         actionLabels[l.action] || l.action,
         entityLabels[l.entity_type] || l.entity_type,
         l.entity_id || "",
@@ -106,7 +108,7 @@ const Auditoria = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `auditoria-${new Date().toISOString().split("T")[0]}.csv`;
+    a.download = `auditoria-${todayLocalISO()}.csv`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -146,19 +148,20 @@ const Auditoria = () => {
             className={`${selectCls} pl-9 w-full`}
           />
         </div>
-        <select value={filterAction} onChange={(e) => setFilterAction(e.target.value)} className={selectCls}>
+        <select name="audit-action-filter" aria-label="Filtrar por ação" value={filterAction} onChange={(e) => setFilterAction(e.target.value)} className={selectCls}>
           <option value="">Todas as ações</option>
           {Object.entries(actionLabels).map(([k, v]) => (
             <option key={k} value={k}>{v}</option>
           ))}
         </select>
-        <select value={filterEntity} onChange={(e) => setFilterEntity(e.target.value)} className={selectCls}>
+        <select name="audit-entity-filter" aria-label="Filtrar por entidade" value={filterEntity} onChange={(e) => setFilterEntity(e.target.value)} className={selectCls}>
           <option value="">Todas as entidades</option>
           {Object.entries(entityLabels).map(([k, v]) => (
             <option key={k} value={k}>{v}</option>
           ))}
         </select>
         <button
+          type="button"
           onClick={exportCsv}
           disabled={filteredLogs.length === 0}
           className="px-4 py-2.5 rounded-2xl bg-primary text-primary-foreground text-sm font-medium flex items-center gap-2 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
@@ -218,7 +221,7 @@ const Auditoria = () => {
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {new Date(log.created_at).toLocaleString("pt-BR")}
+                      {auditDateTime(log.created_at)}
                       {log.entity_id && <span className="ml-2 opacity-50">ID: {log.entity_id.slice(0, 8)}…</span>}
                     </p>
                   </div>
@@ -229,7 +232,7 @@ const Auditoria = () => {
         )}
         {!isLoading && !isError && hasNextPage && (
           <div className="p-4 border-t border-border text-center">
-            <button onClick={() => fetchNextPage()} disabled={isFetchingNextPage} className="px-4 py-2 rounded-xl border border-border text-sm hover:bg-accent disabled:opacity-50">
+            <button type="button" onClick={() => fetchNextPage()} disabled={isFetchingNextPage} className="px-4 py-2 rounded-xl border border-border text-sm hover:bg-accent disabled:opacity-50">
               {isFetchingNextPage ? "Carregando..." : "Carregar mais 200 registros"}
             </button>
           </div>

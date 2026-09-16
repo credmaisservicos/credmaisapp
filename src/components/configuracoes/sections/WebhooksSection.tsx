@@ -27,7 +27,7 @@ const WebhooksSection = ({ ctx }: SectionProps) => {
                 <p className="text-xs text-muted-foreground">Integre com automações externas.</p>
               </div>
             </div>
-            <div><label className="text-label mb-1.5 block">URL do Webhook N8N</label><input value={form.n8n_webhook_url} onChange={(e) => setForm({ ...form, n8n_webhook_url: e.target.value })} placeholder="https://n8n.exemplo.com/webhook/..." className={inputCls} /></div>
+            <div><label htmlFor="n8n-webhook-url" className="text-label mb-1.5 block">URL do Webhook N8N</label><input id="n8n-webhook-url" name="n8n_webhook_url" autoComplete="url" value={form.n8n_webhook_url} onChange={(e) => setForm({ ...form, n8n_webhook_url: e.target.value })} placeholder="https://n8n.exemplo.com/webhook/..." className={inputCls} /></div>
           </>
     </>
   );

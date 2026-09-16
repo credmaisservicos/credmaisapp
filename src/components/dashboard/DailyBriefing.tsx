@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Sparkles, RefreshCw, TrendingUp, AlertTriangle, Minus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { todayLocalISO } from "@/lib/dateUtils";
 
 type Briefing = {
   greeting: string;
@@ -24,7 +25,7 @@ export default function DailyBriefing() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const cacheKey = `${CACHE_KEY_PREFIX}${user?.id}-${new Date().toISOString().slice(0, 10)}`;
+  const cacheKey = `${CACHE_KEY_PREFIX}${user?.id}-${todayLocalISO()}`;
 
   const fetchBriefing = async (force = false) => {
     if (!force) {

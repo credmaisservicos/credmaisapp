@@ -18,13 +18,18 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
 } from "@/components/ui/dialog";
-import { formatBR } from "@/lib/dateUtils";
+import { formatBR, parseLocalDate } from "@/lib/dateUtils";
 import { Button } from "@/components/ui/button";
 import { useMultiTableRealtime } from "@/hooks/useRealtimeSubscription";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { friendlyError } from "@/lib/friendlyError";
 import ErrorState from "@/components/feedback/ErrorState";
 import { fetchAll } from "@/lib/fetchAll";
+
+const safeNumber = (value: unknown) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+};
 
 const Cobradores = () => {
   const { user } = useAuth();
@@ -222,8 +227,8 @@ const Cobradores = () => {
   };
 
   const filteredCollectors = collectors.filter((c: any) =>
-    !search || c.name.toLowerCase().includes(search.toLowerCase()) ||
-    c.phone.includes(search) || c.city?.toLowerCase().includes(search.toLowerCase())
+    !search || (c.name || "").toLowerCase().includes(search.toLowerCase()) ||
+    (c.phone || "").includes(search) || c.city?.toLowerCase().includes(search.toLowerCase())
   );
 
   const stats = {
@@ -243,7 +248,7 @@ const Cobradores = () => {
     return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
   };
 
-  const fmt = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+  const fmt = (v: number) => safeNumber(v).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
   const now = new Date();
 
   // Ficha data
@@ -255,9 +260,9 @@ const Cobradores = () => {
   const fichaPending = fichaInstallments.filter((i: any) => isEmAberto(i));
   const fichaOverdue = fichaPending.filter((i: any) => isEmAtraso(i, now));
   const fichaPaid = fichaInstallments.filter((i: any) => i.status === "paid");
-  const fichaTotalPending = fichaPending.reduce((s: number, i: any) => s + Number(i.amount), 0);
-  const fichaTotalOverdue = fichaOverdue.reduce((s: number, i: any) => s + Number(i.amount), 0);
-  const fichaTotalPaid = fichaPaid.reduce((s: number, i: any) => s + Number(i.paid_amount || i.amount), 0);
+  const fichaTotalPending = fichaPending.reduce((s: number, i: any) => s + safeNumber(i.amount), 0);
+  const fichaTotalOverdue = fichaOverdue.reduce((s: number, i: any) => s + safeNumber(i.amount), 0);
+  const fichaTotalPaid = fichaPaid.reduce((s: number, i: any) => s + safeNumber(i.paid_amount ?? i.amount), 0);
 
   if (queryError) {
     return (
@@ -286,7 +291,7 @@ const Cobradores = () => {
               <p className="text-sm text-muted-foreground mt-0.5">Gestão completa de cobradores externos</p>
             </div>
           </div>
-          <button onClick={() => { resetForm(); setShowForm(!showForm); }} className="btn-premium w-full sm:w-auto justify-center">
+          <button type="button" onClick={() => { resetForm(); setShowForm(!showForm); }} className="btn-premium w-full sm:w-auto justify-center">
             <Plus size={16} /> Novo Cobrador
           </button>
         </div>
@@ -317,6 +322,10 @@ const Cobradores = () => {
         <div className="relative">
           <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input
+            id="collectors-search"
+            name="collectors_search"
+            aria-label="Buscar cobradores"
+            autoComplete="off"
             type="text"
             placeholder="Buscar por nome, telefone ou cidade..."
             value={search}
@@ -324,7 +333,7 @@ const Cobradores = () => {
             className={`${inputCls} pl-10`}
           />
           {search && (
-            <button onClick={() => setSearch("")} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+            <button type="button" aria-label="Limpar busca de cobradores" onClick={() => setSearch("")} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
               <X size={14} />
             </button>
           )}
@@ -348,25 +357,25 @@ const Cobradores = () => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Nome Completo *</label>
-              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: João Silva" required className={inputCls} />
+              <label htmlFor="collector-name" className="text-xs font-medium text-muted-foreground mb-1.5 block">Nome Completo *</label>
+              <input id="collector-name" name="collector_name" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: João Silva" required className={inputCls} />
             </div>
             <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Telefone / WhatsApp *</label>
-              <input value={phone} onChange={(e) => setPhone(formatPhone(e.target.value))} placeholder="(00) 00000-0000" required className={inputCls} />
+              <label htmlFor="collector-phone" className="text-xs font-medium text-muted-foreground mb-1.5 block">Telefone / WhatsApp *</label>
+              <input id="collector-phone" name="collector_phone" autoComplete="tel" value={phone} onChange={(e) => setPhone(formatPhone(e.target.value))} placeholder="(00) 00000-0000" required className={inputCls} />
             </div>
             <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">E-mail</label>
-              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@exemplo.com" className={inputCls} />
+              <label htmlFor="collector-email" className="text-xs font-medium text-muted-foreground mb-1.5 block">E-mail</label>
+              <input id="collector-email" name="collector_email" autoComplete="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@exemplo.com" className={inputCls} />
             </div>
             <div className="grid grid-cols-3 gap-3">
               <div className="col-span-2">
-                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Cidade *</label>
-                <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="São Paulo" required className={inputCls} />
+                <label htmlFor="collector-city" className="text-xs font-medium text-muted-foreground mb-1.5 block">Cidade *</label>
+                <input id="collector-city" name="collector_city" autoComplete="address-level2" value={city} onChange={(e) => setCity(e.target.value)} placeholder="São Paulo" required className={inputCls} />
               </div>
               <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">UF *</label>
-                <input value={state} onChange={(e) => setState(e.target.value.toUpperCase())} placeholder="SP" maxLength={2} required className={inputCls} />
+                <label htmlFor="collector-state" className="text-xs font-medium text-muted-foreground mb-1.5 block">UF *</label>
+                <input id="collector-state" name="collector_state" autoComplete="address-level1" value={state} onChange={(e) => setState(e.target.value.toUpperCase())} placeholder="SP" maxLength={2} required className={inputCls} />
               </div>
             </div>
           </div>
@@ -435,7 +444,19 @@ const Cobradores = () => {
                 <div className="p-4 sm:p-5 space-y-4">
                   {/* Header */}
                   <div className="flex min-w-0 items-start justify-between gap-2">
-                    <div className="flex min-w-0 items-center gap-3 cursor-pointer" onClick={() => setFichaCollector(c.id)}>
+                    <div
+                      className="flex min-w-0 items-center gap-3 cursor-pointer rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Ver ficha de ${c.name || "cobrador"}`}
+                      onClick={() => setFichaCollector(c.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setFichaCollector(c.id);
+                        }
+                      }}
+                    >
                       <div className={`relative w-12 h-12 rounded-xl flex items-center justify-center text-base font-bold shadow-sm ${
                         isActive
                           ? "bg-gradient-to-br from-primary/20 to-primary/5 text-primary border border-primary/10"
@@ -475,7 +496,7 @@ const Cobradores = () => {
 
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <button className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors">
+                          <button type="button" aria-label={`Ações de ${c.name || "cobrador"}`} className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors">
                             <MoreVertical size={16} />
                           </button>
                         </DropdownMenuTrigger>
@@ -556,7 +577,7 @@ const Cobradores = () => {
                   {/* Assigned clients */}
                   {cAssignments.length > 0 && (
                     <div>
-                      <button onClick={() => setExpandedCard(isExpanded ? null : c.id)}
+                      <button type="button" onClick={() => setExpandedCard(isExpanded ? null : c.id)} aria-expanded={isExpanded} aria-label={`${isExpanded ? "Ocultar" : "Mostrar"} clientes atribuídos a ${c.name || "cobrador"}`}
                         className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground mb-2 transition-colors">
                         <ChevronDown size={12} className={`transition-transform ${isExpanded ? "rotate-180" : ""}`} />
                         {cAssignments.length} {cAssignments.length === 1 ? "cliente atribuído" : "clientes atribuídos"}
@@ -566,7 +587,7 @@ const Cobradores = () => {
                           {cAssignments.map((a: any) => (
                             <Badge key={a.id} variant="outline" className="text-[11px] gap-1.5 py-1 px-2.5 bg-accent/30 hover:bg-accent/50 transition-colors">
                               {a.clients?.name}
-                              <button onClick={() => handleRemoveAssignment(a.id)}
+                              <button type="button" onClick={() => handleRemoveAssignment(a.id)} aria-label={`Remover ${a.clients?.name || "cliente"} da carteira do cobrador`}
                                 className="hover:text-destructive transition-colors"><X size={10} /></button>
                             </Badge>
                           ))}
@@ -577,15 +598,15 @@ const Cobradores = () => {
 
                   {/* Quick action buttons */}
                   <div className="flex items-center gap-2 pt-1">
-                    <button onClick={() => setFichaCollector(c.id)}
+                    <button type="button" onClick={() => setFichaCollector(c.id)}
                       className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium bg-accent/50 text-foreground hover:bg-accent transition-all">
                       <FileText size={12} /> Ver Ficha
                     </button>
-                    <button onClick={() => setAssignCobrancaModal(c.id)}
+                    <button type="button" onClick={() => setAssignCobrancaModal(c.id)}
                       className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-all">
                       <DollarSign size={12} /> Atribuir Cobranças
                     </button>
-                    <button onClick={() => handleGenerateToken(c.id)}
+                    <button type="button" onClick={() => handleGenerateToken(c.id)} aria-label={`Gerar token para ${c.name || "cobrador"}`}
                       className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium bg-accent/50 text-foreground hover:bg-accent transition-all">
                       <Key size={12} />
                     </button>
@@ -701,7 +722,7 @@ const Cobradores = () => {
                         const clientInst = fichaInstallments.filter((i: any) => i.client_id === a.client_id);
                         const clientPending = clientInst.filter((i: any) => isEmAberto(i));
                         const clientOverdue = clientPending.filter((i: any) => isEmAtraso(i, now));
-                        const clientTotal = clientPending.reduce((s: number, i: any) => s + Number(i.amount), 0);
+                        const clientTotal = clientPending.reduce((s: number, i: any) => s + safeNumber(i.amount), 0);
 
                         return (
                           <div key={a.id} className="rounded-xl border border-border bg-card/50 overflow-hidden">
@@ -754,7 +775,7 @@ const Cobradores = () => {
                                           {formatBR(inst.due_date)}
                                           {isOverdue && (
                                             <span className="text-destructive ml-1">
-                                              ({Math.floor((now.getTime() - new Date(inst.due_date).getTime()) / 86400000)}d atrás)
+                                              ({(() => { const due = parseLocalDate(inst.due_date); return due ? Math.max(0, Math.floor((now.getTime() - due.getTime()) / 86400000)) : 0; })()}d atrás)
                                             </span>
                                           )}
                                         </p>
@@ -805,6 +826,10 @@ const Cobradores = () => {
             <div className="relative">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <input
+                id="collector-billing-client-search"
+                name="collector_billing_client_search"
+                aria-label="Buscar cliente para atribuir cobranças"
+                autoComplete="off"
                 value={cobrancaClientSearch}
                 onChange={(e) => setCobrancaClientSearch(e.target.value)}
                 placeholder="Buscar cliente..."
@@ -817,7 +842,7 @@ const Cobradores = () => {
                 .filter((cl: any) => {
                   const collectorAssigns = assignments.filter((a: any) => a.collector_id === assignCobrancaModal);
                   return !collectorAssigns.some((a: any) => a.client_id === cl.id) &&
-                    (!cobrancaClientSearch || cl.name.toLowerCase().includes(cobrancaClientSearch.toLowerCase()));
+                    (!cobrancaClientSearch || (cl.name || "").toLowerCase().includes(cobrancaClientSearch.toLowerCase()));
                 })
                 .map((cl: any) => {
                   // Find pending installments for this client
@@ -825,10 +850,10 @@ const Cobradores = () => {
                     i.client_id === cl.id && isEmAberto(i)
                   );
                   const clientOverdueInst = clientPendingInst.filter((i: any) => isEmAtraso(i, now));
-                  const totalPending = clientPendingInst.reduce((s: number, i: any) => s + Number(i.amount), 0);
+                  const totalPending = clientPendingInst.reduce((s: number, i: any) => s + safeNumber(i.amount), 0);
 
                   return (
-                    <button key={cl.id}
+                    <button type="button" key={cl.id}
                       onClick={() => { handleAssign(assignCobrancaModal!, cl.id); }}
                       className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm hover:bg-accent/50 text-foreground transition-colors text-left border border-border/50 bg-card/50">
                       <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-sm font-bold text-primary shrink-0">
@@ -863,7 +888,7 @@ const Cobradores = () => {
               {clients.filter((cl: any) => {
                 const collectorAssigns = assignments.filter((a: any) => a.collector_id === assignCobrancaModal);
                 return !collectorAssigns.some((a: any) => a.client_id === cl.id) &&
-                  (!cobrancaClientSearch || cl.name.toLowerCase().includes(cobrancaClientSearch.toLowerCase()));
+                  (!cobrancaClientSearch || (cl.name || "").toLowerCase().includes(cobrancaClientSearch.toLowerCase()));
               }).length === 0 && (
                 <p className="text-center text-sm text-muted-foreground py-6">
                   {cobrancaClientSearch ? "Nenhum cliente encontrado" : "Todos os clientes já foram atribuídos"}
@@ -887,6 +912,10 @@ const Cobradores = () => {
             <div className="relative">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <input
+                id="collector-client-search"
+                name="collector_client_search"
+                aria-label="Buscar cliente para atribuir"
+                autoComplete="off"
                 value={clientSearch}
                 onChange={(e) => setClientSearch(e.target.value)}
                 placeholder="Buscar cliente..."
@@ -899,10 +928,10 @@ const Cobradores = () => {
                 .filter((cl: any) => {
                   const collectorAssigns = assignments.filter((a: any) => a.collector_id === assignModal);
                   return !collectorAssigns.some((a: any) => a.client_id === cl.id) &&
-                    (!clientSearch || cl.name.toLowerCase().includes(clientSearch.toLowerCase()));
+                    (!clientSearch || (cl.name || "").toLowerCase().includes(clientSearch.toLowerCase()));
                 })
                 .map((cl: any) => (
-                  <button key={cl.id}
+                  <button type="button" key={cl.id}
                     onClick={() => { handleAssign(assignModal!, cl.id); setAssignModal(null); setClientSearch(""); }}
                     className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm hover:bg-accent/50 text-foreground transition-colors text-left">
                     <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
@@ -914,7 +943,7 @@ const Cobradores = () => {
               {clients.filter((cl: any) => {
                 const collectorAssigns = assignments.filter((a: any) => a.collector_id === assignModal);
                 return !collectorAssigns.some((a: any) => a.client_id === cl.id) &&
-                  (!clientSearch || cl.name.toLowerCase().includes(clientSearch.toLowerCase()));
+                  (!clientSearch || (cl.name || "").toLowerCase().includes(clientSearch.toLowerCase()));
               }).length === 0 && (
                 <p className="text-center text-sm text-muted-foreground py-6">
                   {clientSearch ? "Nenhum cliente encontrado" : "Todos os clientes já foram atribuídos"}

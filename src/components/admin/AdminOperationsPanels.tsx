@@ -9,8 +9,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import ErrorState from "@/components/feedback/ErrorState";
+import { formatBR, formatBRDateTime } from "@/lib/dateUtils";
 
 type CountResult = { count: number | null; error: unknown };
+
+const safeAdminNumber = (value: unknown) => {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? number : 0;
+};
+const safeAdminDate = (value: unknown) => formatBR(typeof value === "string" ? value : null) || "data indisponível";
+const safeAdminDateTime = (value: unknown) => formatBRDateTime(typeof value === "string" ? value : null) || "data indisponível";
 
 const countRows = async (table: string, apply?: (query: any) => any) => {
   let query = (supabase.from(table as any) as any).select("*", { count: "exact", head: true });
@@ -129,8 +137,8 @@ export const AdminFinancePanel = () => {
       active: subscriptions.filter((s) => s.status === "active").length,
       pending: subscriptions.filter((s) => ["pending", "in_process"].includes(s.status)).length,
       failed: subscriptions.filter((s) => ["failed", "cancelled", "canceled"].includes(s.status)).length,
-      paid: subscriptions.reduce((sum, s) => sum + Number(s.amount_paid || 0), 0),
-      volume: transactions.reduce((sum, t) => sum + Math.abs(Number(t.amount || 0)), 0),
+      paid: subscriptions.reduce((sum, s) => sum + safeAdminNumber(s.amount_paid), 0),
+      volume: transactions.reduce((sum, t) => sum + Math.abs(safeAdminNumber(t.amount)), 0),
     };
   }, [query.data]);
   if (query.error) return <ErrorState error={query.error} onRetry={() => query.refetch()} />;
@@ -150,8 +158,8 @@ export const AdminFinancePanel = () => {
           <table className="w-full min-w-[760px] text-xs text-left">
             <thead className="bg-accent/30 text-muted-foreground"><tr><th className="p-3">Cliente</th><th className="p-3">Plano</th><th className="p-3">Provedor</th><th className="p-3">Valor</th><th className="p-3">Status</th><th className="p-3">Período</th></tr></thead>
             <tbody className="divide-y divide-border/60">
-              {(query.data?.subscriptions || []).map((s) => <tr key={s.id}><td className="p-3">{s.email}</td><td className="p-3">{s.plan_name || s.plan_tier || "—"}</td><td className="p-3">{s.provider || "—"}</td><td className="p-3">{Number(s.amount_paid || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td><td className="p-3"><Badge variant={s.status === "active" ? "default" : "outline"}>{s.status}</Badge></td><td className="p-3 text-muted-foreground">{s.current_period_end ? new Date(s.current_period_end).toLocaleDateString("pt-BR") : "—"}</td></tr>)}
-              {!query.isLoading && !query.data?.subscriptions.length && <tr><td colSpan={6} className="p-8 text-center text-muted-foreground">Nenhuma assinatura registrada.</td></tr>}
+              {(query.data?.subscriptions || []).map((s) => <tr key={s.id}><td className="p-3">{s.email || "—"}</td><td className="p-3">{s.plan_name || s.plan_tier || "—"}</td><td className="p-3">{s.provider || "—"}</td><td className="p-3">{safeAdminNumber(s.amount_paid).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td><td className="p-3"><Badge variant={s.status === "active" ? "default" : "outline"}>{s.status || "—"}</Badge></td><td className="p-3 text-muted-foreground">{safeAdminDate(s.current_period_end)}</td></tr>)}
+          {!query.isLoading && !(query.data?.subscriptions || []).length && <tr><td colSpan={6} className="p-8 text-center text-muted-foreground">Nenhuma assinatura registrada.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -192,8 +200,8 @@ export const AdminSecurityPanel = () => {
       <div className="rounded-2xl border border-border bg-card overflow-hidden">
         <div className="p-4 border-b border-border"><h3 className="text-sm font-semibold">Atividade administrativa recente</h3></div>
         <div className="divide-y divide-border/60">
-          {(d?.recent || []).map((event) => <div key={event.id} className="p-3 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-xs"><Badge variant="outline">{event.action}</Badge><span className="font-medium">{event.entity_type}</span><span className="font-mono text-[10px] text-muted-foreground truncate flex-1">{event.entity_id || "—"}</span><time className="text-muted-foreground">{new Date(event.created_at).toLocaleString("pt-BR")}</time></div>)}
-          {!query.isLoading && !d?.recent.length && <p className="p-8 text-center text-sm text-muted-foreground">Nenhum evento recente.</p>}
+          {(d?.recent || []).map((event) => <div key={event.id} className="p-3 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-xs"><Badge variant="outline">{event.action || "—"}</Badge><span className="font-medium">{event.entity_type || "—"}</span><span className="font-mono text-[10px] text-muted-foreground truncate flex-1">{event.entity_id || "—"}</span><time className="text-muted-foreground">{safeAdminDateTime(event.created_at)}</time></div>)}
+          {!query.isLoading && !(d?.recent || []).length && <p className="p-8 text-center text-sm text-muted-foreground">Nenhum evento recente.</p>}
         </div>
       </div>
     </div>

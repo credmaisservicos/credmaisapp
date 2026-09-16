@@ -3,6 +3,7 @@ import { AlertTriangle, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { formatBRDateTime } from "@/lib/dateUtils";
 
 /**
  * Erros de tela capturados no navegador dos assinantes e dos clientes.
@@ -91,7 +92,7 @@ const ClientErrorsPanel = () => {
                 <p className="text-xs text-foreground/90 mt-1 break-words">{e.mensagem}</p>
               </div>
               <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
-                {new Date(e.ultima).toLocaleString("pt-BR")}
+                {formatBRDateTime(typeof e.ultima === "string" ? e.ultima : null) || "data indisponível"}
               </span>
             </div>
           </div>

@@ -1,7 +1,9 @@
 import { loadPdfLib } from "@/utils/pdfLib";
+import { formatBR, formatBRDateTime, parseLocalDate } from "@/lib/dateUtils";
 
-const brl = (n: number) => (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-const dt = (s?: string | null) => (s ? new Date(s).toLocaleDateString("pt-BR") : "-");
+const safeNumber = (value: unknown) => Number.isFinite(Number(value ?? 0)) ? Number(value ?? 0) : 0;
+const brl = (n: number) => safeNumber(n).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const dt = (s?: string | null) => formatBR(s) || "-";
 
 export async function generateInvestorStatementPdf(payload: {
   investor: { name: string; cpf_cnpj: string | null; email: string | null };
@@ -38,9 +40,9 @@ export async function generateInvestorStatementPdf(payload: {
 
   // KPIs
   const active = payload.loans.filter((l) => l.status !== "paid");
-  const capital = active.reduce((s, l) => s + Number(l.principal), 0);
-  const receber = active.reduce((s, l) => s + (Number(l.total_due) - Number(l.paid_amount)), 0);
-  const recebido = payload.loans.reduce((s, l) => s + Number(l.paid_amount), 0);
+  const capital = active.reduce((s, l) => s + safeNumber(l.principal), 0);
+  const receber = active.reduce((s, l) => s + (safeNumber(l.total_due) - safeNumber(l.paid_amount)), 0);
+  const recebido = payload.loans.reduce((s, l) => s + safeNumber(l.paid_amount), 0);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
@@ -72,7 +74,7 @@ export async function generateInvestorStatementPdf(payload: {
       `${l.interest_rate}%`,
       brl(l.total_due),
       brl(l.paid_amount),
-      brl(Number(l.total_due) - Number(l.paid_amount)),
+      brl(safeNumber(l.total_due) - safeNumber(l.paid_amount)),
       l.status === "paid" ? "Quitado" : "Ativo",
     ]),
   });
@@ -93,7 +95,7 @@ export async function generateInvestorStatementPdf(payload: {
       headStyles: { fillColor: [16, 185, 129], textColor: 255 },
       head: [["Data", "Método", "Valor"]],
       body: allPayments
-        .sort((a: any, b: any) => new Date(b.paid_at).getTime() - new Date(a.paid_at).getTime())
+        .sort((a: any, b: any) => (parseLocalDate(b.paid_at)?.getTime() ?? 0) - (parseLocalDate(a.paid_at)?.getTime() ?? 0))
         .map((p: any) => [dt(p.paid_at), p.method || "—", brl(p.amount)]),
     });
   }
@@ -103,9 +105,10 @@ export async function generateInvestorStatementPdf(payload: {
   doc.setFontSize(8);
   doc.setTextColor(120, 120, 120);
   doc.text(
-    `Documento gerado em ${new Date().toLocaleString("pt-BR")} • ${company} • Credor: ${payload.owner?.name || "-"}`,
+    `Documento gerado em ${formatBRDateTime(new Date())} • ${company} • Credor: ${payload.owner?.name || "-"}`,
     w / 2, pageH - 8, { align: "center" }
   );
 
-  doc.save(`extrato-investidor-${payload.investor.name.replace(/\s+/g, "-").toLowerCase()}.pdf`);
+  const investorFileName = String(payload.investor?.name || "investidor").replace(/\s+/g, "-").toLowerCase();
+  doc.save(`extrato-investidor-${investorFileName}.pdf`);
 }

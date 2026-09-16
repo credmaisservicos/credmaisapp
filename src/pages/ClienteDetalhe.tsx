@@ -36,7 +36,7 @@ import {
 } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import ErrorState from "@/components/feedback/ErrorState";
-import { formatBR } from "@/lib/dateUtils";
+import { formatBR, parseLocalDate, todayLocalISO } from "@/lib/dateUtils";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { calculateLoan, generateInstallmentSchedule, LOAN_MODE_LABEL, type LoanMode, type Frequency, type DailyMode } from "@/lib/loanMath";
 import { getSignedUploadUrl } from "@/lib/storage";
@@ -49,7 +49,11 @@ import { buildPendingSchedule, createContractAtomically } from "@/lib/contractPe
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getPreferredPhone, resolveClientPhones } from "@/lib/phone";
 
-const moneyLike = (value: number) => `R$ ${Number(value || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const safeNumber = (value: unknown) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+};
+const moneyLike = (value: number) => `R$ ${safeNumber(value).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const InfoCell = ({ icon: Icon, label, value, tone = "blue" }: { icon: any; label: string; value: string; tone?: string }) => <div className="reference-info-cell"><span className={`reference-info-icon ${tone}`}><Icon size={15}/></span><span><small>{label}</small><strong>{value}</strong></span></div>;
 const StatCell = ({ icon: Icon, value, label, tone = "blue" }: { icon: any; value: string; label: string; tone?: string }) => <div className="reference-stat-cell"><span className={`reference-info-icon ${tone}`}><Icon size={14}/></span><span><strong>{value}</strong><small>{label}</small></span></div>;
 
@@ -94,8 +98,8 @@ const ClienteDetalhe = () => {
   const [loanCapital, setLoanCapital] = useState("");
   const [loanInstallments, setLoanInstallments] = useState("");
   const [loanFreq, setLoanFreq] = useState("monthly");
-  const [loanStartDate, setLoanStartDate] = useState(new Date().toISOString().split("T")[0]);
-  const [loanStart, setLoanStart] = useState(new Date().toISOString().split("T")[0]);
+  const [loanStartDate, setLoanStartDate] = useState(todayLocalISO());
+  const [loanStart, setLoanStart] = useState(todayLocalISO());
   const [loanInterestRate, setLoanInterestRate] = useState("10");
   const [loanDailyFee, setLoanDailyFee] = useState(String(DEFAULT_DAILY_LATE_RATE));
   const [loanLateFee, setLoanLateFee] = useState("0");
@@ -207,7 +211,10 @@ const ClienteDetalhe = () => {
         .select("*, contracts(capital, frequency, daily_interest_percent, max_interest_cap_percent)")
         .eq("client_id", id!).order("due_date").range(from, to));
       const now = new Date();
-      return (data || []).map((i: any) => i.status === "pending" && new Date(i.due_date) < now ? { ...i, status: "overdue" } : i);
+      return (data || []).map((i: any) => {
+        const dueTime = parseLocalDate(i.due_date)?.getTime() ?? NaN;
+        return i.status === "pending" && Number.isFinite(dueTime) && dueTime < now.getTime() ? { ...i, status: "overdue" } : i;
+      });
     },
     enabled: !!id && !!user,
     staleTime: 30_000,
@@ -241,20 +248,20 @@ const ClienteDetalhe = () => {
       if (installment.status !== "paid") continue;
       const contract = activeContracts.find((c: any) => c.id === installment.contract_id);
       if (!contract) continue;
-      const fallback = Number(contract.capital || 0) / (Number(contract.num_installments) || 1);
+      const fallback = safeNumber(contract.capital) / (safeNumber(contract.num_installments) || 1);
       returnedPrincipal.set(
         contract.id,
-        (returnedPrincipal.get(contract.id) || 0) + Number(installment.paid_principal ?? fallback),
+        (returnedPrincipal.get(contract.id) || 0) + safeNumber(installment.paid_principal ?? fallback),
       );
     }
     const totalCapital = activeContracts.reduce((s: number, c: any) =>
-      s + Math.max(0, Number(c.capital || 0) - (returnedPrincipal.get(c.id) || 0)), 0);
-    const lifetimeCapital = contracts.reduce((s: number, c: any) => s + Number(c.capital || 0), 0);
-    const totalAmount = contracts.reduce((s: number, c: any) => s + Number(c.total_amount || 0), 0);
+      s + Math.max(0, safeNumber(c.capital) - (returnedPrincipal.get(c.id) || 0)), 0);
+    const lifetimeCapital = contracts.reduce((s: number, c: any) => s + safeNumber(c.capital), 0);
+    const totalAmount = contracts.reduce((s: number, c: any) => s + safeNumber(c.total_amount), 0);
     const paidInst = installments.filter((i: any) => i.status === "paid");
     const overdueInst = installments.filter((i: any) => i.status === "overdue");
     const pendingInst = installments.filter((i: any) => i.status === "pending");
-    const totalPaid = paidInst.reduce((s: number, i: any) => s + Number(i.paid_amount || i.amount || 0), 0);
+    const totalPaid = paidInst.reduce((s: number, i: any) => s + safeNumber(i.paid_amount ?? i.amount), 0);
     const balanceOf = (i: any) => {
       const contract = contracts.find((c: any) => c.id === i.contract_id) as any;
       return portalInstallmentAmount({
@@ -265,14 +272,14 @@ const ClienteDetalhe = () => {
     };
     const totalOverdue = overdueInst.reduce((s: number, i: any) => s + balanceOf(i), 0);
     const totalPending = pendingInst.reduce((s: number, i: any) => s + balanceOf(i), 0);
-    const totalProfit = profits.reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
-    const ltvPct = totalAmount > 0 ? Math.round((totalPaid / totalAmount) * 100) : 0;
+    const totalProfit = profits.reduce((s: number, p: any) => s + safeNumber(p.amount), 0);
+    const ltvPct = totalAmount > 0 ? Math.max(0, Math.min(100, Math.round((totalPaid / totalAmount) * 100))) : 0;
     const ticketMedio = contracts.length > 0 ? lifetimeCapital / contracts.length : 0;
     const totalDueInst = paidInst.length + overdueInst.length;
-    const latePayRate = totalDueInst > 0 ? Math.round((overdueInst.length / totalDueInst) * 100) : 0;
+    const latePayRate = totalDueInst > 0 ? Math.max(0, Math.min(100, Math.round((overdueInst.length / totalDueInst) * 100))) : 0;
     const nextDueInst = pendingInst
       .slice()
-      .sort((a: any, b: any) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())[0];
+      .sort((a: any, b: any) => (parseLocalDate(a.due_date)?.getTime() ?? Number.MAX_SAFE_INTEGER) - (parseLocalDate(b.due_date)?.getTime() ?? Number.MAX_SAFE_INTEGER))[0];
     return { totalCapital, lifetimeCapital, totalAmount, totalPaid, totalOverdue, totalPending, totalProfit, remaining: totalPending + totalOverdue, paidInst, overdueInst, pendingInst, ltvPct, ticketMedio, latePayRate, nextDueInst, activeContracts };
   }, [contracts, installments, profits]);
 
@@ -315,7 +322,7 @@ const ClienteDetalhe = () => {
   };
   const signedUrl = async (name: string) => {
     const { data } = await supabase.storage.from("uploads").createSignedUrl(`${docsFolder}/${name}`, 60 * 10);
-    if (data?.signedUrl) window.open(data.signedUrl, "_blank");
+    if (data?.signedUrl) window.open(data.signedUrl, "_blank", "noopener,noreferrer");
   };
 
 
@@ -542,7 +549,7 @@ const ClienteDetalhe = () => {
       });
       if (error) throw error;
 
-      toast({ title: "Contrato renegociado!", description: `${payload.numInstallments}x de R$ ${payload.installmentAmount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` });
+      toast({ title: "Contrato renegociado!", description: `${payload.numInstallments || 0}x de R$ ${Number(payload.installmentAmount || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` });
       setRenegotiating(null);
       invAll();
     } catch (err: any) {
@@ -565,7 +572,7 @@ const ClienteDetalhe = () => {
       installment_amount: String(c.installment_amount ?? ""),
       frequency: baseFreq,
       daily_mode: dailyMode,
-      start_date: c.start_date ? new Date(c.start_date).toISOString().split("T")[0] : "",
+      start_date: parseLocalDate(c.start_date)?.toISOString().split("T")[0] || "",
       late_fee_percent: String(c.late_fee_percent ?? "0"),
       daily_interest_percent: String(c.daily_interest_percent ?? "0"),
       notes: c.notes || "",
@@ -715,7 +722,7 @@ const ClienteDetalhe = () => {
     setEditInst(inst);
     setEditInstForm({
       amount: String(inst.amount ?? ""),
-      due_date: inst.due_date ? new Date(inst.due_date).toISOString().split("T")[0] : "",
+      due_date: parseLocalDate(inst.due_date)?.toISOString().split("T")[0] || "",
     });
   };
 
@@ -724,8 +731,10 @@ const ClienteDetalhe = () => {
     setEditInstSaving(true);
     try {
       const amt = parseFloat(editInstForm.amount);
-      const dd = editInstForm.due_date ? new Date(editInstForm.due_date + "T12:00:00").toISOString() : editInst.due_date;
+      const dueDate = editInstForm.due_date ? parseLocalDate(editInstForm.due_date) : null;
+      const dd = dueDate ? dueDate.toISOString() : editInstForm.due_date ? null : editInst.due_date;
       if (isNaN(amt) || amt <= 0) throw new Error("Valor inválido");
+      if (!dd) throw new Error("Data de vencimento inválida");
       const { error } = await supabase.from("contract_installments").update({ amount: amt, due_date: dd }).eq("id", editInst.id);
       if (error) throw error;
       toast({ title: "Parcela atualizada!" });
@@ -967,7 +976,7 @@ const ClienteDetalhe = () => {
     const phone = getPhone();
     if (!phone) { toast({ title: "Sem telefone", variant: "destructive" }); return; }
     const msg = encodeURIComponent(`Olá ${client?.name}, sua parcela #${inst.installment_number} de R$ ${fmt(Number(inst.amount))} venceu em ${formatBR(inst.due_date)}. Regularize o pagamento.`);
-    window.open(`https://wa.me/${phone}?text=${msg}`, "_blank");
+    window.open(`https://wa.me/${phone}?text=${msg}`, "_blank", "noopener,noreferrer");
   };
 
   const sendPortalLink = () => {
@@ -975,7 +984,7 @@ const ClienteDetalhe = () => {
     if (!phone) { toast({ title: "Sem telefone", variant: "destructive" }); return; }
     const portalUrl = `${window.location.origin}/portal-cliente?o=${user!.id}`;
     const msg = encodeURIComponent(`Olá ${client?.name}, aqui está o link para o seu portal do cliente: ${portalUrl}\n\nLá você pode conferir suas parcelas, gerar PIX para pagamento e ver seu saldo devedor.\n\nPara acessar, informe somente o seu CPF.`);
-    window.open(`https://wa.me/${phone}?text=${msg}`, "_blank");
+    window.open(`https://wa.me/${phone}?text=${msg}`, "_blank", "noopener,noreferrer");
   };
 
   const sendAllOverdue = () => {
@@ -991,7 +1000,7 @@ const ClienteDetalhe = () => {
       });
     }, 0);
     const msg = encodeURIComponent(`Olá ${client?.name}, você possui ${kpis.overdueInst.length} parcela(s) em atraso, total R$ ${fmt(total)}. Entre em contato para regularizar.`);
-    window.open(`https://wa.me/${phone}?text=${msg}`, "_blank");
+    window.open(`https://wa.me/${phone}?text=${msg}`, "_blank", "noopener,noreferrer");
   };
 
   const payAllPending = async () => {
@@ -1216,7 +1225,7 @@ const ClienteDetalhe = () => {
     // Fallback: baixa o PDF e abre o WhatsApp para o usuário anexar manualmente
     doc.save(fileName);
     const msg = encodeURIComponent(`${msgText}\n\n(O PDF foi baixado no seu dispositivo — anexe-o na conversa)`);
-    window.open(`https://wa.me/55${phone}?text=${msg}`, "_blank");
+    window.open(`https://wa.me/55${phone}?text=${msg}`, "_blank", "noopener,noreferrer");
     toast({ title: "PDF baixado", description: "Anexe-o no WhatsApp que abriu." });
   };
 
@@ -1261,7 +1270,7 @@ const ClienteDetalhe = () => {
     if (!last) { toast({ title: "Nenhum empréstimo anterior", variant: "destructive" }); return; }
     if (!(await confirm(`Duplicar último empréstimo de R$ ${fmt(Number(last.capital))} (${last.num_installments}x)?`))) return;
     try {
-      const today = new Date().toISOString().split("T")[0];
+      const today = todayLocalISO();
       const contractPayload = {
         capital: last.capital, interest_rate: last.interest_rate,
         num_installments: last.num_installments, installment_amount: last.installment_amount,
@@ -1393,8 +1402,10 @@ const ClienteDetalhe = () => {
     return matchesStatus && searchable.includes(contractSearch.trim().toLocaleLowerCase("pt-BR"));
   });
 
-  const daysAsClient = client.created_at ? Math.max(1, Math.floor((Date.now() - new Date(client.created_at).getTime()) / 86400000)) : 0;
-  const clientSince = client.created_at ? new Date(client.created_at).toLocaleDateString("pt-BR", { month: "short", year: "numeric" }).toUpperCase() : "—";
+  const clientCreatedAt = parseLocalDate(client.created_at)?.getTime() ?? NaN;
+  const hasValidClientCreatedAt = Number.isFinite(clientCreatedAt);
+  const daysAsClient = hasValidClientCreatedAt ? Math.max(1, Math.floor((Date.now() - clientCreatedAt) / 86400000)) : 0;
+  const clientSince = hasValidClientCreatedAt ? new Date(clientCreatedAt).toLocaleDateString("pt-BR", { month: "short", year: "numeric" }).toUpperCase() : "—";
   const riskLabel = (client.credit_score || 0) >= 75 ? "Baixo Risco" : (client.credit_score || 0) >= 50 ? "Risco Moderado" : (client.credit_score || 0) >= 25 ? "Risco Elevado" : "Risco Alto";
 
   return (
@@ -1711,17 +1722,18 @@ const ClienteDetalhe = () => {
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-[60vh] overflow-y-auto pr-1">
                 {clientDocs.map((d: any) => {
-                  const isImg = /\.(png|jpe?g|gif|webp|heic)$/i.test(d.name);
+                  const documentName = String(d.name || "documento");
+                  const isImg = /\.(png|jpe?g|gif|webp|heic)$/i.test(documentName);
                   return (
                     <div key={d.name} className="group relative flex items-center gap-2 px-3 py-2.5 rounded-xl border border-border bg-background/40 hover:border-primary/40 transition-colors">
                       <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${isImg ? "bg-violet-500/10 text-violet-400" : "bg-sky-500/10 text-sky-400"}`}>
                         {isImg ? <ImageIcon size={14} /> : <FileIcon size={14} />}
                       </div>
-                      <button onClick={() => signedUrl(d.name)} className="flex-1 min-w-0 text-left">
-                        <p className="text-[11px] text-foreground font-semibold truncate">{d.name.replace(/^\d+-/, "")}</p>
+                      <button type="button" onClick={() => signedUrl(documentName)} className="flex-1 min-w-0 text-left">
+                        <p className="text-[11px] text-foreground font-semibold truncate">{documentName.replace(/^\d+-/, "")}</p>
                         <p className="text-[9px] text-muted-foreground">{d.metadata?.size ? `${Math.round(d.metadata.size / 1024)} KB` : ""}</p>
                       </button>
-                      <button onClick={() => deleteDoc(d.name)} className="opacity-0 group-hover:opacity-100 p-1 rounded-md hover:bg-destructive/10 text-destructive transition-opacity" title="Remover">
+                      <button type="button" onClick={() => deleteDoc(documentName)} className="opacity-0 group-hover:opacity-100 p-1 rounded-md hover:bg-destructive/10 text-destructive transition-opacity" title="Remover">
                         <Trash2 size={12} />
                       </button>
                     </div>
@@ -1767,7 +1779,7 @@ const ClienteDetalhe = () => {
               : overdue > 0
               ? { label: `${overdue} em atraso`, cls: "bg-destructive/15 text-destructive border-destructive/25", dot: "bg-destructive" }
               : { label: `${paid}/${total} pagas`, cls: "bg-amber-500/15 text-amber-400 border-amber-500/25", dot: "bg-amber-400" };
-            const pct = total > 0 ? Math.round((paid / total) * 100) : 0;
+            const pct = total > 0 ? Math.max(0, Math.min(100, Math.round((paid / total) * 100))) : 0;
             const barColor = isPaid ? "bg-emerald-500" : overdue > 0 ? "bg-destructive" : "bg-primary";
             const isExpanded = expandedContracts.has(c.id);
             return (
@@ -2029,7 +2041,7 @@ const ClienteDetalhe = () => {
             bg: isNote ? "bg-warning/10" : isContact ? "bg-primary/10" : "bg-muted",
           });
         });
-        const sorted = events.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        const sorted = events.sort((a, b) => (parseLocalDate(b.date)?.getTime() ?? 0) - (parseLocalDate(a.date)?.getTime() ?? 0));
         const filters = [
           { key: "all", label: "Tudo", count: sorted.length },
           { key: "contract", label: "Contratos", count: sorted.filter(e => e.type === "contract").length },
@@ -2064,7 +2076,7 @@ const ClienteDetalhe = () => {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-foreground truncate">{ev.title}</p>
                         <p className="text-[10px] text-muted-foreground">
-                          {formatBR(ev.date)} · {new Date(ev.date).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                          {formatBR(ev.date) || "Data indisponível"} · {parseLocalDate(ev.date)?.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) || "—"}
                         </p>
                       </div>
                       <p className={`text-sm font-bold ${ev.color} shrink-0`}>{ev.subtitle}</p>

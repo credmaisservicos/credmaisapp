@@ -17,14 +17,21 @@ type Props = {
   totalContracts: number;
 };
 
+const safeNumber = (value: unknown) => {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? number : 0;
+};
 const fmt = (v: number) =>
-  v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  safeNumber(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const fmtCompact = (v: number) => {
+  v = safeNumber(v);
   if (v >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(2)}M`;
   if (v >= 10_000) return `R$ ${(v / 1_000).toFixed(1)}k`;
   return `R$ ${fmt(v)}`;
 };
+const boundedPercent = (value: number, total: number) =>
+  total > 0 ? Math.max(0, Math.min(100, (value / total) * 100)) : 0;
 
 /**
  * Foco: quanto está NA RUA (ativo) e quanto foi EMPRESTADO (histórico).
@@ -47,19 +54,26 @@ export default function NarrativeHero({
   totalContracts,
 }: Props) {
   const primeiroNome = (userName || "").split(" ")[0] || "você";
-  const healthy = overdueAmount === 0 || (capitalOnStreet > 0 && overdueAmount < capitalOnStreet * 0.05);
-  const healthPct = capitalOnStreet > 0
-    ? Math.max(0, 100 - (overdueAmount / capitalOnStreet) * 100)
+  const safeCapitalOnStreet = safeNumber(capitalOnStreet);
+  const safeTotalLent = safeNumber(totalLent);
+  const safeTotalReceived = safeNumber(totalReceived);
+  const safeOverdueAmount = safeNumber(overdueAmount);
+  const safeRoi = safeNumber(roi);
+  const healthy = safeOverdueAmount === 0 || (safeCapitalOnStreet > 0 && safeOverdueAmount < safeCapitalOnStreet * 0.05);
+  const healthPct = safeCapitalOnStreet > 0
+    ? Math.max(0, Math.min(100, 100 - (safeOverdueAmount / safeCapitalOnStreet) * 100))
     : 100;
+  const returnedPct = boundedPercent(safeTotalReceived, safeTotalLent);
+  const overduePct = boundedPercent(safeOverdueAmount, safeCapitalOnStreet);
   // ROI só faz sentido quando existe base
-  const showROI = roi > 0 && totalLent > 0;
+  const showROI = safeRoi > 0 && safeTotalLent > 0;
 
   const deltaTxt =
     typeof deltaReceived === "number" && isFinite(deltaReceived)
       ? `${deltaReceived >= 0 ? "▲" : "▼"} ${Math.abs(deltaReceived).toFixed(1)}% vs período anterior`
       : null;
 
-  const nada = totalLent === 0 && capitalOnStreet === 0;
+  const nada = safeTotalLent === 0 && safeCapitalOnStreet === 0;
 
   return (
     <div className="overflow-hidden rounded-2xl border border-white/[.08] bg-card/55 p-5 backdrop-blur-xl animate-fade-in md:p-6">
@@ -83,7 +97,7 @@ export default function NarrativeHero({
                 {primeiroNome}, você tem{" "}
                 <span className="text-primary">R$ {fmt(capitalOnStreet)}</span>{" "}
                 <span className="opacity-80">circulando na rua</span>
-                {totalLent > capitalOnStreet && (
+                {safeTotalLent > safeCapitalOnStreet && (
                   <>
                     {" "}de um total de{" "}
                     <span className="text-foreground">R$ {fmt(totalLent)}</span>{" "}
@@ -100,10 +114,10 @@ export default function NarrativeHero({
                   <>, sendo <strong className="text-success">R$ {fmt(totalProfit)}</strong> de lucro</>
                 )}
                 {showROI && (
-                  <> — retorno de <strong className="text-success">{roi.toFixed(1)}%</strong></>
+                  <> — retorno de <strong className="text-success">{safeRoi.toFixed(1)}%</strong></>
                 )}
                 .{" "}
-                {overdueAmount > 0 ? (
+                {safeOverdueAmount > 0 ? (
                   <>
                     Há <strong className="text-destructive">R$ {fmt(overdueAmount)}</strong> em atraso
                     ({overdueCount} parcela{overdueCount === 1 ? "" : "s"}) — vale priorizar hoje.
@@ -207,29 +221,29 @@ export default function NarrativeHero({
           </div>
 
           {/* Divisão: quanto ainda está fora vs quanto voltou */}
-          {totalLent > 0 && (
+          {safeTotalLent > 0 && (
             <div className="pt-1 space-y-2">
               <div className="flex items-center justify-between text-[11px]">
                 <span className="text-muted-foreground">Já retornou ao caixa</span>
                 <span className="font-bold text-success tabular-nums">
-                  {((totalReceived / totalLent) * 100).toFixed(0)}%
+                  {returnedPct.toFixed(0)}%
                 </span>
               </div>
               <div className="h-1.5 rounded-full bg-muted/40 overflow-hidden">
                 <div
                   className="h-full rounded-full bg-gradient-to-r from-success/60 to-success transition-all duration-700"
-                  style={{ width: `${Math.min(100, (totalReceived / totalLent) * 100)}%` }}
+                  style={{ width: `${returnedPct}%` }}
                 />
               </div>
             </div>
           )}
 
-          {overdueAmount > 0 && capitalOnStreet > 0 && (
+          {safeOverdueAmount > 0 && safeCapitalOnStreet > 0 && (
             <div className="flex items-start gap-2 pt-1 text-[11px] text-muted-foreground">
               <AlertCircle size={12} className="text-destructive shrink-0 mt-0.5" />
               <span>
                 <strong className="text-destructive">
-                  {((overdueAmount / capitalOnStreet) * 100).toFixed(1)}%
+                  {overduePct.toFixed(1)}%
                 </strong>{" "}
                 da carteira ativa precisa de cobrança
               </span>

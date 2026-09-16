@@ -10,7 +10,12 @@ interface Props {
   onClickInstallment?: (i: any) => void;
 }
 
-const fmt = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+const fmt = (v: number) => safeNumber(v).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+
+const safeNumber = (value: unknown) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+};
 
 const CalendarView = ({ installments, onWhatsApp, onMarkPaid, onClickInstallment }: Props) => {
   const [cursor, setCursor] = useState(() => {
@@ -48,12 +53,13 @@ const CalendarView = ({ installments, onWhatsApp, onMarkPaid, onClickInstallment
   const todayKey = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`;
 
   const selectedItems = selectedDay ? byDay.get(selectedDay) || [] : [];
-  const selectedTotal = selectedItems.reduce((acc, i) => acc + Number(i.amount), 0);
+  const selectedTotal = selectedItems.reduce((acc, i) => acc + safeNumber(i.amount), 0);
 
   return (
     <div className="space-y-4 animate-fade-in">
       <div className="flex items-center justify-between bg-card border border-border rounded-2xl p-4">
         <button
+          type="button"
           onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}
           className="p-2 rounded-lg hover:bg-accent focus-ring"
           aria-label="Mês anterior"
@@ -62,6 +68,7 @@ const CalendarView = ({ installments, onWhatsApp, onMarkPaid, onClickInstallment
         </button>
         <h3 className="text-headline text-lg capitalize">{monthName}</h3>
         <button
+          type="button"
           onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}
           className="p-2 rounded-lg hover:bg-accent focus-ring"
           aria-label="Próximo mês"
@@ -86,12 +93,13 @@ const CalendarView = ({ installments, onWhatsApp, onMarkPaid, onClickInstallment
             const overdueCount = items.filter((i) => isEmAtraso(i as any, today)).length;
             const pendingCount = items.filter((i) => isEmAberto(i as any) && !isEmAtraso(i as any, today)).length;
             const paidCount = items.filter((i) => i.status === "paid").length;
-            const total = items.reduce((acc, i) => acc + Number(i.amount), 0);
+            const total = items.reduce((acc, i) => acc + safeNumber(i.amount), 0);
             const isToday = key === todayKey;
             const isSelected = key === selectedDay;
 
             return (
               <button
+                type="button"
                 key={idx}
                 onClick={() => setSelectedDay(items.length > 0 ? key : null)}
                 aria-label={`${d.toLocaleDateString("pt-BR")}: ${items.length} parcela${items.length === 1 ? "" : "s"}`}
@@ -150,14 +158,14 @@ const CalendarView = ({ installments, onWhatsApp, onMarkPaid, onClickInstallment
                   <p className="text-sm font-medium text-foreground truncate cursor-pointer hover:text-primary" onClick={() => onClickInstallment?.(i)}>
                     {i.client_name} <span className="text-muted-foreground text-xs">#{i.installment_number}</span>
                   </p>
-                  <p className="text-xs text-muted-foreground">R$ {fmt(Number(i.amount))} · {i.status === "overdue" ? "Atrasada" : i.status === "paid" ? "Paga" : "Pendente"}</p>
+                  <p className="text-xs text-muted-foreground">R$ {fmt(i.amount)} · {i.status === "overdue" ? "Atrasada" : i.status === "paid" ? "Paga" : "Pendente"}</p>
                 </div>
                 {i.status !== "paid" && (
                   <div className="flex gap-1.5">
-                    <button onClick={() => onWhatsApp(i)} className="p-2 rounded-lg bg-success text-success-foreground hover:opacity-90 active:scale-95 focus-ring" title="WhatsApp">
+                    <button type="button" onClick={() => onWhatsApp(i)} className="p-2 rounded-lg bg-success text-success-foreground hover:opacity-90 active:scale-95 focus-ring" title="WhatsApp" aria-label={`Enviar WhatsApp para ${i.client_name || "cliente"}`}>
                       <MessageSquare size={14} />
                     </button>
-                    <button onClick={() => onMarkPaid(i.id)} className="p-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90 active:scale-95 focus-ring" title="Marcar como paga">
+                    <button type="button" onClick={() => onMarkPaid(i.id)} className="p-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90 active:scale-95 focus-ring" title="Marcar como paga" aria-label="Marcar parcela como paga">
                       <Check size={14} />
                     </button>
                   </div>

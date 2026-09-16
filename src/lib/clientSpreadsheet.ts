@@ -1,5 +1,10 @@
 import { isOverdue } from "@/lib/dateUtils";
 
+const safeNumber = (value: unknown) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+};
+
 export const buildClientSpreadsheetRows = (
   clients: any[],
   contracts: any[],
@@ -15,9 +20,9 @@ export const buildClientSpreadsheetRows = (
 
   return {
     ...client,
-    totalCapital: clientContracts.reduce((sum, contract) => sum + Number(contract.capital || 0), 0),
-    totalAmount: clientContracts.reduce((sum, contract) => sum + Number(contract.total_amount || 0), 0),
-    totalPaid: paid.reduce((sum, installment) => sum + Number(installment.paid_amount ?? installment.amount ?? 0), 0),
+    totalCapital: clientContracts.reduce((sum, contract) => sum + safeNumber(contract.capital), 0),
+    totalAmount: clientContracts.reduce((sum, contract) => sum + safeNumber(contract.total_amount), 0),
+    totalPaid: paid.reduce((sum, installment) => sum + safeNumber(installment.paid_amount ?? installment.amount), 0),
     paidCount: paid.length,
     overdueCount: overdue.length,
     totalInstallments: countedInstallments.length,

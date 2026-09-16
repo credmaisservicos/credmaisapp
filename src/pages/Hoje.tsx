@@ -23,8 +23,12 @@ const endOfToday = () => { const d = new Date(); d.setHours(23,59,59,999); retur
 const startOfMonth = () => { const d = new Date(); d.setDate(1); d.setHours(0,0,0,0); return d; };
 const endOfMonth = () => { const d = new Date(); d.setMonth(d.getMonth()+1, 0); d.setHours(23,59,59,999); return d; };
 const inDays = (n: number) => { const d = startOfToday(); d.setDate(d.getDate()+n); return d; };
-const fmtBRL = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const fmtTime = (iso: string) => formatBR(iso, { day: "2-digit", month: "short" });
+const safeNumber = (value: unknown) => {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? number : 0;
+};
+const fmtBRL = (v: number) => safeNumber(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtTime = (iso: string) => formatBR(iso, { day: "2-digit", month: "short" }) || "data indisponível";
 const fmtDayLabel = (iso: string) => {
   const d = parseLocalDate(iso);
   if (!d) return "";
@@ -130,8 +134,10 @@ const Hoje = () => {
       // Agenda 7 dias agrupada por data
       const agendaMap: Record<string, { date: string; items: any[]; total: number }> = {};
       (next7Res.data || []).forEach((i: any) => {
-        const key = i.due_date.slice(0, 10);
-        if (!agendaMap[key]) agendaMap[key] = { date: i.due_date, items: [], total: 0 };
+        const dueDate = String(i.due_date || "");
+        if (!dueDate) return;
+        const key = dueDate.slice(0, 10);
+        if (!agendaMap[key]) agendaMap[key] = { date: dueDate, items: [], total: 0 };
         agendaMap[key].items.push(i);
         agendaMap[key].total += portalInstallmentAmount(i);
       });
@@ -146,26 +152,29 @@ const Hoje = () => {
         return md === todayMD;
       });
 
-      const profitMonth = (profitsMonthRes.data || []).reduce((s: number, p: any) => s + Number(p.amount), 0);
+      const profitMonth = (profitsMonthRes.data || []).reduce((s: number, p: any) => s + safeNumber(p.amount), 0);
       const aReceberMonth = (pendingMonthRes.data || []).reduce((s: number, p: any) => s + portalInstallmentAmount(p), 0);
       const txs = transactionsRes.data || [];
       const cashIn = txs.filter((t: any) => t.type === "payment" || t.type === "capital_injection")
-        .reduce((s: number, t: any) => s + Number(t.amount || 0), 0);
+        .reduce((s: number, t: any) => s + safeNumber(t.amount), 0);
       const cashOut = txs.filter((t: any) => ["loan_disbursement", "capital_withdrawal", "expense"].includes(t.type))
-        .reduce((s: number, t: any) => s + Number(t.amount || 0), 0) +
-        (expensesRes.data || []).reduce((s: number, e: any) => s + Number(e.amount || 0), 0);
+        .reduce((s: number, t: any) => s + safeNumber(t.amount), 0) +
+        (expensesRes.data || []).reduce((s: number, e: any) => s + safeNumber(e.amount), 0);
       const promises = (promisesRes.data || []).map((p: any) => ({
         id: p.id, date: p.details?.promise_date, client: p.details?.client_name || "Cliente",
         msg: p.details?.message,
       }));
-      const brokenPromises = promises.filter((p: any) => p.date && new Date(p.date) < startOfToday()).length;
+      const brokenPromises = promises.filter((p: any) => {
+        const date = parseLocalDate(p.date);
+        return !!date && date < startOfToday();
+      }).length;
 
       return {
         dueToday: dueTodayRes.data || [],
         overdue: overdueRes.data || [],
         todos: todosRes.data || [],
         notifications: notifRes.data || [],
-        profitToday: (profitsTodayRes.data || []).reduce((s: number, p: any) => s + Number(p.amount), 0),
+        profitToday: (profitsTodayRes.data || []).reduce((s: number, p: any) => s + safeNumber(p.amount), 0),
         promises,
         brokenPromises,
         topDebtors,
@@ -293,7 +302,7 @@ const Hoje = () => {
     const clean = phone.replace(/\D/g, "");
     const num = clean.startsWith("55") ? clean : `55${clean}`;
     const msg = encodeURIComponent(customMsg || `Olá ${clientName || ""}! Lembrete da parcela de R$ ${fmtBRL(amount || 0)} vencendo em ${due ? fmtTime(due) : "breve"}.`);
-    window.open(`https://wa.me/${num}?text=${msg}`, "_blank");
+    window.open(`https://wa.me/${num}?text=${msg}`, "_blank", "noopener,noreferrer");
   };
 
   if (isLoading) {
@@ -491,7 +500,7 @@ const Hoje = () => {
               <div className="min-w-0">
                 <p className="text-[10px] font-bold uppercase tracking-[.14em] text-muted-foreground truncate">{item.label}</p>
                 <p className="mt-2 text-base sm:text-xl font-extrabold tabular-nums text-foreground break-words">
-                  {item.count ? item.value : `R$ ${fmtBRL(Number(item.value))}`}
+                {item.count ? item.value : `R$ ${fmtBRL(safeNumber(item.value))}`}
                 </p>
                 <p className="mt-1 text-[11px] text-muted-foreground">{item.helper}</p>
               </div>
@@ -516,7 +525,7 @@ const Hoje = () => {
             <h2 id="hoje-cobrancas-title" className="text-sm font-bold text-foreground flex items-center gap-1.5">
               <Receipt size={12} className="text-primary" /> Cobranças prioritárias
             </h2>
-            <button onClick={() => navigate("/cobrancas")} className="text-xs text-primary hover:underline flex items-center gap-1">
+            <button type="button" onClick={() => navigate("/cobrancas")} className="text-xs text-primary hover:underline flex items-center gap-1">
               Ver todas <ArrowRight size={10} />
             </button>
           </div>
@@ -528,11 +537,12 @@ const Hoje = () => {
               </li>
             )}
             {[...(data?.overdue || []), ...(data?.dueToday || [])].slice(0, 30).map((inst: any) => {
-              const dueLocal = parseLocalDate(inst.due_date) ?? new Date(inst.due_date);
+              const dueLocal = parseLocalDate(inst.due_date);
+              if (!dueLocal) return null;
               const isOverdue = dueLocal < startOfToday();
               const daysLate = isOverdue ? Math.floor((startOfToday().getTime() - dueLocal.getTime()) / 86400000) : 0;
               const clientName = inst.clients?.name || "Cliente";
-              const amount = Number(inst.amount);
+              const amount = safeNumber(inst.amount);
               return (
                 <li key={inst.id} className="px-3 sm:px-4 py-3 grid grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-3 gap-y-2 hover:bg-accent/20 transition-colors">
                   <button onClick={() => navigate(`/clientes/${inst.client_id}`)} className="flex-1 min-w-0 text-left">
@@ -671,7 +681,7 @@ const Hoje = () => {
                   <p className="text-xs font-bold text-foreground truncate">{payment.clients?.name || "Cliente"}</p>
                   <p className="text-[11px] text-muted-foreground">{payment.paid_at ? formatBR(payment.paid_at) : "Data não informada"}</p>
                 </div>
-                <p className="text-sm font-bold tabular-nums text-success shrink-0">+ R$ {fmtBRL(Number(payment.paid_amount || 0))}</p>
+                <p className="text-sm font-bold tabular-nums text-success shrink-0">+ R$ {fmtBRL(safeNumber(payment.paid_amount))}</p>
               </button>
             ))}
           </div>
@@ -708,7 +718,7 @@ const Hoje = () => {
 
       {pendingPayment && (() => {
         const fee = computeLateFeeBreakdown(pendingPayment);
-        const alreadyPaid = Number(pendingPayment.paid_amount || 0);
+        const alreadyPaid = safeNumber(pendingPayment.paid_amount);
         const remaining = Math.max(0, Math.round((fee.withFees - alreadyPaid) * 100) / 100);
         return (
           <PayModal

@@ -492,8 +492,10 @@ export default function Checkout() {
 
                       <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); goToPayment(); }}>
                         <div>
-                          <label className="block text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: c.goldSoft }}>Nome completo *</label>
+                          <label htmlFor="checkout-name" className="block text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: c.goldSoft }}>Nome completo *</label>
                           <input
+                            id="checkout-name"
+                            name="name"
                             type="text"
                             value={name}
                             onChange={(e) => setName(e.target.value)}
@@ -504,8 +506,10 @@ export default function Checkout() {
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
-                            <label className="block text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: c.goldSoft }}>E-mail *</label>
+                            <label htmlFor="checkout-email" className="block text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: c.goldSoft }}>E-mail *</label>
                             <input
+                              id="checkout-email"
+                              name="email"
                               type="email"
                               value={email}
                               onChange={(e) => setEmail(e.target.value)}
@@ -514,8 +518,10 @@ export default function Checkout() {
                             />
                           </div>
                           <div>
-                            <label className="block text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: c.goldSoft }}>WhatsApp *</label>
+                            <label htmlFor="checkout-whatsapp" className="block text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: c.goldSoft }}>WhatsApp *</label>
                             <input
+                              id="checkout-whatsapp"
+                              name="whatsapp"
                               type="tel"
                               inputMode="numeric"
                               value={whatsapp}
@@ -528,7 +534,7 @@ export default function Checkout() {
 
                         <div>
                           <div className="flex items-center justify-between mb-2">
-                            <label className="block text-[11px] font-bold uppercase tracking-wider" style={{ color: c.goldSoft }}>Documento *</label>
+                            <label htmlFor="checkout-document" className="block text-[11px] font-bold uppercase tracking-wider" style={{ color: c.goldSoft }}>Documento *</label>
                             <div className="flex bg-white/5 border border-white/10 p-1 rounded-lg">
                               {(["CPF", "CNPJ"] as const).map((t) => (
                                 <button
@@ -546,6 +552,8 @@ export default function Checkout() {
                             </div>
                           </div>
                           <input
+                            id="checkout-document"
+                            name="document"
                             inputMode="numeric"
                             value={doc}
                             onChange={(e) => setDoc(docType === "CPF" ? maskCPF(e.target.value) : maskCNPJ(e.target.value))}

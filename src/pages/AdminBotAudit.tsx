@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Shield, ShieldAlert, ShieldCheck, RefreshCw, Search, Bot } from "lucide-react";
 import ErrorState from "@/components/feedback/ErrorState";
+import { formatBRDateTime } from "@/lib/dateUtils";
 
 type AuditRow = {
   id: string;
@@ -46,6 +47,8 @@ const toneCls = {
   emerald: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
   slate: "bg-slate-500/15 text-slate-300 border-slate-500/30",
 } as const;
+
+const formatAuditDate = (value: unknown) => formatBRDateTime(typeof value === "string" ? value : null) || "data indisponível";
 
 export default function AdminBotAudit() {
   const { user, isPlatformAdmin, loading: authLoading } = useAuth();
@@ -172,6 +175,8 @@ export default function AdminBotAudit() {
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
                     placeholder="buscar motivo/cliente…"
+                    name="bot-audit-search"
+                    aria-label="Buscar na auditoria do bot"
                     className="h-8 w-56 pl-8 text-xs"
                   />
                 </div>
@@ -220,7 +225,7 @@ export default function AdminBotAudit() {
                         )}
                       </div>
                       <div className="text-xs text-muted-foreground whitespace-nowrap">
-                        {new Date(row.created_at).toLocaleString("pt-BR")}
+                        {formatAuditDate(row.created_at)}
                       </div>
                     </div>
                   );
@@ -256,7 +261,7 @@ export default function AdminBotAudit() {
                         <div className="text-xs text-muted-foreground font-mono">{f.phone}</div>
                       </div>
                       <div className="text-xs text-muted-foreground whitespace-nowrap">
-                        {f.agent_state_updated_at ? new Date(f.agent_state_updated_at).toLocaleString("pt-BR") : "—"}
+                        {formatAuditDate(f.agent_state_updated_at)}
                       </div>
                     </div>
                   );
@@ -294,7 +299,7 @@ export default function AdminBotAudit() {
                       )}
                     </div>
                     <div className="text-xs text-muted-foreground whitespace-nowrap">
-                      {new Date(a.created_at).toLocaleString("pt-BR")}
+                      {formatAuditDate(a.created_at)}
                     </div>
                   </div>
                 ))}

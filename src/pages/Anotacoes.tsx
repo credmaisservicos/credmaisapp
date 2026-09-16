@@ -13,6 +13,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { loadProductivityQueue, loadProductivitySnapshot, queueOfflineNote, saveProductivitySnapshot } from "@/lib/offlineProductivity";
 import { PRODUCTIVITY_SYNCED_EVENT } from "@/components/ProductivityOfflineSync";
+import { parseLocalDate } from "@/lib/dateUtils";
 
 type Note = Database["public"]["Tables"]["notes"]["Row"];
 
@@ -133,7 +134,7 @@ const Anotacoes = () => {
     fetchNotes();
   };
 
-  const filtered = notes.filter(n => !search || n.title.toLowerCase().includes(search.toLowerCase()));
+  const filtered = notes.filter(n => !search || (n.title || "").toLowerCase().includes(search.toLowerCase()));
 
   const colors = [
     "bg-primary/5 border-primary/15",
@@ -143,7 +144,9 @@ const Anotacoes = () => {
   ];
 
   const timeAgo = (date: string) => {
-    const diff = Date.now() - new Date(date).getTime();
+    const parsed = parseLocalDate(date);
+    if (!parsed) return "data indisponível";
+    const diff = Date.now() - parsed.getTime();
     const mins = Math.floor(diff / 60000);
     if (mins < 60) return `${mins}min atrás`;
     const hrs = Math.floor(mins / 60);
@@ -165,7 +168,7 @@ const Anotacoes = () => {
               <p className="text-muted-foreground text-sm mt-0.5">{notes.length} nota{notes.length !== 1 ? "s" : ""} salva{notes.length !== 1 ? "s" : ""}</p>
             </div>
           </div>
-          <button onClick={() => setShowForm(!showForm)} className="btn-premium w-full sm:w-auto justify-center">
+          <button type="button" onClick={() => setShowForm(!showForm)} className="btn-premium w-full sm:w-auto justify-center">
             <Plus size={16} /> Nova Anotação
           </button>
         </div>
@@ -175,10 +178,10 @@ const Anotacoes = () => {
       {notes.length > 3 && (
         <div className="relative">
           <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input type="text" placeholder="Buscar anotações..." value={search} onChange={(e) => setSearch(e.target.value)}
+          <input type="text" name="notes_search" aria-label="Buscar anotações" placeholder="Buscar anotações..." value={search} onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-10 pr-10 py-3 rounded-2xl bg-card border border-border text-foreground placeholder:text-muted-foreground text-sm input-enhanced" />
           {search && (
-            <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-md hover:bg-accent text-muted-foreground">
+            <button type="button" onClick={() => setSearch("")} aria-label="Limpar busca" className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-md hover:bg-accent text-muted-foreground">
               <X size={14} />
             </button>
           )}
@@ -189,7 +192,7 @@ const Anotacoes = () => {
         <div className="rounded-2xl border border-border bg-card p-6 space-y-4 animate-scale-in">
           <div>
             <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Conteúdo</label>
-            <textarea value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ex: Lembrar de cobrar fulano amanhã..."
+            <textarea name="note_content" aria-label="Conteúdo da anotação" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ex: Lembrar de cobrar fulano amanhã..."
               rows={3}
               className="w-full px-4 py-3 rounded-2xl bg-card border border-border text-foreground placeholder:text-muted-foreground text-sm input-enhanced resize-none"
               onKeyDown={(e) => e.key === "Enter" && (e.metaKey || e.ctrlKey) && handleAdd()} />
@@ -197,7 +200,7 @@ const Anotacoes = () => {
           </div>
           <div className="flex gap-2">
             <LoadingButton onClick={handleAdd} loading={saving} loadingText="Salvando…">Salvar</LoadingButton>
-            <button onClick={() => setShowForm(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">Cancelar</button>
+            <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">Cancelar</button>
           </div>
         </div>
       )}
@@ -220,11 +223,11 @@ const Anotacoes = () => {
               {pendingIds.has(n.id) && <span className="absolute bottom-3 right-4 text-[9px] font-semibold text-warning">Pendente de sincronização</span>}
               {editingId === n.id ? (
                 <div className="space-y-2">
-                  <textarea value={editTitle} onChange={(e) => setEditTitle(e.target.value)}
+                  <textarea name="note_edit_content" aria-label="Editar anotação" value={editTitle} onChange={(e) => setEditTitle(e.target.value)}
                     className="w-full px-3 py-2 rounded-lg bg-card border border-border text-foreground text-sm resize-none" rows={2} autoFocus />
                   <div className="flex gap-2">
-                    <button onClick={() => handleEdit(n.id)} disabled={busyId === n.id} aria-label="Salvar anotação" className="p-1.5 rounded-lg bg-success/10 text-success hover:bg-success/20 disabled:opacity-50"><Check size={14} /></button>
-                    <button onClick={() => setEditingId(null)} disabled={busyId === n.id} aria-label="Cancelar edição" className="p-1.5 rounded-lg bg-muted text-muted-foreground hover:bg-accent disabled:opacity-50"><X size={14} /></button>
+                    <button type="button" onClick={() => handleEdit(n.id)} disabled={busyId === n.id} aria-label="Salvar anotação" className="p-1.5 rounded-lg bg-success/10 text-success hover:bg-success/20 disabled:opacity-50"><Check size={14} /></button>
+                    <button type="button" onClick={() => setEditingId(null)} disabled={busyId === n.id} aria-label="Cancelar edição" className="p-1.5 rounded-lg bg-muted text-muted-foreground hover:bg-accent disabled:opacity-50"><X size={14} /></button>
                   </div>
                 </div>
               ) : (
@@ -239,11 +242,11 @@ const Anotacoes = () => {
                     </div>
                   </div>
                   <div className="absolute top-4 right-4 flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all">
-                    <button onClick={() => { setEditingId(n.id); setEditTitle(n.title); }}
+                    <button type="button" onClick={() => { setEditingId(n.id); setEditTitle(n.title); }}
                       aria-label="Editar anotação" className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-all">
                       <Edit size={13} />
                     </button>
-                    <button onClick={() => handleDelete(n.id)} disabled={busyId === n.id}
+                    <button type="button" onClick={() => handleDelete(n.id)} disabled={busyId === n.id}
                       aria-label="Excluir anotação" className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all disabled:opacity-50">
                       <Trash2 size={13} />
                     </button>

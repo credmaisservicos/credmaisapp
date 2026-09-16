@@ -9,14 +9,21 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatBR } from "@/lib/dateUtils";
+import { formatBR, parseLocalDate } from "@/lib/dateUtils";
 import { useNavigate } from "react-router-dom";
 import EmptyState from "@/components/EmptyState";
 import ErrorState from "@/components/feedback/ErrorState";
 import { useMultiTableRealtime } from "@/hooks/useRealtimeSubscription";
 
+const safeNumber = (value: unknown) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+};
+const safeTime = (value: unknown) => {
+  return parseLocalDate(typeof value === "string" || value instanceof Date ? value : null)?.getTime() ?? null;
+};
 const fmt = (v: number) =>
-  v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  safeNumber(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 type PeriodKey = "7d" | "30d" | "90d" | "6m" | "12m" | "ytd" | "all" | "custom";
 
@@ -97,7 +104,9 @@ export default function HistoricoFinanceiro() {
     for (const i of data.installments as any[]) {
       if (!i.paid_at || !i.contract_id) continue;
       const cur = map.get(i.contract_id);
-      if (!cur || new Date(i.paid_at) > new Date(cur)) {
+      const paidTime = safeTime(i.paid_at);
+      const currentTime = safeTime(cur);
+      if (paidTime !== null && (currentTime === null || paidTime > currentTime)) {
         map.set(i.contract_id, i.paid_at);
       }
     }
@@ -111,7 +120,7 @@ export default function HistoricoFinanceiro() {
       if (!installment.contract_id) continue;
       map.set(
         installment.contract_id,
-        (map.get(installment.contract_id) || 0) + Number(installment.paid_amount || installment.amount || 0),
+        (map.get(installment.contract_id) || 0) + safeNumber(installment.paid_amount ?? installment.amount),
       );
     }
     return map;
@@ -125,9 +134,10 @@ export default function HistoricoFinanceiro() {
     }));
     if (!start && !end) return list;
     return list.filter((c: any) => {
-      const d = new Date(c.completed_at);
-      if (start && d < start) return false;
-      if (end && d > end) return false;
+      const time = safeTime(c.completed_at);
+      if (time === null) return false;
+      if (start && time < start.getTime()) return false;
+      if (end && time > end.getTime()) return false;
       return true;
     });
   }, [data, completedAtMap, start, end]);
@@ -137,7 +147,7 @@ export default function HistoricoFinanceiro() {
     const totalRecebido = contractsInRange.reduce((sum: number, contract: any) =>
       sum + (receivedByContract.get(contract.id) || 0), 0);
     const totalCapital = contractsInRange.reduce((s: number, c: any) =>
-      s + Number(c.capital || 0), 0);
+      s + safeNumber(c.capital), 0);
     const totalLucro = totalRecebido - totalCapital;
     return {
       totalRecebido,
@@ -280,7 +290,7 @@ export default function HistoricoFinanceiro() {
           </div>
           {filtered.map((c: any) => {
             const recebido = receivedByContract.get(c.id) || 0;
-            const lucroRealizado = recebido - Number(c.capital || 0);
+            const lucroRealizado = recebido - safeNumber(c.capital);
             return (
               <button
                 key={c.id}
@@ -301,7 +311,7 @@ export default function HistoricoFinanceiro() {
                   </div>
                 </div>
                 <span className="text-sm font-semibold tabular-nums text-muted-foreground md:text-right">
-                  <span className="block text-[10px] uppercase md:hidden">Capital</span>R$ {fmt(Number(c.capital))}
+              <span className="block text-[10px] uppercase md:hidden">Capital</span>R$ {fmt(safeNumber(c.capital))}
                 </span>
                 <span className="text-right text-sm font-semibold tabular-nums text-success">
                   <span className="block text-[10px] uppercase md:hidden">Total pago</span>R$ {fmt(recebido)}
@@ -318,7 +328,7 @@ export default function HistoricoFinanceiro() {
               Totais ({filtered.length})
             </span>
             <span className="text-sm tabular-nums text-muted-foreground">
-              R$ {fmt(filtered.reduce((s: number, c: any) => s + Number(c.capital || 0), 0))}
+              R$ {fmt(filtered.reduce((s: number, c: any) => s + safeNumber(c.capital), 0))}
             </span>
             <span className="text-sm tabular-nums text-success">
               R$ {fmt(
@@ -328,7 +338,7 @@ export default function HistoricoFinanceiro() {
               )}
             </span>
             <span className="text-sm tabular-nums text-primary">
-              R$ {fmt(filtered.reduce((s: number, c: any) => s + (receivedByContract.get(c.id) || 0) - Number(c.capital || 0), 0))}
+              R$ {fmt(filtered.reduce((s: number, c: any) => s + (receivedByContract.get(c.id) || 0) - safeNumber(c.capital), 0))}
             </span>
           </div>
         </div>

@@ -29,8 +29,8 @@ const PixSection = ({ ctx }: SectionProps) => {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="text-label mb-1.5 block">Tipo da Chave</label>
-                <select value={form.pix_key_type} onChange={(e) => setForm({ ...form, pix_key_type: e.target.value })} className={inputCls}>
+                <label htmlFor="pix-key-type" className="text-label mb-1.5 block">Tipo da Chave</label>
+                <select id="pix-key-type" name="pix_key_type" value={form.pix_key_type} onChange={(e) => setForm({ ...form, pix_key_type: e.target.value })} className={inputCls}>
                   <option value="cpf">CPF</option>
                   <option value="cnpj">CNPJ</option>
                   <option value="email">Email</option>
@@ -39,8 +39,8 @@ const PixSection = ({ ctx }: SectionProps) => {
                 </select>
               </div>
               <div>
-                <label className="text-label mb-1.5 block">Chave PIX</label>
-                <input value={form.pix_key} onChange={(e) => setForm({ ...form, pix_key: e.target.value })} placeholder="Sua chave PIX" className={inputCls} />
+                <label htmlFor="pix-key" className="text-label mb-1.5 block">Chave PIX</label>
+                <input id="pix-key" name="pix_key" value={form.pix_key} onChange={(e) => setForm({ ...form, pix_key: e.target.value })} placeholder="Sua chave PIX" className={inputCls} />
               </div>
             </div>
             <div className="p-3 rounded-xl bg-info/5 border border-info/20">

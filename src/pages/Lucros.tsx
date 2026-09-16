@@ -11,14 +11,19 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
-import { formatBR, todayLocalISO } from "@/lib/dateUtils";
+import { formatBR, parseLocalDate, todayLocalISO } from "@/lib/dateUtils";
 import { Button } from "@/components/ui/button";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMultiTableRealtime } from "@/hooks/useRealtimeSubscription";
 import { friendlyError } from "@/lib/friendlyError";
 import { parseFinancialAmount, parseFinancialDate } from "@/lib/financialEntry";
 
-const fmt = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const safeNumber = (value: unknown) => {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? number : 0;
+};
+const safeDateMs = (value: unknown) => parseLocalDate(typeof value === "string" ? value : null)?.getTime() || 0;
+const fmt = (v: number) => safeNumber(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 function useDebounced<T>(value: T, ms = 200) {
   const [v, setV] = useState(value);
@@ -189,7 +194,8 @@ const Lucros = () => {
     const term = debouncedSearch.toLowerCase().trim();
 
     const arr = profits.filter((p: any) => {
-      const pd = new Date(p.date);
+      const pd = parseLocalDate(p.date);
+      if (!pd) return false;
       if (timeFilter === "today" && pd < startOfDay) return false;
       if (timeFilter === "ytd" && pd < startOfYear) return false;
       if (days) {
@@ -198,16 +204,16 @@ const Lucros = () => {
       }
       if (sourceFilter === "operational" && !p.client_id) return false;
       if (sourceFilter === "manual" && p.client_id) return false;
-      if (term && !p.description.toLowerCase().includes(term)) return false;
+      if (term && !(p.description || "").toLowerCase().includes(term)) return false;
       return true;
     });
 
     arr.sort((a: any, b: any) => {
       switch (sortKey) {
-        case "date_asc": return new Date(a.date).getTime() - new Date(b.date).getTime();
-        case "amount_desc": return Number(b.amount) - Number(a.amount);
-        case "amount_asc": return Number(a.amount) - Number(b.amount);
-        default: return new Date(b.date).getTime() - new Date(a.date).getTime();
+        case "date_asc": return safeDateMs(a.date) - safeDateMs(b.date);
+        case "amount_desc": return safeNumber(b.amount) - safeNumber(a.amount);
+        case "amount_asc": return safeNumber(a.amount) - safeNumber(b.amount);
+        default: return safeDateMs(b.date) - safeDateMs(a.date);
       }
     });
     return arr;
@@ -216,31 +222,31 @@ const Lucros = () => {
   const handleExportCSV = () => {
     const header = "Data,Descrição,Valor,Origem\n";
     const rows = filtered.map((p: any) =>
-      `${formatBR(p.date)},"${p.description.replace(/"/g, '""')}",${Number(p.amount).toFixed(2)},${p.client_id ? "Operacional" : "Manual"}`
+      `${formatBR(p.date) || "data indisponível"},"${String(p.description || "").replace(/"/g, '""')}",${safeNumber(p.amount).toFixed(2)},${p.client_id ? "Operacional" : "Manual"}`
     ).join("\n");
     const blob = new Blob([header + rows], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = `lucros_${new Date().toISOString().slice(0,10)}.csv`; a.click();
+    const a = document.createElement("a"); a.href = url; a.download = `lucros_${todayLocalISO()}.csv`; a.click();
     URL.revokeObjectURL(url);
     toast({ title: "CSV exportado!" });
   };
 
   // KPIs
-  const total = filtered.reduce((acc: number, p: any) => acc + Number(p.amount), 0);
-  const totalAll = profits.reduce((acc: number, p: any) => acc + Number(p.amount), 0);
+  const total = filtered.reduce((acc: number, p: any) => acc + safeNumber(p.amount), 0);
+  const totalAll = profits.reduce((acc: number, p: any) => acc + safeNumber(p.amount), 0);
 
   const now = new Date();
   const startOfWeek = new Date(now); startOfWeek.setDate(now.getDate() - now.getDay()); startOfWeek.setHours(0,0,0,0);
-  const weekTotal = profits.filter((p: any) => new Date(p.date) >= startOfWeek).reduce((s: number, p: any) => s + Number(p.amount), 0);
+  const weekTotal = profits.filter((p: any) => { const d = parseLocalDate(p.date); return d && d >= startOfWeek; }).reduce((s: number, p: any) => s + safeNumber(p.amount), 0);
 
   const monthlyData = useMemo(() => {
     return Array.from({ length: 6 }, (_, i) => {
       const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
       const monthStr = d.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "");
       const amount = profits.filter((p: any) => {
-        const pd = new Date(p.date);
-        return pd.getMonth() === d.getMonth() && pd.getFullYear() === d.getFullYear();
-      }).reduce((s: number, p: any) => s + Number(p.amount), 0);
+        const pd = parseLocalDate(p.date);
+        return !!pd && pd.getMonth() === d.getMonth() && pd.getFullYear() === d.getFullYear();
+      }).reduce((s: number, p: any) => s + safeNumber(p.amount), 0);
       return { month: monthStr, amount };
     });
 
@@ -261,22 +267,23 @@ const Lucros = () => {
   const avgPerEntry = profits.length > 0 ? totalAll / profits.length : 0;
 
   const todayTotal = profits.filter((p: any) => {
-    const d = new Date(p.date);
-    return d.toDateString() === new Date().toDateString();
-  }).reduce((s: number, p: any) => s + Number(p.amount), 0);
+    const d = parseLocalDate(p.date);
+    const today = parseLocalDate(todayLocalISO());
+    return !!d && !!today && d.toDateString() === today.toDateString();
+  }).reduce((s: number, p: any) => s + safeNumber(p.amount), 0);
 
   // Top descriptions
   const topDescriptions = useMemo(() => {
     const map = new Map<string, number>();
     filtered.forEach((p: any) => {
-      const k = p.description.trim();
-      map.set(k, (map.get(k) || 0) + Number(p.amount));
+      const k = (p.description || "").trim();
+      map.set(k, (map.get(k) || 0) + safeNumber(p.amount));
     });
     return Array.from(map.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5);
   }, [filtered]);
 
   // Source breakdown
-  const opTotal = filtered.filter((p: any) => p.client_id).reduce((s: number, p: any) => s + Number(p.amount), 0);
+  const opTotal = filtered.filter((p: any) => p.client_id).reduce((s: number, p: any) => s + safeNumber(p.amount), 0);
   const manualTotal = total - opTotal;
 
   const grouped = useMemo(() => filtered.reduce((acc: Record<string, any[]>, p: any) => {
@@ -301,7 +308,7 @@ const Lucros = () => {
       return n;
     });
   };
-  const selectedTotal = filtered.filter((p: any) => selected.has(p.id)).reduce((s: number, p: any) => s + Number(p.amount), 0);
+  const selectedTotal = filtered.filter((p: any) => selected.has(p.id)).reduce((s: number, p: any) => s + safeNumber(p.amount), 0);
 
   const activeFilterCount = (timeFilter !== "all" ? 1 : 0) + (sourceFilter !== "all" ? 1 : 0) + (sortKey !== "date_desc" ? 1 : 0);
 
@@ -343,11 +350,11 @@ const Lucros = () => {
 
           <div className="grid w-full grid-cols-2 gap-2 lg:w-auto">
             {filtered.length > 0 && (
-              <button onClick={handleExportCSV} className="btn-ghost justify-center">
+              <button type="button" onClick={handleExportCSV} className="btn-ghost justify-center">
                 <Download size={14} /> CSV
               </button>
             )}
-            <button onClick={() => { resetForm(); setShowForm(true); }} className="btn-premium justify-center">
+            <button type="button" onClick={() => { resetForm(); setShowForm(true); }} className="btn-premium justify-center">
               <Plus size={16} /> Novo Lucro
             </button>
           </div>
@@ -506,12 +513,12 @@ const Lucros = () => {
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input ref={searchRef} type="text" placeholder="Buscar lucros... (atalho /)" value={search} onChange={e => setSearch(e.target.value)}
+          <input id="profits-search" name="profits_search" aria-label="Buscar lucros" ref={searchRef} type="text" placeholder="Buscar lucros... (atalho /)" value={search} onChange={e => setSearch(e.target.value)}
             className={`${inputCls} pl-9 pr-16`} />
           {!search && <kbd className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded border border-border bg-muted/50 text-[10px] text-muted-foreground">/</kbd>}
-          {search && <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"><X size={14} /></button>}
+          {search && <button type="button" aria-label="Limpar busca de lucros" onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"><X size={14} /></button>}
         </div>
-        <button onClick={() => setShowFilters(s => !s)} className="btn-ghost relative">
+          <button type="button" onClick={() => setShowFilters(s => !s)} className="btn-ghost relative">
           <SlidersHorizontal size={14} /> Filtros
           {activeFilterCount > 0 && (
             <span className="ml-1 px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold">{activeFilterCount}</span>
@@ -527,7 +534,7 @@ const Lucros = () => {
               {([
                 ["all","Todos"],["today","Hoje"],["7d","7 dias"],["30d","30 dias"],["90d","90 dias"],["ytd","Ano"]
               ] as [TimeFilter, string][]).map(([k, label]) => (
-                <button key={k} onClick={() => setTimeFilter(k)}
+                <button type="button" key={k} onClick={() => setTimeFilter(k)}
                   className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors ${
                     timeFilter === k ? "bg-primary text-primary-foreground" : "bg-muted/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                   }`}>{label}</button>
@@ -540,7 +547,7 @@ const Lucros = () => {
               {([
                 ["all","Todas"],["operational","Operacional"],["manual","Manual"]
               ] as [SourceFilter, string][]).map(([k, label]) => (
-                <button key={k} onClick={() => setSourceFilter(k)}
+                <button type="button" key={k} onClick={() => setSourceFilter(k)}
                   className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors ${
                     sourceFilter === k ? "bg-primary text-primary-foreground" : "bg-muted/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                   }`}>{label}</button>
@@ -553,7 +560,7 @@ const Lucros = () => {
               {([
                 ["date_desc","Mais recente"],["date_asc","Mais antigo"],["amount_desc","Maior valor"],["amount_asc","Menor valor"]
               ] as [SortKey, string][]).map(([k, label]) => (
-                <button key={k} onClick={() => setSortKey(k)}
+                <button type="button" key={k} onClick={() => setSortKey(k)}
                   className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors ${
                     sortKey === k ? "bg-primary text-primary-foreground" : "bg-muted/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                   }`}>{label}</button>
@@ -561,7 +568,7 @@ const Lucros = () => {
             </div>
           </div>
           {activeFilterCount > 0 && (
-            <button onClick={() => { setTimeFilter("all"); setSourceFilter("all"); setSortKey("date_desc"); }}
+            <button type="button" onClick={() => { setTimeFilter("all"); setSourceFilter("all"); setSortKey("date_desc"); }}
               className="text-[11px] text-muted-foreground hover:text-foreground underline">Limpar filtros</button>
           )}
         </div>
@@ -596,7 +603,7 @@ const Lucros = () => {
           <p className="text-foreground font-semibold text-lg">{debouncedSearch ? `Sem resultados para "${debouncedSearch}"` : "Nenhum lucro registrado"}</p>
           <p className="text-sm text-muted-foreground mt-2">Registre seus lucros para acompanhar a evolução financeira</p>
           {!debouncedSearch && (
-            <button onClick={() => { resetForm(); setShowForm(true); }}
+            <button type="button" onClick={() => { resetForm(); setShowForm(true); }}
               className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-primary-foreground"
               style={{ background: "var(--gradient-button)" }}>
               <Plus size={14} /> Registrar Primeiro Lucro
@@ -607,7 +614,7 @@ const Lucros = () => {
         <div className="rounded-2xl border border-border bg-card overflow-hidden">
           {/* Select all bar */}
           <div className="flex items-center gap-2 px-4 py-2 border-b border-border/50 bg-muted/10">
-            <button onClick={toggleAll} className="flex items-center gap-2 text-[11px] text-muted-foreground hover:text-foreground">
+            <button type="button" onClick={toggleAll} aria-label={allSelected ? "Desmarcar todos os lucros" : "Selecionar todos os lucros"} className="flex items-center gap-2 text-[11px] text-muted-foreground hover:text-foreground">
               {allSelected ? <CheckSquare size={14} className="text-primary"/> : <Square size={14}/>}
               {allSelected ? "Desmarcar tudo" : "Selecionar tudo"}
             </button>
@@ -619,7 +626,7 @@ const Lucros = () => {
                 <div className="flex items-center gap-2 px-4 py-2.5 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold sticky top-0 bg-card/95 backdrop-blur-sm z-[5] border-b border-border/50">
                   <Calendar size={10} /> {dateStr}
                   <span className="text-success font-bold ml-auto text-xs normal-case">
-                    +R$ {fmt(items.reduce((s: number, p: any) => s + Number(p.amount), 0))}
+                    +R$ {fmt(items.reduce((s: number, p: any) => s + safeNumber(p.amount), 0))}
                   </span>
                 </div>
                 <div className="divide-y divide-border/30">
@@ -627,7 +634,7 @@ const Lucros = () => {
                     const isSel = selected.has(p.id);
                     return (
                       <div key={p.id} className={`grid grid-cols-[auto_auto_minmax(0,1fr)_auto] sm:grid-cols-[auto_auto_minmax(0,1fr)_auto_auto] items-center gap-x-2.5 sm:gap-x-3 gap-y-2 px-3 sm:px-4 py-3 group transition-colors ${isSel ? "bg-primary/5" : "hover:bg-accent/20"}`}>
-                        <button onClick={() => toggleOne(p.id)} className="shrink-0 text-muted-foreground hover:text-primary">
+                        <button type="button" onClick={() => toggleOne(p.id)} aria-label={`${isSel ? "Desmarcar" : "Selecionar"} lucro ${p.description || "sem descrição"}`} className="shrink-0 text-muted-foreground hover:text-primary">
                           {isSel ? <CheckSquare size={16} className="text-primary"/> : <Square size={16}/>}
                         </button>
                         <div className="w-10 h-10 rounded-xl bg-success/10 border border-success/10 flex items-center justify-center shrink-0">
@@ -644,10 +651,10 @@ const Lucros = () => {
                             {formatBR(p.date, { day: "2-digit", month: "long", year: "numeric" })}
                           </p>
                         </div>
-                        <span className="col-span-2 sm:col-span-1 col-start-3 sm:col-start-auto text-sm font-bold text-success whitespace-nowrap">+R$ {fmt(Number(p.amount))}</span>
+                        <span className="col-span-2 sm:col-span-1 col-start-3 sm:col-start-auto text-sm font-bold text-success whitespace-nowrap">+R$ {fmt(p.amount)}</span>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <button className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent/50 sm:opacity-0 sm:group-hover:opacity-100 transition-all" aria-label={`Ações para ${p.description}`}>
+                            <button type="button" className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent/50 sm:opacity-0 sm:group-hover:opacity-100 transition-all" aria-label={`Ações para ${p.description || "lucro"}`}>
                               <MoreVertical size={14} />
                             </button>
                           </DropdownMenuTrigger>
@@ -681,7 +688,7 @@ const Lucros = () => {
           <span className="text-xs font-semibold text-foreground">{selected.size} selecionado(s)</span>
           <span className="text-xs text-success font-bold">R$ {fmt(selectedTotal)}</span>
           <div className="h-5 w-px bg-border" />
-          <button onClick={() => setSelected(new Set())} className="text-xs text-muted-foreground hover:text-foreground">Limpar</button>
+          <button type="button" onClick={() => setSelected(new Set())} className="text-xs text-muted-foreground hover:text-foreground">Limpar</button>
           <Button variant="destructive" size="sm" onClick={() => setBulkDeleteOpen(true)} className="h-8 text-xs">
             <Trash2 size={12} className="mr-1"/> Excluir
           </Button>
@@ -699,8 +706,8 @@ const Lucros = () => {
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Descrição</label>
-              <input type="text" placeholder="Ex: Juros recebidos, Comissão..." value={desc} onChange={e => setDesc(e.target.value)} className={inputCls} />
+              <label htmlFor="profit-description" className="text-xs font-medium text-muted-foreground mb-1.5 block">Descrição</label>
+              <input id="profit-description" name="profit_description" type="text" placeholder="Ex: Juros recebidos, Comissão..." value={desc} onChange={e => setDesc(e.target.value)} className={inputCls} />
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {["Juros", "Comissão", "Multa", "Taxa", "Venda"].map(tag => (
                   <button key={tag} type="button" onClick={() => setDesc(tag)}
@@ -711,12 +718,12 @@ const Lucros = () => {
               </div>
             </div>
             <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Valor (R$)</label>
-              <input type="text" inputMode="decimal" placeholder="0,00" value={amount} onChange={e => setAmount(e.target.value)} className={inputCls} />
+              <label htmlFor="profit-amount" className="text-xs font-medium text-muted-foreground mb-1.5 block">Valor (R$)</label>
+              <input id="profit-amount" name="profit_amount" type="text" inputMode="decimal" placeholder="0,00" value={amount} onChange={e => setAmount(e.target.value)} className={inputCls} />
             </div>
             <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Data</label>
-              <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inputCls} />
+              <label htmlFor="profit-date" className="text-xs font-medium text-muted-foreground mb-1.5 block">Data</label>
+              <input id="profit-date" name="profit_date" type="date" value={date} onChange={e => setDate(e.target.value)} className={inputCls} />
             </div>
           </div>
           <DialogFooter className="mt-4">

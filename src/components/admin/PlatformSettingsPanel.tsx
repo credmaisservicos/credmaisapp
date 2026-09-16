@@ -81,6 +81,8 @@ const PlatformSettingsPanel = () => {
             </div>
             <input
               type="checkbox"
+              name="platform-maintenance-mode"
+              aria-label="Modo de manutenção"
               checked={form.maintenance_mode}
               onChange={(e) => setForm({ ...form, maintenance_mode: e.target.checked })}
               className="w-5 h-5 accent-primary shrink-0"
@@ -110,6 +112,8 @@ const PlatformSettingsPanel = () => {
             </div>
             <input
               type="checkbox"
+              name="platform-new-registrations"
+              aria-label="Permitir novos cadastros"
               checked={form.allow_new_registrations}
               onChange={(e) => setForm({ ...form, allow_new_registrations: e.target.checked })}
               className="w-5 h-5 accent-primary shrink-0"
@@ -134,6 +138,8 @@ const PlatformSettingsPanel = () => {
             </p>
             <input
               type="text"
+              name="platform-checkout-url"
+              aria-label="Link de checkout do cadastro"
               value={form.checkout_url ?? ""}
               onChange={(e) => setForm({ ...form, checkout_url: e.target.value })}
               placeholder="https://mpago.la/... ou link de assinatura do Mercado Pago"
@@ -149,6 +155,8 @@ const PlatformSettingsPanel = () => {
             <p className="text-sm font-semibold">Dias de trial padrão</p>
             <input
               type="number"
+              name="platform-default-trial-days"
+              aria-label="Dias de trial padrão"
               min={0}
               max={365}
               value={form.default_trial_days}

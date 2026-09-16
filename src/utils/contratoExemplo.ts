@@ -1,4 +1,5 @@
 import type { ContractPlaceholderData } from "./contractTemplate";
+import { toDateInputValue } from "@/lib/dateUtils";
 
 /**
  * Cliente e empréstimo fictícios para a prévia do contrato.
@@ -20,7 +21,7 @@ export function contratoDeExemplo(empresa: {
   const hoje = new Date();
   const venc = (n: number) => {
     const d = new Date(hoje.getFullYear(), hoje.getMonth() + n, hoje.getDate(), 12);
-    return d.toISOString().slice(0, 10);
+    return toDateInputValue(d);
   };
 
   return {

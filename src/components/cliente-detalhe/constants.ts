@@ -10,7 +10,10 @@ export const LOAN_MODES: { v: LoanMode; label: string; desc: string; Icon: any }
   { v: "grace", label: "Com Carência", desc: "X períodos sem pagar", Icon: PauseCircle },
 ];
 
-export const fmt = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+export const fmt = (v: number) => {
+  const value = Number(v);
+  return (Number.isFinite(value) ? value : 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+};
 export const FREQ: Record<string, string> = { daily: "Diário", weekly: "Semanal", biweekly: "Quinzenal", monthly: "Mensal", custom: "Personalizado" };
 export const DAILY_MODES: Record<string, string> = { "mon-fri": "Seg → Sex", "mon-sat": "Seg → Sáb", "mon-sun": "Todos os dias" };
 export const formatFrequency = (value?: string | null) => {

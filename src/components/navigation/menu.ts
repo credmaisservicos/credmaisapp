@@ -161,7 +161,8 @@ export function filterMenuSections(sections: MenuSection[], v: MenuVisibility): 
     .map((s) => ({
       ...s,
       items: s.items.filter((i) => {
-        if (ADMIN_ONLY_PATHS.includes(i.path)) return v.isPlatformAdmin;
+        const basePath = i.path.split("?", 1)[0];
+        if (ADMIN_ONLY_PATHS.some((path) => basePath === path || basePath.startsWith(`${path}/`))) return v.isPlatformAdmin;
         if (i.pro && !v.hasAutomations) return false;
         if (i.module && v.modules && v.modules[i.module] === false) return false;
         return true;

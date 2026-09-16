@@ -160,7 +160,7 @@ const ExportCenter = () => {
               { label: "30d", d: 30 },
               { label: "90d", d: 90 },
             ].map((p) => (
-              <button key={p.label} onClick={() => setPreset(p.d)}
+              <button type="button" key={p.label} onClick={() => setPreset(p.d)}
                 className="px-2.5 py-2 rounded-lg text-[11px] font-bold text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors">
                 {p.label}
               </button>
@@ -180,7 +180,7 @@ const ExportCenter = () => {
                 className={`rounded-2xl border p-4 transition-all ${active ? "border-primary/40 bg-primary/5" : "border-border/40 bg-card/40 hover:border-border"}`}>
                 <div className="flex items-start justify-between gap-2 mb-3">
                   <label className="flex items-start gap-3 cursor-pointer flex-1 min-w-0">
-                    <input type="checkbox" checked={active} onChange={() => toggle(e.key)}
+                    <input type="checkbox" name={`export_${e.key}`} aria-label={`Selecionar ${e.label}`} checked={active} onChange={() => toggle(e.key)}
                       className="mt-1 w-4 h-4 rounded accent-primary" />
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
@@ -191,7 +191,7 @@ const ExportCenter = () => {
                     </div>
                   </label>
                 </div>
-                <button onClick={() => exportOne(e)} disabled={isBusy || !user}
+                <button type="button" onClick={() => exportOne(e)} disabled={isBusy || !user}
                   className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-card/70 border border-border/40 text-[11px] font-bold hover:border-primary/40 hover:text-primary transition-all disabled:opacity-50">
                   {isBusy ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
                   Baixar CSV
@@ -205,7 +205,7 @@ const ExportCenter = () => {
           <p className="text-[11px] text-muted-foreground">
             {selected.size === 0 ? "Selecione pelo menos uma entidade" : `${selected.size} entidade(s) selecionada(s)`}
           </p>
-          <button onClick={exportSelected} disabled={selected.size === 0 || busy === "all"}
+          <button type="button" onClick={exportSelected} disabled={selected.size === 0 || busy === "all"}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-emerald-500 disabled:opacity-50 sm:w-auto">
             {busy === "all" ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
             Exportar selecionadas

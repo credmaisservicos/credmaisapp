@@ -6,6 +6,11 @@ import { motion, useReducedMotion } from "framer-motion";
 
 export type BentoTone = "primary" | "success" | "danger" | "warning" | "info" | "muted";
 
+const safeNumber = (value: unknown) => {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? number : 0;
+};
+
 const toneMap: Record<BentoTone, { text: string; bg: string; border: string; grad: string }> = {
   primary: {
     text: "text-primary",
@@ -179,7 +184,7 @@ export default function BentoKPI({
             )}
           >
             {up ? <TrendingUp size={11} strokeWidth={2.25} /> : <TrendingDown size={11} strokeWidth={2.25} />}
-            {Math.abs(delta as number).toFixed(1)}%
+            {Math.abs(safeNumber(delta)).toFixed(1)}%
             <span className="text-muted-foreground/70 font-normal">vs anterior</span>
           </div>
         )}

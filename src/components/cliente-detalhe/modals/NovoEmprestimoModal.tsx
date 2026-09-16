@@ -91,13 +91,13 @@ export default function NovoEmprestimoModal(p: Props) {
       <div className="w-full max-w-lg sm:max-h-[85vh] sm:overflow-y-auto my-auto rounded-2xl border border-border bg-card p-6 space-y-4" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-foreground">Novo Empréstimo</h2>
-          <button onClick={p.onClose} aria-label="Fechar" className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground"><X size={18} /></button>
+          <button type="button" onClick={p.onClose} aria-label="Fechar" className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground"><X size={18} /></button>
         </div>
         <p className="text-xs text-muted-foreground">Para: <strong className="text-foreground">{p.clientName}</strong></p>
 
         <div>
           <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Tipo de Empréstimo</label>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-2">
             {LOAN_MODES.map(m => (
               <button key={m.v} type="button" onClick={() => {
                 p.setLoanMode(m.v);
@@ -118,20 +118,20 @@ export default function NovoEmprestimoModal(p: Props) {
         {p.loanMode === "grace" && (
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">Períodos de carência (sem pagar)</label>
-            <input type="number" value={p.loanGracePeriods} onChange={e => p.setLoanGracePeriods(e.target.value)} placeholder="2" className={INPUT} min={1} />
+            <input type="number" name="loan_grace_periods" aria-label="Períodos de carência" value={p.loanGracePeriods} onChange={e => p.setLoanGracePeriods(e.target.value)} placeholder="2" className={INPUT} min={1} />
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3">
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">Capital (R$)</label>
-            <input type="number" value={p.loanCapital} onChange={e => p.setLoanCapital(e.target.value)} placeholder="1000" className={INPUT} />
+            <input type="number" name="loan_capital" aria-label="Capital do empréstimo" value={p.loanCapital} onChange={e => p.setLoanCapital(e.target.value)} placeholder="1000" className={INPUT} />
           </div>
           {p.loanMode !== "bullet" && <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">
               Nº Parcelas
             </label>
-            <input type="number" value={p.loanInstallments} onChange={e => p.setLoanInstallments(e.target.value)} placeholder="12" className={INPUT} />
+            <input type="number" name="loan_installments" aria-label="Número de parcelas" value={p.loanInstallments} onChange={e => p.setLoanInstallments(e.target.value)} placeholder="12" className={INPUT} />
           </div>}
           {p.loanMode === "installments" && (
             <div className="col-span-2">
@@ -151,7 +151,7 @@ export default function NovoEmprestimoModal(p: Props) {
           {p.loanMode === "installments" && p.loanValueMode === "installment" ? (
             <div>
               <label className="text-xs font-medium text-muted-foreground mb-1 block">Valor da Parcela (R$)</label>
-              <input type="number" step="0.01" value={p.loanInstallmentValue} onChange={e => p.setLoanInstallmentValue(e.target.value)} placeholder="100" className={INPUT} />
+              <input type="number" name="loan_installment_value" aria-label="Valor da parcela" step="0.01" value={p.loanInstallmentValue} onChange={e => p.setLoanInstallmentValue(e.target.value)} placeholder="100" className={INPUT} />
               {p.loanCalc?.derivedRate !== undefined && (
                 <p className="text-[10px] text-primary mt-1">Taxa derivada: {p.loanCalc.derivedRate.toFixed(2)}%</p>
               )}
@@ -159,14 +159,14 @@ export default function NovoEmprestimoModal(p: Props) {
           ) : (
             <div>
               <label className="text-xs font-medium text-muted-foreground mb-1 block">Taxa (%)</label>
-              <input type="number" step="0.1" value={p.loanInterestRate} onChange={e => p.setLoanInterestRate(e.target.value)} className={INPUT} />
+              <input type="number" name="loan_interest_rate" aria-label="Taxa de juros" step="0.1" value={p.loanInterestRate} onChange={e => p.setLoanInterestRate(e.target.value)} className={INPUT} />
             </div>
           )}
           <div className="col-span-2">
             <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Frequência</label>
             <div className="grid grid-cols-2 min-[420px]:grid-cols-3 sm:grid-cols-5 gap-1.5">
               {Object.entries(FREQ).map(([v, l]) => (
-                <button key={v} onClick={() => p.setLoanFreq(v)}
+                <button key={v} type="button" onClick={() => p.setLoanFreq(v)}
                   className={`min-w-0 px-2 py-2.5 rounded-xl text-xs font-semibold border transition-colors ${p.loanFreq === v ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border text-muted-foreground hover:bg-accent"}`}>
                   {l}
                 </button>
@@ -178,7 +178,7 @@ export default function NovoEmprestimoModal(p: Props) {
               <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Dias úteis</label>
               <div className="grid grid-cols-3 gap-1.5">
                 {Object.entries(DAILY_MODES).map(([v, l]) => (
-                  <button key={v} onClick={() => p.setLoanDailyMode(v as DailyMode)}
+                  <button key={v} type="button" onClick={() => p.setLoanDailyMode(v as DailyMode)}
                     className={`px-2 py-2 rounded-xl text-xs font-semibold border transition-colors ${p.loanDailyMode === v ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border text-muted-foreground hover:bg-accent"}`}>
                     {l}
                   </button>
@@ -188,7 +188,7 @@ export default function NovoEmprestimoModal(p: Props) {
           )}
           {p.loanMode !== "bullet" && <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">Data Início</label>
-            <input type="date" value={p.loanStartDate} onChange={e => p.setLoanStartDate(e.target.value)} className={INPUT} />
+            <input type="date" name="loan_start_date" aria-label="Data de início" value={p.loanStartDate} onChange={e => p.setLoanStartDate(e.target.value)} className={INPUT} />
           </div>}
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 flex items-center justify-between gap-1">
@@ -198,17 +198,17 @@ export default function NovoEmprestimoModal(p: Props) {
                 {p.loanFirstDueAuto ? "Auto" : "Manual"}
               </button>
             </label>
-            <input type="date" value={p.loanStart} onChange={e => p.setLoanStart(e.target.value)}
+            <input type="date" name="loan_first_due_date" aria-label="Primeiro vencimento" value={p.loanStart} onChange={e => p.setLoanStart(e.target.value)}
               disabled={p.loanFirstDueAuto} className={INPUT + (p.loanFirstDueAuto ? " opacity-50" : "")} />
           </div>
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">Juros de atraso (% ao dia)</label>
-            <input type="number" min="0" step="0.01" value={p.loanDailyFee} onChange={e => p.setLoanDailyFee(e.target.value)} className={INPUT} />
+            <input type="number" name="loan_daily_fee" aria-label="Juros de atraso ao dia" min="0" step="0.01" value={p.loanDailyFee} onChange={e => p.setLoanDailyFee(e.target.value)} className={INPUT} />
           </div>
           <div className="col-span-2">
             <label className="text-xs font-medium text-muted-foreground mb-1 block">Observações</label>
             <div className="flex gap-2 items-start">
-              <textarea value={p.loanNotes} onChange={e => p.setLoanNotes(e.target.value)} className={INPUT + " min-h-[60px] flex-1"} placeholder="Opcional (ou dite pelo microfone)" />
+              <textarea name="loan_notes" aria-label="Observações do empréstimo" value={p.loanNotes} onChange={e => p.setLoanNotes(e.target.value)} className={INPUT + " min-h-[60px] flex-1"} placeholder="Opcional (ou dite pelo microfone)" />
               <VoiceRecorder onTranscribed={(t) => p.setLoanNotes((n: string) => (n ? n + " " : "") + t)} title="Ditar observação" />
             </div>
           </div>
@@ -262,7 +262,7 @@ export default function NovoEmprestimoModal(p: Props) {
             <span className="text-[10px] uppercase tracking-wider text-muted-foreground group-open:hidden">Abrir</span>
             <span className="text-[10px] uppercase tracking-wider text-primary hidden group-open:inline">Fechar</span>
           </summary>
-          <div className="mt-3 grid grid-cols-2 gap-3">
+          <div className="mt-3 grid grid-cols-1 min-[420px]:grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-medium text-muted-foreground mb-1 block">Carência (dias)</label>
               <input type="number" value={p.loanGraceDays} onChange={e => p.setLoanGraceDays(e.target.value)} placeholder="0" className={INPUT} />
@@ -270,7 +270,7 @@ export default function NovoEmprestimoModal(p: Props) {
             </div>
             <div>
               <label className="text-xs font-medium text-muted-foreground mb-1 block">Forma de Pagamento</label>
-              <select value={p.loanPaymentMethod} onChange={e => p.setLoanPaymentMethod(e.target.value)} className={INPUT}>
+              <select name="loan_payment_method" aria-label="Forma de pagamento" value={p.loanPaymentMethod} onChange={e => p.setLoanPaymentMethod(e.target.value)} className={INPUT}>
                 <option value="pix">PIX</option>
                 <option value="cash">Dinheiro</option>
                 <option value="boleto">Boleto</option>
@@ -345,8 +345,8 @@ export default function NovoEmprestimoModal(p: Props) {
           </label>
         </div>
         <div className="flex gap-2 pt-2">
-          <button onClick={p.onClose} className="flex-1 px-4 py-2.5 rounded-2xl border border-border text-sm text-muted-foreground">Cancelar</button>
-          <button onClick={() => p.onSubmit({ signatureRequired })} disabled={p.loanLoading || !p.loanCalc || !confirmed}
+          <button type="button" onClick={p.onClose} className="flex-1 px-4 py-2.5 rounded-2xl border border-border text-sm text-muted-foreground">Cancelar</button>
+          <button type="button" onClick={() => p.onSubmit({ signatureRequired })} disabled={p.loanLoading || !p.loanCalc || !confirmed}
             className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-primary-foreground disabled:opacity-50" style={{ background: "var(--gradient-button)" }}>
             {p.loanLoading ? "Criando..." : "Criar Empréstimo"}
           </button>

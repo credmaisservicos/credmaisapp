@@ -10,12 +10,12 @@ interface Props {
   onClickInstallment?: (i: any) => void;
 }
 
-const fmt = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+const fmt = (v: number) => (Number.isFinite(v) ? v : 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
 
 const KanbanView = ({ installments, onWhatsApp, onMarkPaid, onClickInstallment }: Props) => {
   const columns = useMemo(() => {
     const now = Date.now();
-    const dueTs = (i: any) => (parseLocalDate(i.due_date)?.getTime() ?? new Date(i.due_date).getTime());
+    const dueTs = (i: any) => parseLocalDate(i.due_date)?.getTime() ?? null;
     // A coluna de atraso vinha de `status === "overdue"` e as outras duas
     // exigiam `status === "pending"`. Uma parcela vencida que o check-overdue
     // ainda não marcou não caía em nenhuma das três: sumia do quadro.
@@ -24,13 +24,13 @@ const KanbanView = ({ installments, onWhatsApp, onMarkPaid, onClickInstallment }
     const overdue = abertas.filter((i) => isEmAtraso(i as any, agora));
     const dueSoon = abertas.filter((i) => {
       if (isEmAtraso(i as any, agora)) return false;
-      const days = (dueTs(i) - now) / 86400000;
-      return days <= 7;
+      const due = dueTs(i);
+      return due !== null && (due - now) / 86400000 <= 7;
     });
     const future = abertas.filter((i) => {
       if (isEmAtraso(i as any, agora)) return false;
-      const days = (dueTs(i) - now) / 86400000;
-      return days > 7;
+      const due = dueTs(i);
+      return due !== null && (due - now) / 86400000 > 7;
     });
     const paid = installments.filter((i) => i.status === "paid").slice(0, 30);
     return [
@@ -44,7 +44,10 @@ const KanbanView = ({ installments, onWhatsApp, onMarkPaid, onClickInstallment }
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 animate-fade-in">
       {columns.map((col) => {
-        const total = col.items.reduce((acc, i) => acc + Number(i.amount), 0);
+        const total = col.items.reduce((acc, i) => {
+          const amount = Number(i.amount);
+          return acc + (Number.isFinite(amount) ? amount : 0);
+        }, 0);
         const Icon = col.icon;
         return (
           <div key={col.key} className="bg-card border border-border rounded-2xl flex flex-col max-h-[70vh]">
@@ -84,12 +87,14 @@ const KanbanView = ({ installments, onWhatsApp, onMarkPaid, onClickInstallment }
                     {col.key !== "paid" && (
                       <div className="flex gap-1">
                         <button
+                          type="button"
                           onClick={() => onWhatsApp(i)}
                           className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg bg-success/10 text-success text-[10px] font-medium hover:bg-success/20 active:scale-95 focus-ring"
                         >
                           <MessageSquare size={11} /> WhatsApp
                         </button>
                         <button
+                          type="button"
                           onClick={() => onMarkPaid(i.id)}
                           className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg bg-primary/10 text-primary text-[10px] font-medium hover:bg-primary/20 active:scale-95 focus-ring"
                         >

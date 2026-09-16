@@ -17,6 +17,15 @@ import { formatDistanceToNow, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import ErrorState from "@/components/feedback/ErrorState";
 import { fetchAll } from "@/lib/fetchAll";
+import { parseLocalDate } from "@/lib/dateUtils";
+
+const safeDate = (value: unknown) => {
+  return parseLocalDate(typeof value === "string" || value instanceof Date ? value : null);
+};
+const relativeDate = (value: unknown) => {
+  const date = safeDate(value);
+  return date ? formatDistanceToNow(date, { addSuffix: true, locale: ptBR }) : "data indisponível";
+};
 
 type Ticket = {
   id: string;
@@ -194,7 +203,7 @@ const SupportInbox = () => {
       const q = search.toLowerCase();
       list = list.filter((t) => {
         const u = usersMap[t.user_id];
-        return t.subject.toLowerCase().includes(q) ||
+        return (t.subject || "").toLowerCase().includes(q) ||
           (u?.name || "").toLowerCase().includes(q) ||
           (u?.email || "").toLowerCase().includes(q);
       });
@@ -267,7 +276,7 @@ const SupportInbox = () => {
     const u = usersMap[activeTicket.user_id];
     return (
       <div className="space-y-4">
-        <button onClick={() => setActiveTicket(null)} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+        <button type="button" onClick={() => setActiveTicket(null)} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
           <ChevronLeft size={16} /> Voltar para lista
         </button>
         <div className="rounded-2xl border border-border/40 bg-card/60 backdrop-blur-sm overflow-hidden">
@@ -315,7 +324,7 @@ const SupportInbox = () => {
                 {categoryLabels[activeTicket.category] || activeTicket.category}
               </Badge>
               <span className="text-xs text-muted-foreground">
-                Aberto em {format(new Date(activeTicket.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                Aberto em {safeDate(activeTicket.created_at) ? format(safeDate(activeTicket.created_at)!, "dd/MM/yyyy HH:mm", { locale: ptBR }) : "data indisponível"}
               </span>
             </div>
           </div>
@@ -381,7 +390,7 @@ const SupportInbox = () => {
                         {isInternal ? "🔒 Nota interna" : isAdmin ? "🛡️ Você (Suporte)" : m.sender_name}
                       </span>
                       <span className="text-[10px] opacity-60">
-                        {formatDistanceToNow(new Date(m.created_at), { addSuffix: true, locale: ptBR })}
+                        {relativeDate(m.created_at)}
                       </span>
                     </div>
                     <p className="text-sm whitespace-pre-wrap break-words">{m.message}</p>
@@ -393,13 +402,13 @@ const SupportInbox = () => {
 
           <div className="p-4 border-t border-border/40 bg-card/40 space-y-3">
             <div className="flex items-center gap-2 mb-1">
-              <button 
+              <button type="button"
                 onClick={() => setShowInternalNotes(false)}
                 className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md transition-all ${!showInternalNotes ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent"}`}
               >
                 Resposta ao Usuário
               </button>
-              <button 
+              <button type="button"
                 onClick={() => setShowInternalNotes(true)}
                 className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md transition-all ${showInternalNotes ? "bg-amber-500 text-white" : "text-muted-foreground hover:bg-accent"}`}
               >
@@ -525,7 +534,7 @@ const SupportInbox = () => {
                       {priorityLabels[t.priority]?.label}
                     </Badge>
                     <span className="text-[11px] text-muted-foreground/70">
-                      · {formatDistanceToNow(new Date(t.last_message_at), { addSuffix: true, locale: ptBR })}
+                      · {relativeDate(t.last_message_at)}
                     </span>
                   </div>
                 </div>

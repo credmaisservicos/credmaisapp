@@ -10,6 +10,7 @@ const FRIENDLY: Array<{ match: RegExp; title: string; description: string }> = [
   { match: /network|failed to fetch|timeout|timed out/i, title: "Sem conexão", description: "Verifique sua internet e tente de novo." },
   { match: /rate limit|too many/i, title: "Muitas tentativas", description: "Aguarde alguns segundos e tente novamente." },
   { match: /check constraint|invalid input|invalid.*format/i, title: "Dado inválido", description: "Confira os campos preenchidos." },
+  { match: /could not find the function|function .* does not exist|relation .* does not exist/i, title: "Recurso indisponivel", description: "Este recurso ainda nao esta habilitado neste ambiente. Procure o administrador do sistema." },
 ];
 
 export function friendlyError(error: unknown, fallback = "Não foi possível concluir. Tente novamente."): { title: string; description: string } {

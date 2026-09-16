@@ -28,6 +28,12 @@ describe("daysLateOf", () => {
     expect(daysLateOf({ amount: 100, due_date: venceEm(0) })).toBe(0);
   });
 
+  it("preserva o dia de vencimento em datas YYYY-MM-DD no fuso brasileiro", () => {
+    const hoje = new Date();
+    const dataLocal = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}-${String(hoje.getDate()).padStart(2, "0")}`;
+    expect(daysLateOf({ amount: 100, due_date: dataLocal }, hoje)).toBe(0);
+  });
+
   it("conta dias inteiros, ignorando a hora do vencimento", () => {
     const ontemDeManha = new Date();
     ontemDeManha.setDate(ontemDeManha.getDate() - 1);
@@ -82,6 +88,12 @@ describe("outstandingDue", () => {
       status: "pending",
     }, new Date("2026-08-23T12:00:00.000Z"))).toBe(0);
   });
+
+  it("ignora pagamentos e encargos negativos vindos de dados legados", () => {
+    const inst = { amount: 100, paid_amount: -20, late_fee: -10, due_date: null, status: "paid" };
+    expect(outstandingDue(inst)).toBe(100);
+    expect(totalDue(inst)).toBe(100);
+  });
 });
 
 describe("dailyRateOf", () => {
@@ -105,6 +117,12 @@ describe("computeLateFee — juros composto diário", () => {
 
   it("é zero antes de vencer", () => {
     expect(computeLateFee({ amount: 100, due_date: venceEm(5), status: "pending" })).toBe(0);
+  });
+
+  it("não gera encargo negativo para parcela com principal inválido", () => {
+    const inst = { amount: -100, due_date: venceEm(-3), status: "pending" };
+    expect(computeLateFee(inst)).toBe(0);
+    expect(totalDue(inst)).toBe(0);
   });
 
   it("1 dia a 4% cobra 4,00", () => {
@@ -229,5 +247,13 @@ describe("independência da hora do dia", () => {
     const manha = new Date(); manha.setHours(6, 0, 0, 0);
     const noite = new Date(); noite.setHours(23, 30, 0, 0);
     expect(computeLateFee(p, manha)).toBeCloseTo(computeLateFee(p, noite), 2);
+  });
+});
+
+describe("dados legados inválidos", () => {
+  it("não propaga NaN quando valores financeiros chegam inválidos", () => {
+    const value = computeLateFee({ amount: "valor-legado-invalido", late_fee: "sem-valor", due_date: "2026-01-01", status: "paid" });
+    expect(Number.isFinite(value)).toBe(true);
+    expect(Number.isFinite(totalDue({ amount: "valor-legado-invalido", due_date: "2026-01-01" }))).toBe(true);
   });
 });

@@ -16,10 +16,11 @@ export const generatePixPayload = (
   description: string = ""
 ): string => {
   // Limpa a chave
-  const cleanKey = key.replace(/\s/g, "");
+  const cleanKey = String(key ?? "").replace(/\s/g, "");
   
   // Formata o valor
-  const amountStr = amount.toFixed(2);
+  const numericAmount = Number(amount);
+  const amountStr = (Number.isFinite(numericAmount) ? Math.max(0, numericAmount) : 0).toFixed(2);
   
   // Helper para formatar campos do EMV
   const f = (id: string, val: string) => {
@@ -32,14 +33,14 @@ export const generatePixPayload = (
     f("26", [
       f("00", "br.gov.bcb.pix"),
       f("01", cleanKey),
-      description ? f("02", description.substring(0, 25)) : ""
+      description ? f("02", String(description).substring(0, 25)) : ""
     ].join("")),
     f("52", "0000"), // Merchant Category Code
     f("53", "986"), // Transaction Currency (BRL)
     f("54", amountStr), // Transaction Amount
     f("58", "BR"), // Country Code
-    f("59", name.substring(0, 25).toUpperCase()), // Merchant Name
-    f("60", city.substring(0, 15).toUpperCase()), // Merchant City
+    f("59", String(name ?? "CLIENTE").substring(0, 25).toUpperCase()), // Merchant Name
+    f("60", String(city ?? "SAO PAULO").substring(0, 15).toUpperCase()), // Merchant City
     f("62", f("05", "***")), // Additional Data Field Template (TXID)
   ].join("");
 

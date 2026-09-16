@@ -28,17 +28,20 @@ const WhatsAppSection = ({ ctx }: SectionProps) => {
               </div>
             </div>
             <div className="space-y-4">
-              <div><label className="text-label mb-1.5 block">URL da API</label><input value={form.whatsapp_api_url} onChange={(e) => setForm({ ...form, whatsapp_api_url: e.target.value })} placeholder="https://api.exemplo.com" className={inputCls} /></div>
+              <div><label htmlFor="whatsapp-api-url" className="text-label mb-1.5 block">URL da API</label><input id="whatsapp-api-url" name="whatsapp_api_url" autoComplete="url" value={form.whatsapp_api_url} onChange={(e) => setForm({ ...form, whatsapp_api_url: e.target.value })} placeholder="https://api.exemplo.com" className={inputCls} /></div>
               <div>
                 <label className="text-label mb-1.5 block">
                   API Key {(settings as any)?.whatsapp_api_key_configured && <span className="ml-2 text-[10px] text-success font-bold">✓ Configurada</span>}
                 </label>
-                <input type="password" value={form.whatsapp_api_key} onChange={(e) => setForm({ ...form, whatsapp_api_key: e.target.value })} placeholder={(settings as any)?.whatsapp_api_key_configured ? "••••••••  (deixe vazio para manter)" : "Cole a chave da Evolution API"} className={inputCls} />
+                <input id="whatsapp-api-key" name="whatsapp_api_key" autoComplete="new-password" type="password" value={form.whatsapp_api_key} onChange={(e) => setForm({ ...form, whatsapp_api_key: e.target.value })} placeholder={(settings as any)?.whatsapp_api_key_configured ? "••••••••  (deixe vazio para manter)" : "Cole a chave da Evolution API"} className={inputCls} />
                 <p className="text-[10px] text-muted-foreground mt-1">Por segurança, a chave nunca é exibida. Digite uma nova para substituir.</p>
               </div>
               <div>
                 <label className="text-label mb-1.5 block">Nome da instância</label>
                 <input
+                  id="whatsapp-instance"
+                  name="whatsapp_instance"
+                  autoComplete="off"
                   value={form.whatsapp_instance}
                   onChange={(e) => setForm({ ...form, whatsapp_instance: e.target.value })}
                   placeholder="instancia-da-sua-empresa"

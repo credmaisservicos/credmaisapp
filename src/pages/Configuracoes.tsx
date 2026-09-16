@@ -547,6 +547,10 @@ const Configuracoes = () => {
           <div className="hidden md:block relative">
             <input
               ref={searchInputRef}
+              id="settings-search-desktop"
+              name="settings_search"
+              aria-label="Buscar configuração"
+              autoComplete="off"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar configuração... (Ctrl+K)"
@@ -566,7 +570,7 @@ const Configuracoes = () => {
             {installed ? <Check size={15} className="text-success" /> : <Download size={15} className="text-primary" />}
             <span className="hidden sm:inline">{installed ? "Instalado" : installing ? "Instalando..." : "Instalar"}</span>
           </button>
-          <button onClick={handleSave} disabled={saving}
+          <button type="button" onClick={handleSave} disabled={saving} aria-label={saving ? "Salvando configurações" : saved ? "Configurações salvas" : "Salvar configurações"}
             className={`px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition shrink-0 ${
               saved ? "bg-success text-success-foreground" : "bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             }`}>
@@ -578,6 +582,10 @@ const Configuracoes = () => {
         {/* Mobile search */}
         <div className="md:hidden relative mt-3">
           <input
+            id="settings-search-mobile"
+            name="settings_search_mobile"
+            aria-label="Buscar configuração"
+            autoComplete="off"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar configuração..."
@@ -598,9 +606,9 @@ const Configuracoes = () => {
       </div>
 
       <section className="settings-overview-grid" aria-label="Resumo das configurações">
-        <button className="settings-overview-card" onClick={() => setTab(configSteps.find(s => !s.done)?.tab || "marca")}><span className="settings-overview-icon"><Check size={16}/></span><span><small>Configuração essencial</small><strong>{completedSteps}/{configSteps.length} concluídas</strong><em>{completedSteps === configSteps.length ? "Tudo pronto" : "Continue sua configuração"}</em></span></button>
-        <button className="settings-overview-card" onClick={() => setTab("modulos")}><span className="settings-overview-icon is-purple"><Package size={16}/></span><span><small>Módulos ativos</small><strong>{Object.values(form.modules_enabled).filter(Boolean).length}</strong><em>Recursos disponíveis no app</em></span></button>
-        <button className="settings-overview-card" onClick={() => setTab("marca")}><span className="settings-overview-icon is-amber"><Palette size={16}/></span><span><small>Aparência atual</small><strong>{form.theme_mode === "light" ? "Modo claro" : form.theme_mode === "system" ? "Automático" : "Modo escuro"}</strong><em>Personalize cores e identidade</em></span></button>
+        <button type="button" className="settings-overview-card" aria-label="Abrir configuração essencial" onClick={() => setTab(configSteps.find(s => !s.done)?.tab || "marca")}><span className="settings-overview-icon"><Check size={16} aria-hidden="true"/></span><span><small>Configuração essencial</small><strong>{completedSteps}/{configSteps.length} concluídas</strong><em>{completedSteps === configSteps.length ? "Tudo pronto" : "Continue sua configuração"}</em></span></button>
+        <button type="button" className="settings-overview-card" aria-label="Abrir módulos ativos" onClick={() => setTab("modulos")}><span className="settings-overview-icon is-purple"><Package size={16} aria-hidden="true"/></span><span><small>Módulos ativos</small><strong>{Object.values(form.modules_enabled).filter(Boolean).length}</strong><em>Recursos disponíveis no app</em></span></button>
+        <button type="button" className="settings-overview-card" aria-label="Abrir aparência atual" onClick={() => setTab("marca")}><span className="settings-overview-icon is-amber"><Palette size={16} aria-hidden="true"/></span><span><small>Aparência atual</small><strong>{form.theme_mode === "light" ? "Modo claro" : form.theme_mode === "system" ? "Automático" : "Modo escuro"}</strong><em>Personalize cores e identidade</em></span></button>
       </section>
 
       <div className="grid md:grid-cols-[240px_1fr] gap-5">
@@ -619,6 +627,8 @@ const Configuracoes = () => {
                   return (
                     <button
                       key={item.id}
+                      type="button"
+                      aria-current={active ? "page" : undefined}
                       onClick={() => setTab(item.id)}
                       className={`settings-nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] transition group ${
                         active

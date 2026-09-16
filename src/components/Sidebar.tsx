@@ -246,6 +246,7 @@ const Sidebar = ({ collapsed = false, onToggleCollapse }: SidebarProps) => {
       {mode !== "platform" && collapsed && (
         <div className="px-2 pt-3 pb-1 flex flex-col gap-1.5">
           <button
+            type="button"
             onClick={openGlobalSearch}
             title="Buscar (⌘K)"
             aria-label="Buscar (⌘K)"
@@ -254,6 +255,7 @@ const Sidebar = ({ collapsed = false, onToggleCollapse }: SidebarProps) => {
             <Search size={15} />
           </button>
           <button
+            type="button"
             onClick={() => navigate("/clientes/novo")}
             title="Novo cliente"
             aria-label="Novo cliente"

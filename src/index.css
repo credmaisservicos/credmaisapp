@@ -1705,6 +1705,20 @@ div[style*="Edit with Lovable"],
   box-shadow: 0 0 0 3px hsl(var(--primary) / .09);
 }
 
+/* Native option menus must keep the dark application theme on Windows/Chrome. */
+.app-content :where(select) {
+  color-scheme: dark;
+}
+
+.app-content :where(select option) {
+  background: hsl(222 30% 12%);
+  color: hsl(var(--foreground));
+}
+
+.app-content :where(select option:disabled) {
+  color: hsl(var(--muted-foreground));
+}
+
 .app-content :where(h1, h2, h3, .kpi-value) {
   font-family: var(--font-heading);
 }

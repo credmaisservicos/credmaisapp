@@ -3,7 +3,7 @@ import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, BarChart, Bar, CartesianGrid, Legend,
 } from "recharts";
-import { formatBR } from "@/lib/dateUtils";
+import { formatBR, toDateInputValue } from "@/lib/dateUtils";
 import { TrendingUp, PieChart as PieIcon, BarChart3 } from "lucide-react";
 import { isEmAtraso } from "@/lib/dashboardMetrics";
 
@@ -22,8 +22,12 @@ const PERIOD_OPTIONS: { value: Period; label: string; days: number; bucket: "day
   { value: "12m", label: "12 meses", days: 365, bucket: "month" },
 ];
 
+const safeNumber = (value: unknown) => {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? number : 0;
+};
 const fmtBRL = (v: number) =>
-  v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+  safeNumber(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
@@ -57,7 +61,7 @@ export default function DashboardCharts({ contracts, installments, profits }: Pr
       for (let i = cfg.days - 1; i >= 0; i--) {
         const d = new Date(now);
         d.setDate(d.getDate() - i);
-        const k = d.toISOString().slice(0, 10);
+        const k = toDateInputValue(d);
         keys.push(k);
         buckets.set(k, { received: 0, profit: 0, overdue: 0 });
       }
@@ -78,7 +82,7 @@ export default function DashboardCharts({ contracts, installments, profits }: Pr
         const k = keyOf(i.paid_at);
         const b = buckets.get(k);
         if (b) {
-          const amt = Number(i.paid_amount || i.amount || 0);
+          const amt = safeNumber(i.paid_amount || i.amount);
           b.received += amt;
         }
       }
@@ -88,7 +92,7 @@ export default function DashboardCharts({ contracts, installments, profits }: Pr
       if (isEmAtraso(i as any, now)) {
         const k = keyOf(i.due_date);
         const b = buckets.get(k);
-        if (b) b.overdue += Number(i.amount || 0);
+        if (b) b.overdue += safeNumber(i.amount);
       }
     });
 
@@ -97,7 +101,7 @@ export default function DashboardCharts({ contracts, installments, profits }: Pr
     profits.forEach((profit: any) => {
       if (!profit.date) return;
       const bucket = buckets.get(keyOf(profit.date));
-      if (bucket) bucket.profit += Number(profit.amount || 0);
+      if (bucket) bucket.profit += safeNumber(profit.amount);
     });
 
     return keys.map((k) => {
@@ -132,7 +136,7 @@ export default function DashboardCharts({ contracts, installments, profits }: Pr
       const c = contracts.find((c: any) => c.id === i.contract_id);
       if (!c?.clients?.name) return;
       const cur = map.get(c.clients.name) || { name: c.clients.name, total: 0 };
-      cur.total += Number(i.paid_amount || i.amount || 0);
+      cur.total += safeNumber(i.paid_amount || i.amount);
       map.set(c.clients.name, cur);
     });
     return [...map.values()].sort((a, b) => b.total - a.total).slice(0, 5).reverse();
@@ -151,6 +155,7 @@ export default function DashboardCharts({ contracts, installments, profits }: Pr
         <div className="inline-flex items-center gap-1 p-1 rounded-full glass-card">
           {PERIOD_OPTIONS.map((opt) => (
             <button
+              type="button"
               key={opt.value}
               onClick={() => setPeriod(opt.value)}
               className={`px-3 py-1.5 rounded-full text-[10px] font-semibold uppercase tracking-wider transition-all ${

@@ -12,6 +12,7 @@
  */
 
 export type InstallmentStatus = "pending" | "overdue" | "paid" | "cancelled" | string;
+import { parseLocalDate } from "./dateUtils";
 
 export interface MetricsInstallment {
   id: string;
@@ -40,7 +41,10 @@ export interface DashboardInput {
   goals: unknown[];
 }
 
-const num = (v: unknown) => Number(v ?? 0) || 0;
+const num = (v: unknown) => {
+  const number = Number(v ?? 0);
+  return Number.isFinite(number) ? number : 0;
+};
 
 export function computeOutstandingPrincipal(
   contracts: MetricsContract[],
@@ -102,8 +106,8 @@ export function computeDashboardMetrics(data: DashboardInput, agora: Date = new 
   const em7dias = new Date(agora.getTime() + 7 * 86400000);
   const proximos7 = activeInstallments.filter((i) => {
     if (!isEmAberto(i) || !i.due_date) return false;
-    const d = new Date(i.due_date);
-    return d > agora && d <= em7dias;
+    const d = parseLocalDate(i.due_date);
+    return !!d && d > agora && d <= em7dias;
   });
 
   const todayStr = agora.toISOString().split("T")[0];
@@ -118,13 +122,14 @@ export function computeDashboardMetrics(data: DashboardInput, agora: Date = new 
   const maxActivity = Math.max(...weeklyActivity.map((w) => w.count), 1);
 
   const recentPayments = [...paidInstallments]
-    .sort((a, b) => new Date(b.paid_at ?? 0).getTime() - new Date(a.paid_at ?? 0).getTime())
+    .sort((a, b) => (parseLocalDate(b.paid_at)?.getTime() ?? 0) - (parseLocalDate(a.paid_at)?.getTime() ?? 0))
     .slice(0, 6);
 
   const overdueList = overdueInstallments
     .map((i) => {
       const contract = contracts.find((c) => c.id === i.contract_id);
-      const daysOverdue = Math.floor((agora.getTime() - new Date(i.due_date).getTime()) / 86400000);
+      const due = parseLocalDate(i.due_date);
+      const daysOverdue = due ? Math.max(0, Math.floor((agora.getTime() - due.getTime()) / 86400000)) : 0;
       return { ...i, clientName: contract?.clients?.name || "—", daysOverdue, contractId: i.contract_id };
     })
     .sort((a, b) => b.daysOverdue - a.daysOverdue);

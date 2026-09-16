@@ -29,7 +29,8 @@ type Props = {
 };
 
 function ClientRowImpl({ client: c, summary, isSel, striped, onToggle, onOpen, onDelete }: Props) {
-  const sc = Number(c.credit_score || 0);
+  const rawScore = Number(c.credit_score);
+  const sc = Number.isFinite(rawScore) ? Math.max(0, Math.min(100, rawScore)) : 0;
   const initial = (c.name?.charAt(0) || "?").toUpperCase();
   const pal = PALETTES[(initial.charCodeAt(0) || 0) % PALETTES.length];
   return (

@@ -12,6 +12,11 @@ import LanguageSwitcher from "./LanguageSwitcher";
 import AppModeSwitcher from "./AppModeSwitcher";
 import { fetchAll } from "@/lib/fetchAll";
 
+const safeNumber = (value: unknown) => {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? number : 0;
+};
+
 interface TopBarProps {
   onSearchClick?: () => void;
   onQuickPayment?: () => void;
@@ -51,8 +56,8 @@ const TopBar = ({ onSearchClick, onQuickPayment }: TopBarProps) => {
           .eq("user_id", user!.id).neq("status", "paid").neq("status", "cancelled").lt("due_date", nowIso).range(f, t)),
       ]);
       const activeContracts = contracts.filter((c: any) => c.status === "active" || c.status === "overdue");
-      const carteira = activeContracts.reduce((s: number, c: any) => s + Number(c.capital), 0);
-      const lucro = profits.reduce((s: number, p: any) => s + Number(p.amount), 0);
+      const carteira = activeContracts.reduce((s: number, c: any) => s + safeNumber(c.capital), 0);
+      const lucro = profits.reduce((s: number, p: any) => s + safeNumber(p.amount), 0);
       const overdue = overdueInstallments.length;
       return { carteira, lucro, overdue };
     },
@@ -70,7 +75,7 @@ const TopBar = ({ onSearchClick, onQuickPayment }: TopBarProps) => {
     navigate("/");
   };
 
-  const fmt = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmt = (v: number) => safeNumber(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const financialValue = (value?: number) => financialsLoading || financialsError ? "—" : `R$ ${fmt(value ?? 0)}`;
 
   return (

@@ -10,13 +10,17 @@ const publicRoutes = [
 
 const protectedRoutes = [
   "/dashboard", "/hoje", "/analises", "/clientes", "/clientes/novo",
-  "/clientes/buscar", "/cobrancas", "/carteira", "/investidores", "/lucros",
+  "/clientes/buscar", "/clientes/11111111-1111-4111-8111-111111111111",
+  "/contratos/22222222-2222-4222-8222-222222222222", "/cobrancas", "/carteira",
+  "/comercial", "/comercial/estoque", "/comercial/vendas", "/comercial/locacoes", "/garantias",
+  "/investidores", "/investidores/11111111-1111-4111-8111-111111111111", "/lucros",
   "/gastos", "/ferramentas", "/ferramentas/metas", "/ferramentas/simulador",
   "/ferramentas/tarefas", "/ferramentas/anotacoes", "/ferramentas/planilha",
   "/puxada-dados", "/sobre", "/perfil", "/admin", "/admin/bot-audit",
   "/relatorios", "/historico", "/historico-financeiro", "/configuracoes",
   "/cobradores", "/qrcode", "/comunicacao", "/comunicacao/inbox",
   "/auditoria", "/suporte", "/notificacoes", "/chat", "/tv",
+  "/central", "/agente-ia", "/bot-performance", "/automacoes", "/configuracoes/whatsapp", "/inadimplencia",
 ];
 
 for (const route of publicRoutes) {

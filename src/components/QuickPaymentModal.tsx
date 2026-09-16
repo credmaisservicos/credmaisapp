@@ -12,7 +12,11 @@ import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 
 interface Props { open: boolean; onClose: () => void; }
 
-const fmtBRL = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const safeNumber = (value: unknown) => {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? number : 0;
+};
+const fmtBRL = (v: number) => safeNumber(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 type PaymentMethod = "pix" | "cash" | "card" | "transfer" | "boleto";
 
@@ -109,7 +113,7 @@ const QuickPaymentModal = ({ open, onClose }: Props) => {
   );
   const remainingDue = (inst: any) => {
     const total = computeLateFeeBreakdown(inst).withFees;
-    return Math.max(0, Math.round((total - Number(inst.paid_amount || 0)) * 100) / 100);
+    return Math.max(0, Math.round((safeNumber(total) - safeNumber(inst.paid_amount)) * 100) / 100);
   };
   const selectedTotal = useMemo(
     () => selectedInstallments.reduce((s: number, i: any) => s + remainingDue(i), 0),
@@ -122,7 +126,7 @@ const QuickPaymentModal = ({ open, onClose }: Props) => {
       return;
     }
     setSaving(inst.id);
-    const amount = Number(inst.paid_amount || 0) + remainingDue(inst);
+    const amount = safeNumber(inst.paid_amount) + remainingDue(inst);
     // RPC atômico: baixa + lucro + caixa + conclusão do contrato numa transação.
     // Antes era `.update()` direto e o pagamento não chegava a Lucros nem ao caixa.
     const { error } = await supabase.rpc("pay_installment", {
@@ -169,7 +173,7 @@ const QuickPaymentModal = ({ open, onClose }: Props) => {
     const updates = await Promise.all(items.map((i: any) =>
       supabase.rpc("pay_installment", {
         _installment_id: i.id,
-        _paid_total: Number(i.paid_amount || 0) + remainingDue(i),
+        _paid_total: safeNumber(i.paid_amount) + remainingDue(i),
         _mark_paid: true,
         _method: method,
       })
@@ -205,8 +209,8 @@ const QuickPaymentModal = ({ open, onClose }: Props) => {
       toast.error("Reconecte para registrar o pagamento parcial");
       return;
     }
-    const paidNow = Number(String(partialValue).replace(",", "."));
-    const alreadyPaid = Number(inst.paid_amount || 0);
+    const paidNow = safeNumber(String(partialValue).replace(",", "."));
+    const alreadyPaid = safeNumber(inst.paid_amount);
     const remaining = remainingDue(inst);
     if (!paidNow || paidNow <= 0) { toast.error("Informe um valor válido"); return; }
     if (paidNow >= remaining) {
@@ -354,10 +358,10 @@ const QuickPaymentModal = ({ open, onClose }: Props) => {
               </div>
             )}
             {filtered.map((inst: any, idx: number) => {
-              const due = parseLocalDate(inst.due_date) ?? new Date(inst.due_date);
-              const isOverdue = due < today;
+              const due = parseLocalDate(inst.due_date);
+              const isOverdue = !!due && due < today;
               const t0 = new Date(); t0.setHours(0,0,0,0);
-              const isToday = new Date(due.getFullYear(), due.getMonth(), due.getDate()).getTime() === t0.getTime();
+              const isToday = !!due && new Date(due.getFullYear(), due.getMonth(), due.getDate()).getTime() === t0.getTime();
               const isActive = idx === activeIdx;
               const isSelected = selected.has(inst.id);
               const fee = computeLateFeeBreakdown(inst);

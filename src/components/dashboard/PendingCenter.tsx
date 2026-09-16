@@ -45,9 +45,9 @@ const PendingCenter = ({ overdueCount }: { overdueCount: number }) => {
 
   const items: PendingItem[] = [
     { label: "Cobranças atrasadas", description: "Priorize os recebimentos", count: overdueCount, path: "/cobrancas?filter=overdue", icon: AlertCircle, tone: "text-destructive bg-destructive/10" },
-    { label: "Assinaturas", description: "Contratos aguardando cliente", count: data?.signatures || 0, path: "/contratos", icon: FileSignature, tone: "text-warning bg-warning/10" },
+    { label: "Assinaturas", description: "Contratos aguardando cliente", count: data?.signatures || 0, path: "/clientes", icon: FileSignature, tone: "text-warning bg-warning/10" },
     { label: "Comprovantes", description: "Pagamentos para conferir", count: data?.receipts || 0, path: "/agente-ia?tab=documentos", icon: FileCheck2, tone: "text-primary bg-primary/10" },
-    { label: "Atendimento humano", description: "Conversas transferidas pelo bot", count: data?.handoffs || 0, path: "/whatsapp", icon: Headphones, tone: "text-info bg-info/10" },
+    { label: "Atendimento humano", description: "Conversas transferidas pelo bot", count: data?.handoffs || 0, path: "/comunicacao/inbox", icon: Headphones, tone: "text-info bg-info/10" },
     { label: "Solicitações novas", description: "Cadastros ainda não convertidos", count: data?.leads || 0, path: "/agente-ia?tab=documentos", icon: Inbox, tone: "text-success bg-success/10" },
   ];
   const total = items.reduce((sum, item) => sum + item.count, 0);

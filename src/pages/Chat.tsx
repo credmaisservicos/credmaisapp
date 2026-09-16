@@ -11,7 +11,9 @@ import { toast } from "sonner";
 import { friendlyError } from "@/lib/friendlyError";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { getSignedUploadUrl } from "@/lib/storage";
+import { toSafeHttpUrl } from "@/lib/safeUrl";
 import ErrorState from "@/components/feedback/ErrorState";
+import { parseLocalDate } from "@/lib/dateUtils";
 
 const EmojiPicker = lazy(() => import("emoji-picker-react"));
 
@@ -33,13 +35,17 @@ type Scope = { kind: "channel"; id: string } | { kind: "dm"; id: string; otherUs
 const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🔥", "🎉", "👏"];
 const URL_RE = /(https?:\/\/[^\s]+)/i;
 
-const fmtTime = (s: string) => new Date(s).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+const safeChatDate = (value: unknown) => {
+  return parseLocalDate(typeof value === "string" || value instanceof Date ? value : null);
+};
+const fmtTime = (s: string) => safeChatDate(s)?.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) || "—";
 const fmtDay = (s: string) => {
   // Havia um `useConfirm()` aqui dentro, sem uso nenhum: esta função só formata
   // data. Como ela é chamada durante o render, uma vez por mensagem, o React
   // contava aquilo como hook do componente que a chamou — e a quantidade variava
   // conforme o número de mensagens, derrubando a tela de conversas.
-  const d = new Date(s); const today = new Date(); const y = new Date(); y.setDate(y.getDate() - 1);
+  const d = safeChatDate(s); if (!d) return "Data indisponível";
+  const today = new Date(); const y = new Date(); y.setDate(y.getDate() - 1);
   if (d.toDateString() === today.toDateString()) return "Hoje";
   if (d.toDateString() === y.toDateString()) return "Ontem";
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
@@ -350,10 +356,10 @@ const Chat = () => {
   const channelMemberCount = (cid: string) => memberships.filter((m) => m.channel_id === cid).length;
 
   const visibleProfiles = useMemo(() => {
-    return Object.values(profiles).filter((p) => p.id !== user?.id && (!search || p.name.toLowerCase().includes(search.toLowerCase())));
+    return Object.values(profiles).filter((p) => p.id !== user?.id && (!search || (p.name || "").toLowerCase().includes(search.toLowerCase())));
   }, [profiles, user, search]);
 
-  const filteredChannels = channels.filter((c) => !search || c.name.toLowerCase().includes(search.toLowerCase()));
+  const filteredChannels = channels.filter((c) => !search || (c.name || "").toLowerCase().includes(search.toLowerCase()));
   const pinnedMessages = useMemo(() => messages.filter((m) => m.is_pinned && !m.is_deleted), [messages]);
 
   // Filter messages by inline search
@@ -431,7 +437,7 @@ const Chat = () => {
       const payload: any = {
         user_id: user.id, user_name: profile.name, user_avatar: profile.avatar_url || null,
         content: input.trim(), type: "text",
-        reply_to: replyTo ? { id: replyTo.id, user_name: replyTo.user_name, content: replyTo.content.slice(0, 120) } : null,
+        reply_to: replyTo ? { id: replyTo.id, user_name: replyTo.user_name, content: String(replyTo.content || "").slice(0, 120) } : null,
       };
       if (scope.kind === "channel") payload.channel_id = scope.id; else payload.dm_thread_id = scope.id;
       const { error } = await supabase.from("chat_messages").insert(payload);
@@ -751,7 +757,7 @@ const Chat = () => {
                     >
                       <div className="relative shrink-0">
                         <div className="w-9 h-9 rounded-full bg-primary/15 flex items-center justify-center text-xs font-bold text-primary overflow-hidden">
-                          {other.avatar_url ? <img src={other.avatar_url} alt="" className="w-9 h-9 object-cover" /> : other.name.charAt(0).toUpperCase()}
+                          {other.avatar_url ? <img src={other.avatar_url} alt="" className="w-9 h-9 object-cover" /> : (other.name || "?").charAt(0).toUpperCase()}
                         </div>
                         {online && <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-success ring-2 ring-card" />}
                       </div>
@@ -786,7 +792,7 @@ const Chat = () => {
                     <div key={p.id} className="group flex items-center gap-2.5 px-2.5 py-2 rounded-xl hover:bg-accent/40 transition">
                       <div className="relative shrink-0">
                         <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center text-xs font-bold text-primary overflow-hidden">
-                          {p.avatar_url ? <img src={p.avatar_url} alt="" className="w-8 h-8 object-cover" /> : p.name.charAt(0).toUpperCase()}
+                          {p.avatar_url ? <img src={p.avatar_url} alt="" className="w-8 h-8 object-cover" /> : (p.name || "?").charAt(0).toUpperCase()}
                         </div>
                         {online && <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-success ring-2 ring-card" />}
                       </div>
@@ -865,7 +871,7 @@ const Chat = () => {
                   <>
                     <div className="relative">
                       <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center text-xs font-bold text-primary overflow-hidden">
-                        {dmOther.avatar_url ? <img src={dmOther.avatar_url} alt="" className="w-8 h-8 object-cover" /> : dmOther.name.charAt(0).toUpperCase()}
+                        {dmOther.avatar_url ? <img src={dmOther.avatar_url} alt="" className="w-8 h-8 object-cover" /> : (dmOther.name || "?").charAt(0).toUpperCase()}
                       </div>
                       {onlineUsers.has(dmOther.id) && <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-success ring-2 ring-card" />}
                     </div>
@@ -906,6 +912,10 @@ const Chat = () => {
               <div className="px-3 py-2 border-b border-border/40 bg-muted/20 flex items-center gap-2">
                 <Search size={13} className="text-muted-foreground shrink-0" />
                 <input
+                  id="chat-thread-search"
+                  name="chat_thread_search"
+                  aria-label="Buscar mensagens nesta conversa"
+                  autoComplete="off"
                   autoFocus
                   value={inThreadSearch}
                   onChange={(e) => setInThreadSearch(e.target.value)}
@@ -915,7 +925,7 @@ const Chat = () => {
                 {inThreadSearch && (
                   <span className="text-[10px] text-muted-foreground font-semibold">{visibleMessages.length} resultado{visibleMessages.length !== 1 ? "s" : ""}</span>
                 )}
-                <button onClick={() => { setShowThreadSearch(false); setInThreadSearch(""); }} className="p-1 hover:bg-muted/50 rounded">
+                <button type="button" aria-label="Fechar busca na conversa" onClick={() => { setShowThreadSearch(false); setInThreadSearch(""); }} className="p-1 hover:bg-muted/50 rounded">
                   <X size={12} />
                 </button>
               </div>
@@ -978,7 +988,7 @@ const Chat = () => {
                           <div className="w-8 shrink-0">
                             {!sameAuthor && (
                               <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center text-xs font-bold text-primary overflow-hidden">
-                                {m.user_avatar ? <img src={m.user_avatar} alt="" className="w-8 h-8 object-cover" /> : m.user_name.charAt(0).toUpperCase()}
+                                {m.user_avatar ? <img src={m.user_avatar} alt="" className="w-8 h-8 object-cover" /> : (m.user_name || "?").charAt(0).toUpperCase()}
                               </div>
                             )}
                           </div>
@@ -1030,7 +1040,7 @@ const Chat = () => {
                               {url && !m.is_deleted && m.type === "text" && (
                                 <div className={`mt-1.5 flex items-center gap-1.5 text-[10px] ${mine ? "text-primary-foreground/80" : "text-muted-foreground"}`}>
                                   <LinkIcon size={10} />
-                                  <span className="truncate max-w-[200px]">{new URL(url).hostname}</span>
+                                  <span className="truncate max-w-[200px]">{toSafeHttpUrl(url)?.hostname || "Link externo"}</span>
                                 </div>
                               )}
                               {m.is_pinned && <Pin size={10} className="absolute -top-1.5 -right-1.5 text-warning bg-card rounded-full p-0.5" fill="currentColor" />}
@@ -1169,14 +1179,17 @@ const Chat = () => {
                   </div>
                 ) : (
                   <div className="flex items-end gap-2">
-                    <input ref={fileRef} type="file" hidden accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt,.zip" onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} />
-                    <button onClick={() => fileRef.current?.click()} disabled={uploading} className="p-2.5 rounded-xl hover:bg-muted/50 text-muted-foreground hover:text-foreground transition shrink-0" title="Anexar arquivo">
+                    <input ref={fileRef} type="file" name="chat_attachment" hidden accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt,.zip" onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} />
+                    <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading} aria-label="Anexar arquivo" className="p-2.5 rounded-xl hover:bg-muted/50 text-muted-foreground hover:text-foreground transition shrink-0" title="Anexar arquivo">
                       {uploading ? <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" /> : <Paperclip size={16} />}
                     </button>
-                    <button onClick={() => setShowInputEmoji((v) => !v)} className="p-2.5 rounded-xl hover:bg-muted/50 text-muted-foreground hover:text-foreground transition shrink-0" title="Emoji">
+                    <button type="button" onClick={() => setShowInputEmoji((v) => !v)} aria-label="Abrir seletor de emoji" className="p-2.5 rounded-xl hover:bg-muted/50 text-muted-foreground hover:text-foreground transition shrink-0" title="Emoji">
                       <Smile size={16} />
                     </button>
                     <textarea
+                      id="chat-message-input"
+                      name="chat_message"
+                      aria-label="Mensagem"
                       ref={inputRef}
                       value={input}
                       onChange={(e) => { setInput(e.target.value); broadcastTyping(); }}
@@ -1186,7 +1199,7 @@ const Chat = () => {
                       className="flex-1 resize-none bg-muted/30 border border-border/40 rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary/40 max-h-32"
                     />
                     {input.trim() ? (
-                      <button onClick={send} disabled={sending || !input.trim()} className="p-2.5 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition shrink-0 disabled:opacity-50" title={editingMsg ? "Salvar" : "Enviar"}>
+                      <button type="button" onClick={send} disabled={sending || !input.trim()} aria-label={editingMsg ? "Salvar mensagem" : "Enviar mensagem"} className="p-2.5 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition shrink-0 disabled:opacity-50" title={editingMsg ? "Salvar" : "Enviar"}>
                         {editingMsg ? <Check size={16} /> : <Send size={16} />}
                       </button>
                     ) : (

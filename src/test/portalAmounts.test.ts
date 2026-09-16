@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import { accumulatedPaymentTotal, portalInstallmentAmount } from "@/lib/portalAmounts";
 
 describe("portalInstallmentAmount", () => {
+  it("faz fallback para zero com valores financeiros inválidos", () => {
+    expect(portalInstallmentAmount({ amount: "valor-legado-invalido", paid_amount: null, due_date: "2026-08-21", status: "paid" })).toBe(0);
+    expect(accumulatedPaymentTotal({ amount: 100, paid_amount: "sem-valor", due_date: "2026-08-21" }, "também-inválido" as any)).toBe(0);
+  });
+
   it("cobra apenas o saldo restante depois de pagamento parcial", () => {
     expect(portalInstallmentAmount({
       amount: 100,

@@ -15,7 +15,7 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
-import { formatBR, todayLocalISO } from "@/lib/dateUtils";
+import { formatBR, parseLocalDate, todayLocalISO } from "@/lib/dateUtils";
 import { Button } from "@/components/ui/button";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMultiTableRealtime } from "@/hooks/useRealtimeSubscription";
@@ -23,7 +23,11 @@ import EmptyState from "@/components/EmptyState";
 import ErrorState from "@/components/feedback/ErrorState";
 import { parseFinancialAmount, parseFinancialDate } from "@/lib/financialEntry";
 
-const fmt = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const safeNumber = (value: unknown) => {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? number : 0;
+};
+const fmt = (v: number) => safeNumber(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const CATEGORY_COLORS: Record<string, string> = {
   "Operacional": "bg-blue-500/10 text-blue-500 border-blue-500/20",
@@ -133,11 +137,11 @@ const Gastos = () => {
   const handleExportCSV = () => {
     const header = "Data,Descrição,Categoria,Valor\n";
     const rows = filtered.map((e: any) =>
-      `${formatBR(e.date)},"${String(e.description || "").replace(/"/g, '""')}","${String(e.category || "").replace(/"/g, '""')}",${Number(e.amount).toFixed(2)}`
+      `${formatBR(e.date) || "data indisponível"},"${String(e.description || "").replace(/"/g, '""')}","${String(e.category || "").replace(/"/g, '""')}",${safeNumber(e.amount).toFixed(2)}`
     ).join("\n");
     const blob = new Blob([header + rows], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = `gastos_${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+    const a = document.createElement("a"); a.href = url; a.download = `gastos_${todayLocalISO()}.csv`; a.click();
     URL.revokeObjectURL(url);
     toast({ title: "CSV exportado!" });
   };
@@ -150,23 +154,25 @@ const Gastos = () => {
     const days = filterDays[timeFilter];
     return expenses.filter((e: any) => {
       if (days) {
-        const diff = (now.getTime() - new Date(e.date).getTime()) / 86400000;
+        const dateValue = parseLocalDate(e.date);
+        if (!dateValue) return false;
+        const diff = (now.getTime() - dateValue.getTime()) / 86400000;
         if (diff > days) return false;
       }
       if (catFilter !== "all" && (e.category || "Sem categoria") !== catFilter) return false;
-      if (search && !e.description.toLowerCase().includes(search.toLowerCase())) return false;
+      if (search && !(e.description || "").toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
   }, [expenses, search, catFilter, timeFilter]);
 
-  const totalFiltered = filtered.reduce((acc: number, e: any) => acc + Number(e.amount), 0);
-  const totalAll = expenses.reduce((acc: number, e: any) => acc + Number(e.amount), 0);
+  const totalFiltered = filtered.reduce((acc: number, e: any) => acc + safeNumber(e.amount), 0);
+  const totalAll = expenses.reduce((acc: number, e: any) => acc + safeNumber(e.amount), 0);
 
   const catBreakdown = useMemo(() => {
     const map = new Map<string, number>();
     expenses.forEach((e: any) => {
       const cat = e.category || "Sem categoria";
-      map.set(cat, (map.get(cat) || 0) + Number(e.amount));
+      map.set(cat, (map.get(cat) || 0) + safeNumber(e.amount));
     });
     return Array.from(map.entries())
       .sort((a, b) => b[1] - a[1])
@@ -179,9 +185,9 @@ const Gastos = () => {
       const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
       const monthStr = d.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "");
       const amount = expenses.filter((e: any) => {
-        const ed = new Date(e.date);
-        return ed.getMonth() === d.getMonth() && ed.getFullYear() === d.getFullYear();
-      }).reduce((s: number, e: any) => s + Number(e.amount), 0);
+        const ed = parseLocalDate(e.date);
+        return !!ed && ed.getMonth() === d.getMonth() && ed.getFullYear() === d.getFullYear();
+      }).reduce((s: number, e: any) => s + safeNumber(e.amount), 0);
       return { month: monthStr, amount };
     });
   }, [expenses]);
@@ -194,9 +200,10 @@ const Gastos = () => {
     : currentMonthTotal > 0 ? "+100" : "0";
 
   const todayTotal = expenses.filter((e: any) => {
-    const d = new Date(e.date);
-    return d.toDateString() === new Date().toDateString();
-  }).reduce((s: number, e: any) => s + Number(e.amount), 0);
+    const d = parseLocalDate(e.date);
+    const today = parseLocalDate(todayLocalISO());
+    return !!d && !!today && d.toDateString() === today.toDateString();
+  }).reduce((s: number, e: any) => s + safeNumber(e.amount), 0);
 
   const grouped = filtered.reduce((acc: Record<string, any[]>, e: any) => {
     const key = formatBR(e.date);
@@ -222,11 +229,11 @@ const Gastos = () => {
           </div>
           <div className="grid w-full grid-cols-2 gap-2 sm:w-auto">
             {filtered.length > 0 && (
-              <button onClick={handleExportCSV} className="btn-ghost justify-center">
+            <button type="button" onClick={handleExportCSV} className="btn-ghost justify-center">
                 <Download size={14} /> CSV
               </button>
             )}
-            <button onClick={() => { resetForm(); setShowForm(true); }} className="btn-premium justify-center">
+            <button type="button" onClick={() => { resetForm(); setShowForm(true); }} className="btn-premium justify-center">
               <Plus size={16} /> Novo Gasto
             </button>
           </div>
@@ -354,13 +361,13 @@ const Gastos = () => {
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input type="text" placeholder="Buscar gastos..." value={search} onChange={e => setSearch(e.target.value)}
+          <input id="expenses-search" name="expenses_search" aria-label="Buscar gastos" type="text" placeholder="Buscar gastos..." value={search} onChange={e => setSearch(e.target.value)}
             className={`${inputCls} pl-9`} />
-          {search && <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"><X size={14} /></button>}
+          {search && <button type="button" aria-label="Limpar busca de gastos" onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"><X size={14} /></button>}
         </div>
         <div className="flex rounded-xl border border-border bg-card overflow-hidden">
           {(["all", "7d", "30d", "90d"] as const).map(f => (
-            <button key={f} onClick={() => setTimeFilter(f)}
+              <button type="button" key={f} onClick={() => setTimeFilter(f)}
               className={`px-4 py-2.5 text-xs font-medium transition-colors ${
                 timeFilter === f
                   ? "bg-primary text-primary-foreground"
@@ -379,7 +386,7 @@ const Gastos = () => {
           <span className="text-xs text-muted-foreground">Categoria:</span>
           <Badge variant="outline" className={`text-[10px] ${getCategoryStyle(catFilter)}`}>{catFilter}</Badge>
           <span className="text-sm font-bold text-destructive ml-auto">R$ {fmt(totalFiltered)}</span>
-          <button onClick={() => setCatFilter("all")} className="p-1 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground">
+          <button type="button" onClick={() => setCatFilter("all")} className="p-1 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground">
             <X size={12} />
           </button>
         </div>
@@ -410,7 +417,7 @@ const Gastos = () => {
           title={search ? `Sem resultados para "${search}"` : "Nenhum gasto registrado"}
           description={search ? "Tente outro termo de busca." : "Registre seus gastos para controlar despesas."}
           action={!search ? (
-            <button onClick={() => { resetForm(); setShowForm(true); }}
+            <button type="button" onClick={() => { resetForm(); setShowForm(true); }}
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-primary-foreground"
               style={{ background: "var(--gradient-button)" }}>
               <Plus size={14} /> Registrar Primeiro Gasto
@@ -425,7 +432,7 @@ const Gastos = () => {
                 <div className="flex items-center gap-2 px-4 py-2.5 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold sticky top-0 bg-card/95 backdrop-blur-sm z-[5] border-b border-border/50">
                   <Calendar size={10} /> {dateStr}
                   <span className="text-destructive font-bold ml-auto text-xs normal-case">
-                    −R$ {fmt(items.reduce((s: number, e: any) => s + Number(e.amount), 0))}
+                    −R$ {fmt(items.reduce((s: number, e: any) => s + safeNumber(e.amount), 0))}
                   </span>
                 </div>
                 <div className="divide-y divide-border/30">
@@ -447,10 +454,10 @@ const Gastos = () => {
                           )}
                         </div>
                       </div>
-                      <span className="col-span-2 sm:col-span-1 col-start-2 sm:col-start-auto text-sm font-bold text-destructive whitespace-nowrap">−R$ {fmt(Number(e.amount))}</span>
+                      <span className="col-span-2 sm:col-span-1 col-start-2 sm:col-start-auto text-sm font-bold text-destructive whitespace-nowrap">−R$ {fmt(e.amount)}</span>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <button className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent/50 sm:opacity-0 sm:group-hover:opacity-100 transition-all" aria-label={`Ações para ${e.description}`}>
+                          <button type="button" className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent/50 sm:opacity-0 sm:group-hover:opacity-100 transition-all" aria-label={`Ações para ${e.description || "gasto"}`}>
                             <MoreVertical size={14} />
                           </button>
                         </DropdownMenuTrigger>
@@ -484,16 +491,16 @@ const Gastos = () => {
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Descrição</label>
-              <input type="text" placeholder="Ex: Aluguel, Gasolina..." value={desc} onChange={e => setDesc(e.target.value)} className={inputCls} />
+              <label htmlFor="expense-description" className="text-xs font-medium text-muted-foreground mb-1.5 block">Descrição</label>
+              <input id="expense-description" name="expense_description" type="text" placeholder="Ex: Aluguel, Gasolina..." value={desc} onChange={e => setDesc(e.target.value)} className={inputCls} />
             </div>
             <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Valor (R$)</label>
-              <input type="text" inputMode="decimal" placeholder="0,00" value={amount} onChange={e => setAmount(e.target.value)} className={inputCls} />
+              <label htmlFor="expense-amount" className="text-xs font-medium text-muted-foreground mb-1.5 block">Valor (R$)</label>
+              <input id="expense-amount" name="expense_amount" type="text" inputMode="decimal" placeholder="0,00" value={amount} onChange={e => setAmount(e.target.value)} className={inputCls} />
             </div>
             <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Categoria</label>
-              <input type="text" placeholder="Ex: Operacional" value={category} onChange={e => setCategory(e.target.value)} className={inputCls} />
+              <label htmlFor="expense-category" className="text-xs font-medium text-muted-foreground mb-1.5 block">Categoria</label>
+              <input id="expense-category" name="expense_category" type="text" placeholder="Ex: Operacional" value={category} onChange={e => setCategory(e.target.value)} className={inputCls} />
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {SUGGESTED_CATEGORIES.map(c => (
                   <button key={c} type="button" onClick={() => setCategory(c)}
@@ -506,8 +513,8 @@ const Gastos = () => {
               </div>
             </div>
             <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Data</label>
-              <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inputCls} />
+              <label htmlFor="expense-date" className="text-xs font-medium text-muted-foreground mb-1.5 block">Data</label>
+              <input id="expense-date" name="expense_date" type="date" value={date} onChange={e => setDate(e.target.value)} className={inputCls} />
             </div>
           </div>
           <DialogFooter className="mt-4">

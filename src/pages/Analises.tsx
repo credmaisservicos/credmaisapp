@@ -17,6 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import ErrorState from "@/components/feedback/ErrorState";
+import { parseLocalDate } from "@/lib/dateUtils";
 
 import AnaliseNarrative from "@/components/dashboard/AnaliseNarrative";
 import { fetchAll } from "@/lib/fetchAll";
@@ -61,9 +62,23 @@ function getPresetRange(key: PresetKey): { from: Date; to: Date } {
   }
 }
 
-const fmtBRL = (v: number) => `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const fmtNum = (v: number) => v.toLocaleString("pt-BR");
-const fmtPct = (v: number) => `${v.toFixed(1)}%`;
+const safeNumber = (value: unknown) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+};
+
+const safeDate = (value: unknown) => {
+  return parseLocalDate(typeof value === "string" || value instanceof Date ? value : null);
+};
+const safeDateMs = (value: unknown) => safeDate(value)?.getTime() || 0;
+
+const fmtDate = (value: unknown, pattern: string) => {
+  const date = safeDate(value);
+  return date ? format(date, pattern) : "—";
+};
+const fmtBRL = (v: number) => `R$ ${safeNumber(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const fmtNum = (v: number) => safeNumber(v).toLocaleString("pt-BR");
+const fmtPct = (v: number) => `${safeNumber(v).toFixed(1)}%`;
 
 type StatTone = "default" | "success" | "danger" | "warning" | "info";
 
@@ -116,7 +131,7 @@ function StatCard({ s, onClick }: { s: Stat; onClick?: () => void }) {
       {showDelta ? (
         <p className={cn("text-[11px] font-semibold flex items-center gap-1", good ? "text-success" : "text-destructive")}>
           {up ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
-          {Math.abs(s.delta as number).toFixed(1)}% vs período anterior
+          {Math.abs(safeNumber(s.delta)).toFixed(1)}% vs período anterior
         </p>
       ) : s.hint ? (
         <p className="text-[11px] text-muted-foreground">{s.hint}</p>
@@ -144,14 +159,14 @@ function DetailModal({ payload, onClose }: { payload: DetailPayload; onClose: ()
                 <div className="px-3 py-1.5 rounded-lg bg-muted text-foreground font-semibold">{payload.count} item(ns)</div>
               )}
             </div>
-            {payload.rows.length === 0 ? (
+            {(payload.rows || []).length === 0 ? (
               <div className="py-10 text-center text-sm text-muted-foreground">Nenhum registro encontrado.</div>
             ) : (
               <div className="max-h-[60vh] overflow-auto rounded-lg border border-border/50">
                 <table className="w-full min-w-[560px] text-sm">
                   <thead className="bg-muted/50 sticky top-0">
                     <tr>
-                      {payload.columns.map((c) => (
+                      {(payload.columns || []).map((c) => (
                         <th key={c.key} className={cn("px-3 py-2 text-[11px] uppercase tracking-wider text-muted-foreground font-semibold", c.align === "right" ? "text-right" : "text-left")}>
                           {c.label}
                         </th>
@@ -159,9 +174,9 @@ function DetailModal({ payload, onClose }: { payload: DetailPayload; onClose: ()
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/40">
-                    {payload.rows.map((row, i) => (
+                    {(payload.rows || []).map((row, i) => (
                       <tr key={i} className="hover:bg-muted/30">
-                        {payload.columns.map((c) => (
+                        {(payload.columns || []).map((c) => (
                           <td key={c.key} className={cn("px-3 py-2 tabular-nums", c.align === "right" ? "text-right" : "text-left")}>
                             {c.format ? c.format(row[c.key], row) : (row[c.key] ?? "—")}
                           </td>
@@ -220,7 +235,11 @@ const Analises = () => {
         fetchAll((f, t) => supabase.from("contract_installments").select("*, clients(id, name)").eq("user_id", user!.id).range(f, t)),
         fetchAll((f, t) => supabase.from("clients").select("id, name, credit_score, status, created_at").eq("user_id", user!.id).range(f, t)),
       ]);
-      return { contracts, installments, clients };
+      return {
+        contracts: Array.isArray(contracts) ? contracts : [],
+        installments: Array.isArray(installments) ? installments : [],
+        clients: Array.isArray(clients) ? clients : [],
+      };
     },
     enabled: !!user,
     staleTime: 0,
@@ -237,10 +256,10 @@ const Analises = () => {
     const inRange = (d: Date) => d >= rangeStart && d <= rangeEnd;
     // Normaliza due_date (que pode vir como "YYYY-MM-DD" ou ISO) para Date local sem deslocamento de fuso
     const parseDueLocal = (s: string) => {
-      if (!s) return new Date(NaN);
+      if (!s) return null;
       const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
       if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-      return new Date(s);
+      return safeDate(s);
     };
     const dueDayStr = (s: string) => String(s || "").slice(0, 10);
     const todayStr = format(now, "yyyy-MM-dd");
@@ -248,50 +267,52 @@ const Analises = () => {
     const rangeStartStr = format(rangeStart, "yyyy-MM-dd");
     const rangeEndStr = format(rangeEnd, "yyyy-MM-dd");
 
-    const paidInRange = installments.filter((i: any) => i.status === "paid" && i.paid_at && inRange(new Date(i.paid_at)));
-    const contractsInRange = contracts.filter((c: any) => c.created_at && inRange(new Date(c.created_at)));
+    const paidInRange = installments.filter((i: any) => i.status === "paid" && safeDate(i.paid_at) && inRange(safeDate(i.paid_at)!));
+    const contractsInRange = contracts.filter((c: any) => safeDate(c.created_at) && inRange(safeDate(c.created_at)!));
     const dueInRange = installments.filter((i: any) => {
       const d = dueDayStr(i.due_date);
       return d >= rangeStartStr && d <= rangeEndStr;
     });
 
     // ─── Empréstimos no período
-    const totalLent = contractsInRange.reduce((s: number, c: any) => s + Number(c.capital || 0), 0);
+    const totalLent = contractsInRange.reduce((s: number, c: any) => s + safeNumber(c.capital), 0);
     const newContracts = contractsInRange.length;
     const ticketMedio = newContracts > 0 ? totalLent / newContracts : 0;
-    const novosClientes = clients.filter((c: any) => c.created_at && inRange(new Date(c.created_at))).length;
-    const totalProfitExpected = contractsInRange.reduce((s: number, c: any) => s + Math.max(0, Number(c.total_amount || 0) - Number(c.capital || 0)), 0);
+    const novosClientes = clients.filter((c: any) => safeDate(c.created_at) && inRange(safeDate(c.created_at)!)).length;
+    const totalProfitExpected = contractsInRange.reduce((s: number, c: any) => s + Math.max(0, safeNumber(c.total_amount) - safeNumber(c.capital)), 0);
 
     // ─── Recebimentos no período
-    const totalReceived = paidInRange.reduce((s: number, i: any) => s + Number(i.paid_amount || i.amount || 0), 0);
+    const totalReceived = paidInRange.reduce((s: number, i: any) => s + safeNumber(i.paid_amount || i.amount), 0);
     const paidCount = paidInRange.length;
     const lucroPeriodo = paidInRange.reduce((s: number, i: any) => {
       const c = contracts.find((c: any) => c.id === i.contract_id);
       if (!c?.num_installments) return s;
-      const principal = Number(c.capital) / Number(c.num_installments);
-      return s + Math.max(0, Number(i.paid_amount || i.amount) - principal);
+      const principal = safeNumber(c.capital) / safeNumber(c.num_installments);
+      return s + Math.max(0, safeNumber(i.paid_amount || i.amount) - principal);
     }, 0);
-    const multas = paidInRange.reduce((s: number, i: any) => s + Number(i.late_fee || 0), 0);
+    const multas = paidInRange.reduce((s: number, i: any) => s + safeNumber(i.late_fee), 0);
 
     // ─── Atraso (saldo atual — não filtrado pelo período)
-    const overdueAll = installments.filter((i: any) => isEmAtraso(i, new Date()));
-    const overdueAmount = overdueAll.reduce((s: number, i: any) => s + Number(i.amount || 0), 0);
+    const overdueAll = installments.filter((i: any) => parseDueLocal(i.due_date) && isEmAtraso(i, new Date()));
+    const overdueAmount = overdueAll.reduce((s: number, i: any) => s + safeNumber(i.amount), 0);
     const overdueClients = new Set(overdueAll.map((i: any) => i.client_id)).size;
     const ag = (min: number, max: number) => overdueAll.filter((i: any) => {
-      const d = Math.floor((startOfDay(now).getTime() - startOfDay(parseDueLocal(i.due_date)).getTime()) / 86400000);
+      const due = parseDueLocal(i.due_date);
+      if (!due) return false;
+      const d = Math.floor((startOfDay(now).getTime() - startOfDay(due).getTime()) / 86400000);
       return d >= min && d <= max;
     });
     const aging = {
       a: ag(1, 7), b: ag(8, 15), c: ag(16, 30), d: ag(31, 60), e: ag(61, 9999),
     };
-    const sumAmt = (arr: any[]) => arr.reduce((s, i) => s + Number(i.amount || 0), 0);
+    const sumAmt = (arr: any[]) => arr.reduce((s, i) => s + safeNumber(i.amount), 0);
 
     // ─── Carteira (snapshot atual)
     const activeContracts = contracts.filter((c: any) => c.status === "active" || c.status === "overdue");
-    const capitalAtivo = activeContracts.reduce((s: number, c: any) => s + Number(c.capital || 0), 0);
+    const capitalAtivo = activeContracts.reduce((s: number, c: any) => s + safeNumber(c.capital), 0);
     const aReceberTotal = installments
       .filter((i: any) => isEmAberto(i))
-      .reduce((s: number, i: any) => s + Number(i.amount || 0), 0);
+      .reduce((s: number, i: any) => s + safeNumber(i.amount), 0);
     const quitados = contracts.filter((c: any) => {
       const insts = installments.filter((i: any) => i.contract_id === c.id);
       return insts.length > 0 && insts.every((i: any) => i.status === "paid");
@@ -299,31 +320,33 @@ const Analises = () => {
     const quitadosNoPeriodo = contracts.filter((c: any) => {
       const insts = installments.filter((i: any) => i.contract_id === c.id);
       if (insts.length === 0 || insts.some((i: any) => i.status !== "paid")) return false;
-      const last = insts.map((i: any) => i.paid_at ? new Date(i.paid_at).getTime() : 0).reduce((a, b) => Math.max(a, b), 0);
+      const last = insts.map((i: any) => safeDate(i.paid_at)?.getTime() || 0).reduce((a, b) => Math.max(a, b), 0);
       return last >= rangeStart.getTime() && last <= rangeEnd.getTime();
     }).length;
 
     // ─── Capital emprestado (histórico) — independente do período
-    const totalLentHistory = contracts.reduce((s: number, c: any) => s + Number(c.capital || 0), 0);
+    const totalLentHistory = contracts.reduce((s: number, c: any) => s + safeNumber(c.capital), 0);
     // Contratos encerrados (quitados/cancelados) devolvem 100% do capital para a carteira
     const CLOSED_STATUSES = new Set(["completed", "paid", "closed", "finished", "quitado", "cancelled", "canceled"]);
     const closedContractIds = new Set(contracts.filter((c: any) => CLOSED_STATUSES.has(String(c.status || "").toLowerCase())).map((c: any) => c.id));
     const paidPrincipalAll = contracts.reduce((s: number, c: any) => {
-      const cap = Number(c.capital || 0);
+      const cap = safeNumber(c.capital);
       if (closedContractIds.has(c.id)) return s + cap; // contrato encerrado → capital volta inteiro
       if (!c.num_installments) return s;
       const paidCount = installments.filter((i: any) => i.contract_id === c.id && i.status === "paid").length;
-      return s + (cap / Number(c.num_installments)) * paidCount;
+      const installmentCount = safeNumber(c.num_installments);
+      return installmentCount > 0 ? s + (cap / installmentCount) * paidCount : s;
     }, 0);
     const outstandingCapital = Math.max(0, totalLentHistory - paidPrincipalAll);
-    const totalProfitExpectedAll = contracts.reduce((s: number, c: any) => s + Math.max(0, Number(c.total_amount || 0) - Number(c.capital || 0)), 0);
+    const totalProfitExpectedAll = contracts.reduce((s: number, c: any) => s + Math.max(0, safeNumber(c.total_amount) - safeNumber(c.capital)), 0);
 
     // ─── Cobrança / inadimplência
     // Considera "paga no prazo" apenas quando o pagamento ocorreu até a data de vencimento
     const dueAlready = dueInRange.filter((i: any) => dueDayStr(i.due_date) <= todayStr);
     const pagasNoPrazo = dueAlready.filter((i: any) => {
       if (i.status !== "paid" || !i.paid_at) return false;
-      return format(new Date(i.paid_at), "yyyy-MM-dd") <= dueDayStr(i.due_date);
+      const paidAt = safeDate(i.paid_at);
+      return !!paidAt && format(paidAt, "yyyy-MM-dd") <= dueDayStr(i.due_date);
     }).length;
     const taxaCobranca = dueAlready.length > 0 ? (pagasNoPrazo / dueAlready.length) * 100 : 0;
     const inadRate = installments.length > 0 ? (overdueAll.length / installments.length) * 100 : 0;
@@ -335,8 +358,8 @@ const Analises = () => {
       return d >= todayStr && d <= format(subDays(now, -30), "yyyy-MM-dd");
     });
     const upcoming7 = upcoming.filter((i: any) => dueDayStr(i.due_date) <= format(subDays(now, -7), "yyyy-MM-dd"));
-    const forecastAmount = upcoming.reduce((s: number, i: any) => s + Number(i.amount || 0), 0);
-    const forecast7Amount = upcoming7.reduce((s: number, i: any) => s + Number(i.amount || 0), 0);
+    const forecastAmount = upcoming.reduce((s: number, i: any) => s + safeNumber(i.amount), 0);
+    const forecast7Amount = upcoming7.reduce((s: number, i: any) => s + safeNumber(i.amount), 0);
 
     // ─── Vence hoje / amanhã
     const dueToday = installments.filter((i: any) => isEmAberto(i) && dueDayStr(i.due_date) === todayStr);
@@ -347,16 +370,16 @@ const Analises = () => {
     const prevStart = new Date(rangeStart.getTime() - rangeMs - 1);
     const prevEnd = new Date(rangeStart.getTime() - 1);
     const prevLent = contracts
-      .filter((c: any) => { const d = new Date(c.created_at); return d >= prevStart && d <= prevEnd; })
-      .reduce((s: number, c: any) => s + Number(c.capital), 0);
+      .filter((c: any) => { const d = safeDate(c.created_at); return d && d >= prevStart && d <= prevEnd; })
+      .reduce((s: number, c: any) => s + safeNumber(c.capital), 0);
     const prevReceived = installments
-      .filter((i: any) => i.status === "paid" && i.paid_at && new Date(i.paid_at) >= prevStart && new Date(i.paid_at) <= prevEnd)
-      .reduce((s: number, i: any) => s + Number(i.paid_amount || i.amount), 0);
-    const prevPaidCount = installments.filter((i: any) => i.status === "paid" && i.paid_at && new Date(i.paid_at) >= prevStart && new Date(i.paid_at) <= prevEnd).length;
-    const prevContracts = contracts.filter((c: any) => { const d = new Date(c.created_at); return d >= prevStart && d <= prevEnd; }).length;
+      .filter((i: any) => { const d = safeDate(i.paid_at); return i.status === "paid" && d && d >= prevStart && d <= prevEnd; })
+      .reduce((s: number, i: any) => s + safeNumber(i.paid_amount || i.amount), 0);
+    const prevPaidCount = installments.filter((i: any) => { const d = safeDate(i.paid_at); return i.status === "paid" && d && d >= prevStart && d <= prevEnd; }).length;
+    const prevContracts = contracts.filter((c: any) => { const d = safeDate(c.created_at); return d && d >= prevStart && d <= prevEnd; }).length;
     const prevProfit = contracts
-      .filter((c: any) => { const d = new Date(c.created_at); return d >= prevStart && d <= prevEnd; })
-      .reduce((s: number, c: any) => s + Math.max(0, Number(c.total_amount || 0) - Number(c.capital || 0)), 0);
+      .filter((c: any) => { const d = safeDate(c.created_at); return d && d >= prevStart && d <= prevEnd; })
+      .reduce((s: number, c: any) => s + Math.max(0, safeNumber(c.total_amount) - safeNumber(c.capital)), 0);
     const delta = (cur: number, prev: number) => prev === 0 ? (cur > 0 ? 100 : 0) : ((cur - prev) / prev) * 100;
 
     // ─── Top piores pagadores
@@ -364,9 +387,10 @@ const Analises = () => {
     overdueAll.forEach((i: any) => {
       const cid = i.client_id;
       const cname = i.clients?.name || clients.find((c: any) => c.id === cid)?.name || "—";
-      const days = Math.floor((now.getTime() - new Date(i.due_date).getTime()) / 86400000);
+      const due = parseDueLocal(i.due_date);
+      const days = due ? Math.floor((now.getTime() - due.getTime()) / 86400000) : 0;
       const cur = overdueByClient.get(cid) || { name: cname, amount: 0, count: 0, maxDays: 0 };
-      cur.amount += Number(i.amount);
+      cur.amount += safeNumber(i.amount);
       cur.count += 1;
       cur.maxDays = Math.max(cur.maxDays, days);
       overdueByClient.set(cid, cur);
@@ -384,12 +408,15 @@ const Analises = () => {
     // ─── Helpers para construir detalhes
     const clientName = (cid: string) => clients.find((c: any) => c.id === cid)?.name || "—";
     const contractTag = (cid: string) => cid ? `#${String(cid).slice(0, 6)}` : "—";
-    const daysLate = (due: string) => Math.max(0, Math.floor((startOfDay(now).getTime() - startOfDay(parseDueLocal(due)).getTime()) / 86400000));
+    const daysLate = (due: string) => {
+      const parsed = parseDueLocal(due);
+      return parsed ? Math.max(0, Math.floor((startOfDay(now).getTime() - startOfDay(parsed).getTime()) / 86400000)) : 0;
+    };
 
-    const decorateInst = (i: any) => ({ ...i, _client: clientName(i.client_id), _contract: contractTag(i.contract_id), _days: daysLate(i.due_date), _paid: Number(i.paid_amount || i.amount || 0) });
+    const decorateInst = (i: any) => ({ ...i, _client: clientName(i.client_id), _contract: contractTag(i.contract_id), _days: daysLate(i.due_date), _paid: safeNumber(i.paid_amount || i.amount) });
     const decorateContract = (c: any) => {
-      const total = Number(c.total_amount || 0);
-      const cap = Number(c.capital || 0);
+      const total = safeNumber(c.total_amount);
+      const cap = safeNumber(c.capital);
       return { ...c, _client: clientName(c.client_id), _contract: contractTag(c.id), _total: total, _lucro: Math.max(0, total - cap) };
     };
 
@@ -397,53 +424,54 @@ const Analises = () => {
       { label: "Cliente", key: "_client" },
       { label: "Contrato", key: "_contract" },
       { label: "Parcela", key: "installment_number", align: "right" },
-      { label: "Vencimento", key: "due_date", format: (v) => v ? format(new Date(v), "dd/MM/yy") : "—" },
-      { label: "Valor", key: "amount", align: "right", format: (v) => fmtBRL(Number(v || 0)) },
+      { label: "Vencimento", key: "due_date", format: (v) => fmtDate(v, "dd/MM/yy") },
+      { label: "Valor", key: "amount", align: "right", format: (v) => fmtBRL(safeNumber(v)) },
       { label: "Status", key: "status" },
     ];
     const overdueCols: DetailColumn[] = [
       { label: "Cliente", key: "_client" },
       { label: "Contrato", key: "_contract" },
-      { label: "Vencimento", key: "due_date", format: (v) => v ? format(new Date(v), "dd/MM/yy") : "—" },
+      { label: "Vencimento", key: "due_date", format: (v) => fmtDate(v, "dd/MM/yy") },
       { label: "Atraso", key: "_days", align: "right", format: (v) => `${v}d` },
-      { label: "Valor", key: "amount", align: "right", format: (v) => fmtBRL(Number(v || 0)) },
+      { label: "Valor", key: "amount", align: "right", format: (v) => fmtBRL(safeNumber(v)) },
     ];
     const paidCols: DetailColumn[] = [
       { label: "Cliente", key: "_client" },
       { label: "Contrato", key: "_contract" },
-      { label: "Pago em", key: "paid_at", format: (v) => v ? format(new Date(v), "dd/MM/yy") : "—" },
-      { label: "Vencimento", key: "due_date", format: (v) => v ? format(new Date(v), "dd/MM/yy") : "—" },
-      { label: "Valor", key: "_paid", align: "right", format: (v) => fmtBRL(Number(v || 0)) },
+      { label: "Pago em", key: "paid_at", format: (v) => fmtDate(v, "dd/MM/yy") },
+      { label: "Vencimento", key: "due_date", format: (v) => fmtDate(v, "dd/MM/yy") },
+      { label: "Valor", key: "_paid", align: "right", format: (v) => fmtBRL(safeNumber(v)) },
     ];
     const contractCols: DetailColumn[] = [
       { label: "Cliente", key: "_client" },
       { label: "Contrato", key: "_contract" },
-      { label: "Capital", key: "capital", align: "right", format: (v) => fmtBRL(Number(v || 0)) },
-      { label: "A receber", key: "_total", align: "right", format: (v) => fmtBRL(Number(v || 0)) },
-      { label: "Lucro previsto", key: "_lucro", align: "right", format: (v) => fmtBRL(Number(v || 0)) },
+      { label: "Capital", key: "capital", align: "right", format: (v) => fmtBRL(safeNumber(v)) },
+      { label: "A receber", key: "_total", align: "right", format: (v) => fmtBRL(safeNumber(v)) },
+      { label: "Lucro previsto", key: "_lucro", align: "right", format: (v) => fmtBRL(safeNumber(v)) },
       { label: "Parcelas", key: "num_installments", align: "right" },
-      { label: "Criado", key: "created_at", format: (v) => v ? format(new Date(v), "dd/MM/yy") : "—" },
+      { label: "Criado", key: "created_at", format: (v) => fmtDate(v, "dd/MM/yy") },
     ];
 
     const historyRows = contracts.map((c: any) => {
       const paidInsts = installments.filter((i: any) => i.contract_id === c.id && i.status === "paid").length;
-      const principalPer = Number(c.num_installments || 0) > 0 ? Number(c.capital || 0) / Number(c.num_installments) : 0;
-      const remainingCapital = Math.max(0, Number(c.capital || 0) - paidInsts * principalPer);
+      const installmentCount = safeNumber(c.num_installments);
+      const principalPer = installmentCount > 0 ? safeNumber(c.capital) / installmentCount : 0;
+      const remainingCapital = Math.max(0, safeNumber(c.capital) - paidInsts * principalPer);
       return { ...decorateContract(c), _remainingCapital: remainingCapital };
     }).sort((a: any, b: any) => b._remainingCapital - a._remainingCapital);
 
     const overdueRows = overdueAll.map(decorateInst).sort((a: any, b: any) => b._days - a._days);
-    const paidRows = paidInRange.map(decorateInst).sort((a: any, b: any) => new Date(b.paid_at).getTime() - new Date(a.paid_at).getTime());
-    const contractsRows = contractsInRange.map(decorateContract).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    const paidRows = paidInRange.map(decorateInst).sort((a: any, b: any) => safeDateMs(b.paid_at) - safeDateMs(a.paid_at));
+    const contractsRows = contractsInRange.map(decorateContract).sort((a: any, b: any) => safeDateMs(b.created_at) - safeDateMs(a.created_at));
     const activeRows = activeContracts.map(decorateContract);
-    const pendingRows = installments.filter((i: any) => isEmAberto(i)).map(decorateInst).sort((a: any, b: any) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
+    const pendingRows = installments.filter((i: any) => isEmAberto(i) && parseDueLocal(i.due_date)).map(decorateInst).sort((a: any, b: any) => safeDateMs(a.due_date) - safeDateMs(b.due_date));
     const dueTodayRows = dueToday.map(decorateInst);
     const dueTomorrowRows = dueTomorrow.map(decorateInst);
-    const upcomingRows = upcoming.map(decorateInst).sort((a: any, b: any) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
-    const upcoming7Rows = upcoming7.map(decorateInst).sort((a: any, b: any) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
-    const newClientsRows = clients.filter((c: any) => c.created_at && inRange(new Date(c.created_at)))
+    const upcomingRows = upcoming.map(decorateInst).sort((a: any, b: any) => safeDateMs(a.due_date) - safeDateMs(b.due_date));
+    const upcoming7Rows = upcoming7.map(decorateInst).sort((a: any, b: any) => safeDateMs(a.due_date) - safeDateMs(b.due_date));
+    const newClientsRows = clients.filter((c: any) => safeDate(c.created_at) && inRange(safeDate(c.created_at)!))
       .map((c: any) => ({ ...c, _created: c.created_at }))
-      .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      .sort((a: any, b: any) => safeDateMs(b.created_at) - safeDateMs(a.created_at));
     const quitadosRows = contracts.filter((c: any) => {
       const insts = installments.filter((i: any) => i.contract_id === c.id);
       return insts.length > 0 && insts.every((i: any) => i.status === "paid");
@@ -451,7 +479,7 @@ const Analises = () => {
     const quitadosPeriodoRows = contracts.filter((c: any) => {
       const insts = installments.filter((i: any) => i.contract_id === c.id);
       if (insts.length === 0 || insts.some((i: any) => i.status !== "paid")) return false;
-      const last = insts.map((i: any) => i.paid_at ? new Date(i.paid_at).getTime() : 0).reduce((a, b) => Math.max(a, b), 0);
+      const last = insts.map((i: any) => safeDateMs(i.paid_at)).reduce((a, b) => Math.max(a, b), 0);
       return last >= rangeStart.getTime() && last <= rangeEnd.getTime();
     }).map(decorateContract);
 
@@ -461,13 +489,13 @@ const Analises = () => {
 
     const lucroRows = paidInRange.map((i: any) => {
       const c = contracts.find((c: any) => c.id === i.contract_id);
-      const principal = c?.num_installments ? Number(c.capital) / Number(c.num_installments) : 0;
-      const lucro = Math.max(0, Number(i.paid_amount || i.amount) - principal);
+      const principal = c && safeNumber(c.num_installments) > 0 ? safeNumber(c.capital) / safeNumber(c.num_installments) : 0;
+      const lucro = Math.max(0, safeNumber(i.paid_amount || i.amount) - principal);
       return { ...decorateInst(i), _lucro: lucro };
     }).filter((r: any) => r._lucro > 0).sort((a: any, b: any) => b._lucro - a._lucro);
 
-    const multasRows = paidInRange.filter((i: any) => Number(i.late_fee || 0) > 0)
-      .map((i: any) => ({ ...decorateInst(i), _fee: Number(i.late_fee || 0) }))
+    const multasRows = paidInRange.filter((i: any) => safeNumber(i.late_fee) > 0)
+      .map((i: any) => ({ ...decorateInst(i), _fee: safeNumber(i.late_fee) }))
       .sort((a: any, b: any) => b._fee - a._fee);
 
     const agingCols = overdueCols;
@@ -485,7 +513,7 @@ const Analises = () => {
       totalProfitExpected: { title: "Lucro total dos contratos no período", criteria: `Soma do lucro previsto (total do contrato − capital) dos contratos criados entre ${format(dateFrom, "dd/MM/yy")} e ${format(dateTo, "dd/MM/yy")}.`, total: fmtBRL(totalProfitExpected), count: contractsRows.length, columns: contractCols, rows: contractsRows },
       newContracts: { title: "Novos contratos no período", criteria: "Contratos cuja data de criação está dentro do período selecionado.", count: contractsRows.length, columns: contractCols, rows: contractsRows },
       ticketMedio: { title: "Ticket médio", criteria: "Total emprestado ÷ nº de contratos no período.", total: fmtBRL(ticketMedio), count: contractsRows.length, columns: contractCols, rows: contractsRows },
-      novosClientes: { title: "Novos clientes no período", criteria: "Clientes cuja data de cadastro caiu dentro do período selecionado.", count: newClientsRows.length, columns: [{ label: "Cliente", key: "name" }, { label: "Cadastro", key: "_created", format: (v) => v ? format(new Date(v), "dd/MM/yy") : "—" }, { label: "Status", key: "status" }], rows: newClientsRows },
+      novosClientes: { title: "Novos clientes no período", criteria: "Clientes cuja data de cadastro caiu dentro do período selecionado.", count: newClientsRows.length, columns: [{ label: "Cliente", key: "name" }, { label: "Cadastro", key: "_created", format: (v) => fmtDate(v, "dd/MM/yy") }, { label: "Status", key: "status" }], rows: newClientsRows },
       totalReceived: { title: "Total recebido no período", criteria: "Soma do valor pago das parcelas com status \"pago\" e data de pagamento dentro do período.", total: fmtBRL(totalReceived), count: paidRows.length, columns: paidCols, rows: paidRows },
       paidCount: { title: "Parcelas pagas no período", criteria: "Parcelas marcadas como pagas cuja data de pagamento caiu no período.", count: paidRows.length, columns: paidCols, rows: paidRows },
       lucro: { title: "Lucro (juros) recebido", criteria: "Para cada parcela paga, calcula valor pago − (capital ÷ nº parcelas). Considera só valores positivos.", total: fmtBRL(lucroPeriodo), count: lucroRows.length, columns: [...paidCols, { label: "Juros", key: "_lucro", align: "right", format: (v) => fmtBRL(Number(v || 0)) }], rows: lucroRows },
@@ -500,16 +528,16 @@ const Analises = () => {
       agingD: makeAging(aging.d, "31-60 dias"),
       agingE: makeAging(aging.e, "60+ dias"),
       capitalAtivo: { title: "Capital ativo na rua", criteria: "Soma do capital dos contratos com status \"ativo\" ou \"em atraso\".", total: fmtBRL(capitalAtivo), count: activeRows.length, columns: contractCols, rows: activeRows },
-      totalLentHistory: { title: "Total emprestado (desde sempre)", criteria: "Soma do capital de todos os contratos criados, independente do período selecionado.", total: fmtBRL(totalLentHistory), count: contracts.length, columns: contractCols, rows: contracts.map(decorateContract).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()) },
+      totalLentHistory: { title: "Total emprestado (desde sempre)", criteria: "Soma do capital de todos os contratos criados, independente do período selecionado.", total: fmtBRL(totalLentHistory), count: contracts.length, columns: contractCols, rows: contracts.map(decorateContract).sort((a: any, b: any) => safeDateMs(b.created_at) - safeDateMs(a.created_at)) },
       totalProfitExpectedAll: { title: "Lucro total esperado (desde sempre)", criteria: "Soma do lucro previsto (total do contrato − capital) de todos os contratos, independente do período selecionado.", total: fmtBRL(totalProfitExpectedAll), count: contracts.length, columns: contractCols, rows: contracts.map(decorateContract).sort((a: any, b: any) => b._lucro - a._lucro) },
       outstandingCapital: { title: "Saldo de capital emprestado", criteria: "Capital total já emprestado menos o principal já recuperado pelas parcelas pagas.", total: fmtBRL(outstandingCapital), count: historyRows.filter((r: any) => r._remainingCapital > 0).length, columns: [...contractCols, { label: "Capital em aberto", key: "_remainingCapital", align: "right", format: (v) => fmtBRL(Number(v || 0)) }], rows: historyRows.filter((r: any) => r._remainingCapital > 0) },
       aReceber: { title: "A receber (total)", criteria: "Soma do valor de todas as parcelas com status \"pendente\".", total: fmtBRL(aReceberTotal), count: pendingRows.length, columns: instCols, rows: pendingRows },
       activeContracts: { title: "Contratos ativos", criteria: "Contratos com status \"ativo\" ou \"em atraso\".", count: activeRows.length, columns: contractCols, rows: activeRows },
-      totalClients: { title: "Total de clientes", criteria: "Todos os clientes cadastrados (independente de status).", count: clients.length, columns: [{ label: "Cliente", key: "name" }, { label: "Cadastro", key: "created_at", format: (v) => v ? format(new Date(v), "dd/MM/yy") : "—" }, { label: "Status", key: "status" }], rows: clients },
+      totalClients: { title: "Total de clientes", criteria: "Todos os clientes cadastrados (independente de status).", count: clients.length, columns: [{ label: "Cliente", key: "name" }, { label: "Cadastro", key: "created_at", format: (v) => fmtDate(v, "dd/MM/yy") }, { label: "Status", key: "status" }], rows: clients },
       quitados: { title: "Contratos quitados (geral)", criteria: "Contratos cujas parcelas estão todas com status \"pago\".", count: quitadosRows.length, columns: contractCols, rows: quitadosRows },
       quitadosPeriodo: { title: "Contratos quitados no período", criteria: "Contratos cuja última parcela foi paga dentro do período selecionado.", count: quitadosPeriodoRows.length, columns: contractCols, rows: quitadosPeriodoRows },
-      dueToday: { title: "Vence hoje", criteria: "Parcelas pendentes com data de vencimento igual a hoje.", total: fmtBRL(dueTodayRows.reduce((s: number, i: any) => s + Number(i.amount || 0), 0)), count: dueTodayRows.length, columns: instCols, rows: dueTodayRows },
-      dueTomorrow: { title: "Vence amanhã", criteria: "Parcelas pendentes com data de vencimento igual a amanhã.", total: fmtBRL(dueTomorrowRows.reduce((s: number, i: any) => s + Number(i.amount || 0), 0)), count: dueTomorrowRows.length, columns: instCols, rows: dueTomorrowRows },
+      dueToday: { title: "Vence hoje", criteria: "Parcelas pendentes com data de vencimento igual a hoje.", total: fmtBRL(dueTodayRows.reduce((s: number, i: any) => s + safeNumber(i.amount), 0)), count: dueTodayRows.length, columns: instCols, rows: dueTodayRows },
+      dueTomorrow: { title: "Vence amanhã", criteria: "Parcelas pendentes com data de vencimento igual a amanhã.", total: fmtBRL(dueTomorrowRows.reduce((s: number, i: any) => s + safeNumber(i.amount), 0)), count: dueTomorrowRows.length, columns: instCols, rows: dueTomorrowRows },
       forecast7: { title: "Previsão · próximos 7 dias", criteria: "Parcelas pendentes com vencimento nos próximos 7 dias.", total: fmtBRL(forecast7Amount), count: upcoming7Rows.length, columns: instCols, rows: upcoming7Rows },
       forecast30: { title: "Previsão · próximos 30 dias", criteria: "Parcelas pendentes com vencimento nos próximos 30 dias.", total: fmtBRL(forecastAmount), count: upcomingRows.length, columns: instCols, rows: upcomingRows },
     };
@@ -541,9 +569,9 @@ const Analises = () => {
       taxaCobranca, inadRate,
       // previsão
       forecastAmount, forecast7Amount, upcomingCount: upcoming.length, upcoming7Count: upcoming7.length,
-      dueTodayAmount: dueToday.reduce((s: number, i: any) => s + Number(i.amount || 0), 0),
+      dueTodayAmount: dueToday.reduce((s: number, i: any) => s + safeNumber(i.amount), 0),
       dueTodayCount: dueToday.length,
-      dueTomorrowAmount: dueTomorrow.reduce((s: number, i: any) => s + Number(i.amount || 0), 0),
+      dueTomorrowAmount: dueTomorrow.reduce((s: number, i: any) => s + safeNumber(i.amount), 0),
       dueTomorrowCount: dueTomorrow.length,
       // deltas
       deltaLent: delta(totalLent, prevLent),
@@ -590,7 +618,7 @@ const Analises = () => {
 
   const periodLabel = `${format(dateFrom, "dd/MM/yy")} → ${format(dateTo, "dd/MM/yy")}`;
 
-  const heroDelta = m.deltaReceived;
+  const heroDelta = safeNumber(m.deltaReceived);
   const heroUp = heroDelta >= 0;
 
   return (
@@ -629,10 +657,10 @@ const Analises = () => {
           </div>
 
           <div className="grid w-full grid-cols-2 gap-2 lg:w-auto">
-            <button onClick={() => refetch()} disabled={isFetching} title={dataUpdatedAt ? `Atualizado às ${new Date(dataUpdatedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : "Atualizar análises"} className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-white/[.035] border border-white/10 text-xs font-semibold hover:bg-white/[.07] disabled:opacity-60 transition-colors">
+            <button type="button" onClick={() => refetch()} disabled={isFetching} title={dataUpdatedAt ? `Atualizado às ${new Date(dataUpdatedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : "Atualizar análises"} className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-white/[.035] border border-white/10 text-xs font-semibold hover:bg-white/[.07] disabled:opacity-60 transition-colors">
               <RefreshCw size={13} className={isFetching ? "animate-spin" : ""} /> {isFetching ? "Atualizando" : "Atualizar"}
             </button>
-            <button onClick={handleExport} className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-card/70 border border-border text-xs font-semibold text-foreground hover:bg-accent transition-colors focus-ring">
+            <button type="button" onClick={handleExport} className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-card/70 border border-border text-xs font-semibold text-foreground hover:bg-accent transition-colors focus-ring">
               <Download size={13} className="text-primary" /> Exportar CSV
             </button>
           </div>
@@ -640,10 +668,10 @@ const Analises = () => {
       </div>
 
       <section className="analysis-overview-grid" aria-label="Resumo executivo">
-        <button className="analysis-overview-card is-received" onClick={() => setDetail(m.details.totalReceived)}><span className="analysis-overview-icon"><Wallet size={17}/></span><span><small>Recebido no período</small><strong>{fmtBRL(m.totalReceived)}</strong><em>{m.paidCount} parcelas pagas</em></span></button>
-        <button className="analysis-overview-card is-lent" onClick={() => setDetail(m.details.totalLent)}><span className="analysis-overview-icon"><HandCoins size={17}/></span><span><small>Emprestado no período</small><strong>{fmtBRL(m.totalLent)}</strong><em>{m.newContracts} novos contratos</em></span></button>
-        <button className="analysis-overview-card is-risk" onClick={() => setDetail(m.details.overdue)}><span className="analysis-overview-icon"><AlertTriangle size={17}/></span><span><small>Em atraso agora</small><strong>{fmtBRL(m.overdueAmount)}</strong><em>{m.overdueClients} clientes afetados</em></span></button>
-        <button className="analysis-overview-card is-active" onClick={() => setDetail(m.details.capitalAtivo)}><span className="analysis-overview-icon"><TrendingUp size={17}/></span><span><small>Capital ativo</small><strong>{fmtBRL(m.capitalAtivo)}</strong><em>{m.activeCount} contratos ativos</em></span></button>
+        <button type="button" className="analysis-overview-card is-received" onClick={() => setDetail(m.details.totalReceived)}><span className="analysis-overview-icon"><Wallet size={17}/></span><span><small>Recebido no período</small><strong>{fmtBRL(m.totalReceived)}</strong><em>{m.paidCount} parcelas pagas</em></span></button>
+        <button type="button" className="analysis-overview-card is-lent" onClick={() => setDetail(m.details.totalLent)}><span className="analysis-overview-icon"><HandCoins size={17}/></span><span><small>Emprestado no período</small><strong>{fmtBRL(m.totalLent)}</strong><em>{m.newContracts} novos contratos</em></span></button>
+        <button type="button" className="analysis-overview-card is-risk" onClick={() => setDetail(m.details.overdue)}><span className="analysis-overview-icon"><AlertTriangle size={17}/></span><span><small>Em atraso agora</small><strong>{fmtBRL(m.overdueAmount)}</strong><em>{m.overdueClients} clientes afetados</em></span></button>
+        <button type="button" className="analysis-overview-card is-active" onClick={() => setDetail(m.details.capitalAtivo)}><span className="analysis-overview-icon"><TrendingUp size={17}/></span><span><small>Capital ativo</small><strong>{fmtBRL(m.capitalAtivo)}</strong><em>{m.activeCount} contratos ativos</em></span></button>
       </section>
       <section className="analysis-reading-card"><div><span className="analysis-kicker">Leitura rápida</span><h2>O que merece atenção</h2></div><div className="analysis-reading-grid"><span><AlertTriangle size={16}/><b>{fmtPct(m.inadRate)}</b><small>taxa de inadimplência</small></span><span><PiggyBank size={16}/><b>{fmtBRL(m.lucroPeriodo)}</b><small>juros realizados</small></span><span><Clock size={16}/><b>{fmtBRL(m.forecastAmount)}</b><small>previsto em 30 dias</small></span></div></section>
 
@@ -754,13 +782,13 @@ const Analises = () => {
                   { label: "31-60 dias", data: m.aging.d, key: "agingD", color: "bg-red-500"     },
                   { label: "60+ dias",   data: m.aging.e, key: "agingE", color: "bg-red-700"     },
                 ];
-                const total = m.overdueAmount || 1;
+                const total = Math.max(0, buckets.reduce((sum, bucket) => sum + m.sumAmt(bucket.data), 0)) || 1;
                 return (
                   <>
                     <div className="flex h-2.5 rounded-full overflow-hidden bg-muted/40">
                       {buckets.map((b) => {
                         const amt = m.sumAmt(b.data);
-                        const pct = (amt / total) * 100;
+                        const pct = Math.max(0, Math.min(100, (amt / total) * 100));
                         if (pct === 0) return null;
                         return <div key={b.label} className={b.color} style={{ width: `${pct}%` }} title={`${b.label}: ${fmtBRL(amt)}`} />;
                       })}
@@ -768,7 +796,7 @@ const Analises = () => {
                     <div className="grid grid-cols-2 lg:grid-cols-5 gap-2">
                       {buckets.map((b) => {
                         const amt = m.sumAmt(b.data);
-                        const pct = (amt / total) * 100;
+                        const pct = Math.max(0, Math.min(100, (amt / total) * 100));
                         return (
                           <button
                             type="button"

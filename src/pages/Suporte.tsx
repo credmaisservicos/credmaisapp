@@ -22,6 +22,15 @@ import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import ErrorState from "@/components/feedback/ErrorState";
 import { fetchAll } from "@/lib/fetchAll";
+import { parseLocalDate } from "@/lib/dateUtils";
+
+const safeDate = (value: unknown) => {
+  return parseLocalDate(typeof value === "string" || value instanceof Date ? value : null);
+};
+const relativeDate = (value: unknown) => {
+  const date = safeDate(value);
+  return date ? formatDistanceToNow(date, { addSuffix: true, locale: ptBR }) : "data indisponível";
+};
 
 type Ticket = {
   id: string;
@@ -164,7 +173,7 @@ const Suporte = () => {
   const filtered = useMemo(() => {
     if (!search.trim()) return tickets;
     const q = search.toLowerCase();
-    return tickets.filter((t) => t.subject.toLowerCase().includes(q));
+    return tickets.filter((t) => (t.subject || "").toLowerCase().includes(q));
   }, [tickets, search]);
 
   const handleCreateTicket = async () => {
@@ -263,7 +272,7 @@ const Suporte = () => {
                   {categoryLabels[activeTicket.category] || activeTicket.category}
                 </Badge>
                 <span className="text-xs text-muted-foreground">
-                  Aberto {formatDistanceToNow(new Date(activeTicket.created_at), { addSuffix: true, locale: ptBR })}
+                  Aberto {relativeDate(activeTicket.created_at)}
                 </span>
               </div>
             </div>
@@ -287,7 +296,7 @@ const Suporte = () => {
                           {isMe ? "Você" : `🛡️ ${m.sender_name}`}
                         </span>
                         <span className="text-[10px] opacity-60">
-                          {formatDistanceToNow(new Date(m.created_at), { addSuffix: true, locale: ptBR })}
+                          {relativeDate(m.created_at)}
                         </span>
                       </div>
                       <p className="text-sm whitespace-pre-wrap break-words">{m.message}</p>
@@ -404,7 +413,7 @@ const Suporte = () => {
                       {categoryLabels[t.category] || t.category}
                     </span>
                     <span className="text-[11px] text-muted-foreground/70">
-                      · {formatDistanceToNow(new Date(t.last_message_at), { addSuffix: true, locale: ptBR })}
+                      · {relativeDate(t.last_message_at)}
                     </span>
                   </div>
                 </div>

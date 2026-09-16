@@ -111,7 +111,7 @@ const QRCodePage = () => {
   const shareWhatsApp = () => {
     if (!activeUrl) return;
     const msg = encodeURIComponent(`Acesse: ${activeUrl}`);
-    window.open(`https://wa.me/?text=${msg}`, "_blank");
+    window.open(`https://wa.me/?text=${msg}`, "_blank", "noopener,noreferrer");
   };
 
   const shareEmail = () => {
@@ -201,6 +201,7 @@ const QRCodePage = () => {
                 const isActive = activeUrl === fullUrl;
                 return (
                   <button
+                    type="button"
                     key={p.key}
                     onClick={() => setUrl(fullUrl)}
                     className={`group relative overflow-hidden rounded-2xl border p-4 text-left transition-all duration-200 ${
@@ -251,6 +252,7 @@ const QRCodePage = () => {
                 <div className="flex items-center gap-2 flex-1 px-3.5 py-2.5 rounded-xl bg-muted/40 border border-border/50 focus-within:border-primary/40 focus-within:bg-muted/60 transition-colors">
                   <Link2 size={15} className="text-muted-foreground shrink-0" />
                   <input
+                    name="qr_custom_url"
                     value={inputUrl}
                     onChange={(e) => setInputUrl(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && inputUrl && setUrl(inputUrl)}
@@ -260,7 +262,8 @@ const QRCodePage = () => {
                   />
                 </div>
                 <button
-                  onClick={() => inputUrl && setUrl(inputUrl)}
+                    type="button"
+                    onClick={() => inputUrl && setUrl(inputUrl)}
                   disabled={!inputUrl}
                   className="w-full px-5 py-2.5 rounded-xl text-sm font-bold text-primary-foreground disabled:opacity-40 transition-all hover:shadow-lg hover:shadow-primary/30 sm:w-auto"
                   style={{ background: "var(--gradient-button, hsl(var(--primary)))" }}
@@ -274,6 +277,7 @@ const QRCodePage = () => {
                 <div className="flex items-center gap-1 p-0.5 rounded-lg bg-muted/40 border border-border/50">
                   {([256, 400, 600] as const).map((s) => (
                     <button
+                      type="button"
                       key={s}
                       onClick={() => setSize(s)}
                       className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition-colors ${
@@ -288,6 +292,7 @@ const QRCodePage = () => {
                 </div>
                 <div className="flex items-center gap-1 p-0.5 rounded-lg bg-muted/40 border border-border/50">
                   <button
+                    type="button"
                     onClick={() => setDark(true)}
                     className={`px-3 py-1 rounded-md text-[10px] font-bold transition-colors ${
                       dark
@@ -298,6 +303,7 @@ const QRCodePage = () => {
                     Escuro
                   </button>
                   <button
+                    type="button"
                     onClick={() => setDark(false)}
                     className={`px-3 py-1 rounded-md text-[10px] font-bold transition-colors ${
                       !dark

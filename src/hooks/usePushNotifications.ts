@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { parseLocalDate } from "@/lib/dateUtils";
 
 /**
  * Native Web Notification API integration.
@@ -48,7 +49,8 @@ export function usePushNotifications() {
     // Initialize last-seen
     const key = `push-last-seen-${user.id}`;
     const stored = localStorage.getItem(key);
-    lastSeenRef.current = stored ? Number(stored) : Date.now();
+    const storedNumber = Number(stored);
+    lastSeenRef.current = stored && Number.isFinite(storedNumber) ? storedNumber : Date.now();
 
     const channel = supabase
       .channel(`push-notifs-${user.id}`)
@@ -58,7 +60,9 @@ export function usePushNotifications() {
         (payload: any) => {
           const row = payload.new;
           if (!row) return;
-          const ts = new Date(row.sent_at || row.created_at).getTime();
+          const parsedTs = parseLocalDate(row.sent_at || row.created_at)?.getTime() ?? NaN;
+          if (!Number.isFinite(parsedTs)) return;
+          const ts = parsedTs;
           if (ts <= lastSeenRef.current) return;
           lastSeenRef.current = ts;
           localStorage.setItem(key, String(ts));

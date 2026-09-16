@@ -19,11 +19,19 @@ import {
 } from "lucide-react";
 import { buildInvestorLoanUpdate, validateInvestorLoanTerms } from "@/lib/investorLoan";
 import { fetchAll } from "@/lib/fetchAll";
+import { formatBR, parseLocalDate, todayLocalISO, toDateInputValue } from "@/lib/dateUtils";
 
 
 
-const brl = (n: number) => (n || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-const fmtDate = (d?: string | null) => (d ? new Date(d + "T00:00:00").toLocaleDateString("pt-BR") : "-");
+const brl = (n: number) => {
+  const value = Number(n ?? 0);
+  return (Number.isFinite(value) ? value : 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+};
+const safeNumber = (value: unknown) => {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? number : 0;
+};
+const fmtDate = (d?: string | null) => d ? formatBR(d) || "-" : "-";
 
 export type Investor = {
   id: string; name: string; cpf_cnpj: string | null; email: string | null;
@@ -103,9 +111,9 @@ export default function Investidores() {
   const totals = useMemo(() => {
     const active = loans.filter((l) => l.status !== "paid");
     return {
-      captado: active.reduce((s, l) => s + Number(l.principal), 0),
-      devido: active.reduce((s, l) => s + Math.max(0, Number(l.total_due) - Number(l.paid_amount)), 0),
-      pago: loans.reduce((s, l) => s + Number(l.paid_amount), 0),
+      captado: active.reduce((s, l) => s + safeNumber(l.principal), 0),
+      devido: active.reduce((s, l) => s + Math.max(0, safeNumber(l.total_due) - safeNumber(l.paid_amount)), 0),
+      pago: loans.reduce((s, l) => s + safeNumber(l.paid_amount), 0),
       contagem: investors.filter((i) => i.status === "active").length,
     };
   }, [loans, investors]);
@@ -114,14 +122,17 @@ export default function Investidores() {
     const all = loans.filter((l) => l.investor_id === id);
     const active = all.filter((l) => l.status !== "paid");
     const today = new Date(); today.setHours(0, 0, 0, 0);
-    const overdue = active.filter((l) => new Date(l.due_date + "T00:00:00") < today);
-    const totalDue = active.reduce((s, l) => s + Number(l.total_due), 0);
-    const capital = active.reduce((s, l) => s + Number(l.principal), 0);
-    const paidActive = active.reduce((s, l) => s + Number(l.paid_amount), 0);
+    const overdue = active.filter((l) => {
+      const due = parseLocalDate(l.due_date);
+      return !!due && due < today;
+    });
+    const totalDue = active.reduce((s, l) => s + safeNumber(l.total_due), 0);
+    const capital = active.reduce((s, l) => s + safeNumber(l.principal), 0);
+    const paidActive = active.reduce((s, l) => s + safeNumber(l.paid_amount), 0);
     const saldo = Math.max(0, totalDue - paidActive);
     const pct = totalDue > 0 ? Math.min(100, Math.round((paidActive / totalDue) * 100)) : 0;
-    const prox = active.map((r) => r.due_date).sort()[0] || null;
-    const proxDays = prox ? Math.floor((new Date(prox + "T00:00:00").getTime() - today.getTime()) / 86400000) : null;
+    const prox = active.map((r) => r.due_date).filter((value): value is string => !!parseLocalDate(value)).sort((a, b) => (parseLocalDate(a)?.getTime() ?? Number.MAX_SAFE_INTEGER) - (parseLocalDate(b)?.getTime() ?? Number.MAX_SAFE_INTEGER))[0] || null;
+    const proxDays = prox && parseLocalDate(prox) ? Math.floor((parseLocalDate(prox)!.getTime() - today.getTime()) / 86400000) : null;
     const state: "overdue" | "warn" | "ok" | "paid" =
       overdue.length > 0 ? "overdue" :
       proxDays !== null && proxDays <= 7 ? "warn" :
@@ -143,7 +154,7 @@ export default function Investidores() {
   const darBaixa = (investorId: string) => {
     const aberto = loans
       .filter((l) => l.investor_id === investorId && l.status !== "paid")
-      .sort((a, b) => a.due_date.localeCompare(b.due_date))[0];
+      .sort((a, b) => String(a.due_date || "9999-12-31").localeCompare(String(b.due_date || "9999-12-31")))[0];
     if (!aberto) { toast({ title: "Nenhum empréstimo em aberto", variant: "destructive" }); return; }
     setPayOpen(aberto.id);
   };
@@ -208,7 +219,7 @@ export default function Investidores() {
           (inv.whatsapp || inv.phone || "").toLowerCase().includes(q);
       });
     rows.sort((a, b) => {
-      if (sortBy === "name") return a.inv.name.localeCompare(b.inv.name);
+      if (sortBy === "name") return String(a.inv.name || "").localeCompare(String(b.inv.name || ""), "pt-BR");
       if (sortBy === "prox") {
         const pa = a.s.prox || "9999-99-99"; const pb = b.s.prox || "9999-99-99";
         return pa.localeCompare(pb);
@@ -477,7 +488,7 @@ export default function Investidores() {
                         <Copy size={14} />
                       </button>
                       <button
-                        onClick={() => window.open(`/investidor/${inv.access_token}`, "_blank")}
+                        onClick={() => window.open(`/investidor/${inv.access_token}`, "_blank", "noopener,noreferrer")}
                         title="Abrir portal do investidor"
                         className="h-9 w-9 inline-flex items-center justify-center rounded-lg border border-border bg-accent/40 text-foreground transition-all hover:bg-accent active:scale-[0.98] focus-ring"
                       >
@@ -550,7 +561,7 @@ export default function Investidores() {
                 <Button size="sm" variant="outline" onClick={() => copyPortal(expandedProfile.inv.access_token)} className="gap-1.5">
                   <Copy size={14} /> Copiar link do portal
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => window.open(`/investidor/${expandedProfile.inv.access_token}`, "_blank")} className="gap-1.5">
+                <Button size="sm" variant="outline" onClick={() => window.open(`/investidor/${expandedProfile.inv.access_token}`, "_blank", "noopener,noreferrer")} className="gap-1.5">
                   <ExternalLink size={14} /> Abrir portal
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => regenerateToken(expandedProfile.inv.id)} className="gap-1.5">
@@ -569,14 +580,14 @@ export default function Investidores() {
                 ) : (
                   <ul className="space-y-2">
                     {expandedProfile.loans.map((l) => {
-                      const saldoLoan = Number(l.total_due) - Number(l.paid_amount);
+                      const saldoLoan = safeNumber(l.total_due) - safeNumber(l.paid_amount);
                       return (
                         <li key={l.id} className="rounded-xl border border-border/60 bg-background/40 p-3">
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <div>
                               <p className="font-mono text-lg font-bold text-foreground">{brl(Number(l.total_due))}</p>
                               <p className="text-[11px] text-muted-foreground">
-                                Capital {brl(Number(l.principal))} • Juros {l.interest_rate}% • Vence {fmtDate(l.due_date)}
+                                Capital {brl(safeNumber(l.principal))} • Juros {safeNumber(l.interest_rate)}% • Vence {fmtDate(l.due_date)}
                               </p>
                             </div>
                             <div className="flex flex-wrap items-center gap-1.5">
@@ -706,16 +717,16 @@ function NewInvestorDialog({ open, onOpenChange, onCreated }: { open: boolean; o
       <DialogContent className="w-[calc(100vw-1.5rem)] max-h-[90dvh] max-w-lg overflow-y-auto">
         <DialogHeader><DialogTitle>Novo investidor</DialogTitle></DialogHeader>
         <div className="grid gap-3">
-          <div><Label>Nome *</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
+          <div><Label>Nome *</Label><Input name="investor_name" autoComplete="name" aria-label="Nome do investidor" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div><Label>CPF/CNPJ</Label><Input value={form.cpf_cnpj} onChange={(e) => setForm({ ...form, cpf_cnpj: e.target.value })} /></div>
-            <div><Label>WhatsApp</Label><Input value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} /></div>
+            <div><Label>CPF/CNPJ</Label><Input name="investor_cpf_cnpj" aria-label="CPF ou CNPJ do investidor" value={form.cpf_cnpj} onChange={(e) => setForm({ ...form, cpf_cnpj: e.target.value })} /></div>
+            <div><Label>WhatsApp</Label><Input name="investor_whatsapp" autoComplete="tel" aria-label="WhatsApp do investidor" value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} /></div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div><Label>E-mail</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
-            <div><Label>Telefone</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
+            <div><Label>E-mail</Label><Input name="investor_email" autoComplete="email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
+            <div><Label>Telefone</Label><Input name="investor_phone" autoComplete="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
           </div>
-          <div><Label>Chave PIX</Label><Input value={form.pix_key} onChange={(e) => setForm({ ...form, pix_key: e.target.value })} /></div>
+          <div><Label>Chave PIX</Label><Input name="investor_pix_key" aria-label="Chave PIX do investidor" value={form.pix_key} onChange={(e) => setForm({ ...form, pix_key: e.target.value })} /></div>
           <div><Label>Observações</Label><Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} /></div>
         </div>
         <DialogFooter>
@@ -767,14 +778,14 @@ export function NewLoanDialog({ open, onOpenChange, investor, onCreated }: { ope
         <DialogHeader><DialogTitle>Novo empréstimo — {investor.name}</DialogTitle></DialogHeader>
         <div className="grid gap-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div><Label>Valor recebido (R$) *</Label><Input inputMode="decimal" value={principal} onChange={(e) => setPrincipal(e.target.value)} placeholder="10000" /></div>
-            <div><Label>Juros (%) *</Label><Input inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value)} /></div>
+            <div><Label>Valor recebido (R$) *</Label><Input name="investor_loan_principal" aria-label="Valor recebido" inputMode="decimal" value={principal} onChange={(e) => setPrincipal(e.target.value)} placeholder="10000" /></div>
+            <div><Label>Juros (%) *</Label><Input name="investor_loan_rate" aria-label="Juros do empréstimo" inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value)} /></div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div><Label>Vencimento *</Label><Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} /></div>
+            <div><Label>Vencimento *</Label><Input name="investor_loan_due_date" aria-label="Vencimento do empréstimo" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} /></div>
             <div>
               <Label>Modalidade</Label>
-              <select value={freq} onChange={(e) => setFreq(e.target.value)} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
+              <select name="investor_loan_frequency" aria-label="Modalidade do empréstimo" value={freq} onChange={(e) => setFreq(e.target.value)} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
                 <option value="bullet">Pagamento único</option>
                 <option value="monthly">Juros mensais</option>
               </select>
@@ -784,7 +795,7 @@ export function NewLoanDialog({ open, onOpenChange, investor, onCreated }: { ope
             <p className="text-xs uppercase text-muted-foreground">Total a pagar</p>
             <p className="mt-1 font-mono text-2xl font-bold text-primary">{brl(totalDue)}</p>
           </div>
-          <div><Label>Observações</Label><Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
+          <div><Label>Observações</Label><Textarea name="investor_loan_notes" aria-label="Observações do empréstimo" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
@@ -797,14 +808,14 @@ export function NewLoanDialog({ open, onOpenChange, investor, onCreated }: { ope
 
 export function PayLoanDialog({ loanId, loan, onClose, onPaid }: { loanId: string; loan: Loan; onClose: () => void; onPaid: () => void }) {
   const { user } = useAuth();
-  const saldo = Number(loan.total_due) - Number(loan.paid_amount);
-  const interest = Math.round(Number(loan.principal) * Number(loan.interest_rate) / 100 * 100) / 100;
+  const saldo = Math.max(0, safeNumber(loan.total_due) - safeNumber(loan.paid_amount));
+  const interest = Math.round(safeNumber(loan.principal) * safeNumber(loan.interest_rate) / 100 * 100) / 100;
   const automaticNextDue = useMemo(() => {
-    const date = new Date(`${loan.due_date}T12:00:00`);
+    const date = parseLocalDate(loan.due_date) ?? new Date();
     if (loan.frequency === "weekly") date.setDate(date.getDate() + 7);
     else if (loan.frequency === "biweekly") date.setDate(date.getDate() + 15);
     else date.setMonth(date.getMonth() + 1);
-    return date.toISOString().slice(0, 10);
+    return toDateInputValue(date);
   }, [loan.due_date, loan.frequency]);
   const [amount, setAmount] = useState(String(saldo.toFixed(2)));
   const [method, setMethod] = useState("pix");
@@ -846,19 +857,19 @@ export function PayLoanDialog({ loanId, loan, onClose, onPaid }: { loanId: strin
             <Button type="button" size="sm" variant={mode === "partial" ? "default" : "outline"} onClick={() => { setMode("partial"); setAmount(""); }}>Parcial</Button>
             <Button type="button" size="sm" variant={mode === "interest_only" ? "default" : "outline"} disabled={interest <= 0} onClick={() => { setMode("interest_only"); setAmount(interest.toFixed(2)); }}>Só juros</Button>
           </div>
-          <div><Label>Valor pago (R$)</Label><Input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
+          <div><Label>Valor pago (R$)</Label><Input name="investor_payment_amount" aria-label="Valor pago" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
           {mode === "interest_only" && <div className="space-y-2 rounded-xl border border-amber-400/25 bg-amber-500/5 p-3">
             <p className="text-xs text-muted-foreground">O principal não será abatido. Paga <strong className="text-foreground">{brl(interest)}</strong> e renova o vencimento.</p>
-            <div><Label>Novo vencimento</Label><Input type="date" min={new Date().toISOString().slice(0, 10)} value={nextDueDate} onChange={(e) => setNextDueDate(e.target.value)} /></div>
+            <div><Label>Novo vencimento</Label><Input name="investor_payment_next_due_date" aria-label="Novo vencimento" type="date" min={todayLocalISO()} value={nextDueDate} onChange={(e) => setNextDueDate(e.target.value)} /></div>
           </div>}
           <div>
             <Label>Método</Label>
-            <select value={method} onChange={(e) => setMethod(e.target.value)} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
+            <select name="investor_payment_method" aria-label="Método do pagamento" value={method} onChange={(e) => setMethod(e.target.value)} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
               <option value="pix">Pix</option><option value="dinheiro">Dinheiro</option>
               <option value="transferencia">Transferência</option><option value="outros">Outros</option>
             </select>
           </div>
-          <div><Label>Observação</Label><Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Opcional" /></div>
+          <div><Label>Observação</Label><Textarea name="investor_payment_notes" aria-label="Observação do pagamento" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Opcional" /></div>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancelar</Button>
@@ -912,13 +923,13 @@ export function EditInvestorDialog({ investor, onClose, onSaved }: { investor: I
           <div><Label>Chave PIX</Label><Input value={form.pix_key} onChange={(e) => setForm({ ...form, pix_key: e.target.value })} /></div>
           <div>
             <Label>Situação</Label>
-            <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}
+            <select name="investor_status" aria-label="Situação do investidor" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}
               className="h-10 w-full rounded-md border bg-background px-3 text-sm">
               <option value="active">Ativo</option>
               <option value="inactive">Inativo</option>
             </select>
           </div>
-          <div><Label>Observações</Label><Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
+          <div><Label>Observações</Label><Textarea name="investor_notes" aria-label="Observações do investidor" rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancelar</Button>

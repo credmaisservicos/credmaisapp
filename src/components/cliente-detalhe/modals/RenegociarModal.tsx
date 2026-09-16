@@ -30,16 +30,21 @@ export type RenegotiationPayload = {
   schedule: number[];
 };
 
+const safeNumber = (value: unknown) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+};
+
 export default function RenegociarModal({ contract, installments, clientName, onClose, onConfirm }: Props) {
   const now = new Date();
   const pending = installments.filter((i: any) => i.status !== "paid" && i.status !== "cancelled");
 
   const principalOpen = useMemo(
     () => pending.reduce((s, i: any) => {
-      if (i.scheduled_principal != null) return s + Number(i.scheduled_principal || 0);
+      if (i.scheduled_principal != null) return s + safeNumber(i.scheduled_principal);
       // Compatibilidade antes da migração: distribui somente o capital original,
       // sem transformar juros futuros em novo principal.
-      return s + Number(contract.capital || 0) / (Number(contract.num_installments) || 1);
+      return s + safeNumber(contract.capital) / (safeNumber(contract.num_installments) || 1);
     }, 0),
     [pending, contract.capital, contract.num_installments]
   );
@@ -56,7 +61,7 @@ export default function RenegociarModal({ contract, installments, clientName, on
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() + 30);
-    return d.toISOString().split("T")[0];
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   });
   const [interestRate, setInterestRate] = useState(String(contract.interest_rate ?? 10));
   const [lateFee, setLateFee] = useState("0");
@@ -65,7 +70,7 @@ export default function RenegociarModal({ contract, installments, clientName, on
   const [saving, setSaving] = useState(false);
 
   const baseAmount = baseMode === "principal" ? principalOpen : withFees;
-  const totalCapital = Math.max(0, baseAmount + (parseFloat(addCapital) || 0));
+  const totalCapital = Math.max(0, baseAmount + safeNumber(parseFloat(addCapital)));
 
   const calc = useMemo(() => {
     const n = parseInt(numInstallments) || 0;
@@ -123,7 +128,7 @@ export default function RenegociarModal({ contract, installments, clientName, on
               <p className="text-[11px] text-muted-foreground">{clientName} · R$ {fmt(Number(contract.capital))} · {contract.num_installments}x</p>
             </div>
           </div>
-          <button onClick={onClose} aria-label="Fechar" className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground"><X size={18} /></button>
+          <button type="button" onClick={onClose} aria-label="Fechar" className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground"><X size={18} /></button>
         </div>
 
         {/* Aviso */}
@@ -135,7 +140,7 @@ export default function RenegociarModal({ contract, installments, clientName, on
         {/* Base a renegociar */}
         <div>
           <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Valor base a renegociar</label>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-2">
             <button type="button" onClick={() => setBaseMode("principal")}
               className={`p-3 rounded-xl border-2 text-left transition-colors ${baseMode === "principal" ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/30"}`}>
               <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Só principal</p>
@@ -154,40 +159,40 @@ export default function RenegociarModal({ contract, installments, clientName, on
         {/* Novo capital extra */}
         <div>
           <label className="text-xs font-medium text-muted-foreground mb-1 block">Adicionar novo capital (R$)</label>
-          <input type="number" value={addCapital} onChange={e => setAddCapital(e.target.value)} placeholder="0" className={INPUT} min={0} step="0.01" />
+          <input type="number" name="renegotiation_capital" aria-label="Novo capital" value={addCapital} onChange={e => setAddCapital(e.target.value)} placeholder="0" className={INPUT} min={0} step="0.01" />
           <p className="text-[10px] text-muted-foreground mt-1">Total do novo contrato: <strong className="text-foreground">R$ {fmt(totalCapital)}</strong></p>
         </div>
 
         {/* Termos */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3">
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">Nº parcelas</label>
-            <input type="number" value={numInstallments} onChange={e => setNumInstallments(e.target.value)} className={INPUT} min={1} />
+            <input type="number" name="renegotiation_installments" aria-label="Número de parcelas" value={numInstallments} onChange={e => setNumInstallments(e.target.value)} className={INPUT} min={1} />
           </div>
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">Frequência</label>
-            <select value={frequency} onChange={e => setFrequency(e.target.value)} className={INPUT}>
+            <select name="renegotiation_frequency" aria-label="Frequência" value={frequency} onChange={e => setFrequency(e.target.value)} className={INPUT}>
               {Object.entries(FREQ).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </div>
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">Juros por período (%)</label>
-            <input type="number" value={interestRate} onChange={e => setInterestRate(e.target.value)} className={INPUT} step="0.01" />
+            <input type="number" name="renegotiation_interest" aria-label="Juros por período" value={interestRate} onChange={e => setInterestRate(e.target.value)} className={INPUT} step="0.01" />
           </div>
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">Data 1ª parcela</label>
-            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className={INPUT} />
+            <input type="date" name="renegotiation_start_date" aria-label="Data da primeira parcela" value={startDate} onChange={e => setStartDate(e.target.value)} className={INPUT} />
           </div>
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">Juros de atraso (% ao dia)</label>
-            <input type="number" value={dailyFee} onChange={e => setDailyFee(e.target.value)} className={INPUT} step="0.01" />
+            <input type="number" name="renegotiation_daily_fee" aria-label="Juros de atraso ao dia" value={dailyFee} onChange={e => setDailyFee(e.target.value)} className={INPUT} step="0.01" />
           </div>
 
         </div>
 
         <div>
           <label className="text-xs font-medium text-muted-foreground mb-1 block">Observações</label>
-          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Motivo, condições combinadas..." className={INPUT} />
+          <textarea name="renegotiation_notes" aria-label="Observações da renegociação" value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Motivo, condições combinadas..." className={INPUT} />
         </div>
 
         {/* Preview */}
@@ -200,8 +205,8 @@ export default function RenegociarModal({ contract, installments, clientName, on
         )}
 
         <div className="flex gap-2 pt-2">
-          <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-xl border border-border text-sm font-semibold text-muted-foreground hover:bg-accent">Cancelar</button>
-          <button onClick={submit} disabled={!canSubmit}
+          <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 rounded-xl border border-border text-sm font-semibold text-muted-foreground hover:bg-accent">Cancelar</button>
+          <button type="button" onClick={submit} disabled={!canSubmit}
             className="flex-1 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed">
             {saving ? "Renegociando..." : "Confirmar renegociação"}
           </button>

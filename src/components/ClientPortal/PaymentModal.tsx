@@ -12,7 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { generatePortalReceiptPdf } from "@/utils/portalPdf";
 import { QRCodeSVG } from "qrcode.react";
 import { generatePixPayload } from "@/utils/pixGenerator";
-import { formatBR } from "@/lib/dateUtils";
+import { formatBR, isOverdue as isDateOverdue } from "@/lib/dateUtils";
 import { computeLateFee } from "@/lib/lateFee";
 import { portalInstallmentAmount } from "@/lib/portalAmounts";
 
@@ -35,9 +35,12 @@ export const PaymentModal = ({ isOpen, onOpenChange, installment, ownerProfile, 
   const [isUploading, setIsUploading] = useState(false);
   const [uploadedUrl, setUploadedUrl] = useState<string | null>(installment?.receipt_url || null);
 
-  const fmt = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+  const fmt = (v: number) => {
+    const number = Number(v);
+    return (Number.isFinite(number) ? number : 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+  };
   const isOverdue = installment?.status === "overdue" ||
-    (installment && installment.status !== "paid" && new Date(installment.due_date) < new Date());
+    (installment && installment.status !== "paid" && isDateOverdue(installment.due_date));
   const isPaid = installment?.status === "paid";
 
   const liveFee = useMemo(() => {
@@ -88,11 +91,12 @@ export const PaymentModal = ({ isOpen, onOpenChange, installment, ownerProfile, 
       toast({ title: "Sem WhatsApp do credor", description: "Entre em contato pelos canais informados.", variant: "destructive" });
       return;
     }
-    const valor = Number(installment.amount).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-    const venc = formatBR(installment.due_date);
+    const amount = Number(installment.amount);
+    const valor = (Number.isFinite(amount) ? amount : 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    const venc = formatBR(installment.due_date) || "data indisponível";
     const nome = clientData?.name || "Cliente";
     const msg = `Olá! Sou *${nome}* e acabei de efetuar o pagamento da parcela #${installment.installment_number} no valor de *${valor}* (venc. ${venc}). Segue o comprovante a seguir 👇`;
-    window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(msg)}`, "_blank");
+    window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(msg)}`, "_blank", "noopener,noreferrer");
   };
 
   const handleDownloadReceipt = async () => {
@@ -188,18 +192,18 @@ export const PaymentModal = ({ isOpen, onOpenChange, installment, ownerProfile, 
           <h2 className="text-2xl font-bold mt-2">R$ {fmt(totalDue)}</h2>
           {!isPaid && liveFee > 0 && (
             <p className="text-white/90 text-xs">
-              Parcela R$ {fmt(Number(installment.amount))} + multa/juros R$ {fmt(liveFee)}
+              Parcela R$ {fmt(installment.amount)} + multa/juros R$ {fmt(liveFee)}
             </p>
           )}
           <p className="text-white/80 text-sm">
             {isPaid
-              ? `Pago em ${formatBR(installment.paid_at)}`
-              : `Vencimento em ${formatBR(installment.due_date)}`}
+              ? `Pago em ${formatBR(installment.paid_at) || "data indisponível"}`
+              : `Vencimento em ${formatBR(installment.due_date) || "data indisponível"}`}
           </p>
         </div>
 
         <div className="p-6 space-y-6 bg-card">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-4">
             <div className="space-y-1 min-w-0">
               <p className="text-[10px] text-muted-foreground uppercase font-semibold">Status</p>
               <div className="flex items-center gap-1.5">
@@ -211,7 +215,7 @@ export const PaymentModal = ({ isOpen, onOpenChange, installment, ownerProfile, 
               <p className="text-[10px] text-muted-foreground uppercase font-semibold">Data</p>
               <div className="flex items-center gap-1.5 text-sm font-medium">
                 <Calendar size={14} className="text-muted-foreground shrink-0" />
-                <span className="truncate">{formatBR(installment.due_date)}</span>
+                <span className="truncate">{formatBR(installment.due_date) || "data indisponível"}</span>
               </div>
             </div>
           </div>

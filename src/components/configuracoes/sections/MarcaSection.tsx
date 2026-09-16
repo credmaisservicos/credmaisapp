@@ -54,9 +54,9 @@ const MarcaSection = ({ ctx }: SectionProps) => {
 
               {/* Name */}
               <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Nome do Sistema</label>
+                <label htmlFor="brand-system-name" className="text-xs font-medium text-muted-foreground mb-1.5 block">Nome do Sistema</label>
 
-                <input value={form.company_name} onChange={(e) => setForm({ ...form, company_name: e.target.value })} placeholder="CREDMAIS APP" className={inputCls} />
+                <input id="brand-system-name" name="company_name" autoComplete="organization" value={form.company_name} onChange={(e) => setForm({ ...form, company_name: e.target.value })} placeholder="CREDMAIS APP" className={inputCls} />
                 <p className="text-[10px] text-muted-foreground mt-1">Aparece no menu lateral, topbar, login e título do navegador</p>
               </div>
 
@@ -92,7 +92,7 @@ const MarcaSection = ({ ctx }: SectionProps) => {
               <p className="text-xs font-semibold text-foreground uppercase tracking-wider flex items-center gap-1.5">
                 <Sun size={12} className="text-warning" /> Modo do Tema
               </p>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 min-[400px]:grid-cols-3 gap-2">
                 {[
                   { value: "dark", label: "Escuro", icon: Moon, desc: "Interface dark" },
                   { value: "light", label: "Claro", icon: Sun, desc: "Interface light" },
@@ -100,6 +100,8 @@ const MarcaSection = ({ ctx }: SectionProps) => {
                 ].map(mode => (
                   <button
                     key={mode.value}
+                    type="button"
+                    aria-pressed={form.theme_mode === mode.value}
                     onClick={() => setForm({ ...form, theme_mode: mode.value as any })}
                     className={`p-3 rounded-xl border text-center transition-all ${
                       form.theme_mode === mode.value
@@ -126,6 +128,8 @@ const MarcaSection = ({ ctx }: SectionProps) => {
                 {COLOR_PRESETS.map((preset) => (
                   <button
                     key={preset.label}
+                    type="button"
+                    aria-label={`Usar paleta ${preset.label}`}
                     onClick={() => setForm({ ...form, primary_color: preset.primary, accent_color: preset.accent })}
                     className={`flex items-center gap-2.5 p-2.5 rounded-xl border transition-all ${
                       form.primary_color === preset.primary
@@ -143,9 +147,9 @@ const MarcaSection = ({ ctx }: SectionProps) => {
               </div>
 
               {/* Custom Color Pickers */}
-              <div className="flex items-center gap-4 pt-2">
+              <div className="grid grid-cols-1 min-[400px]:grid-cols-2 items-center gap-4 pt-2">
                 <div className="flex items-center gap-2.5 flex-1">
-                  <input type="color" value={form.primary_color} onChange={(e) => setForm({ ...form, primary_color: e.target.value })}
+                  <input type="color" name="brand-primary-color" aria-label="Cor principal da marca" value={form.primary_color} onChange={(e) => setForm({ ...form, primary_color: e.target.value })}
                     className="w-10 h-10 rounded-xl border border-border cursor-pointer shrink-0" />
                   <div>
                     <p className="text-xs font-medium text-foreground">Principal</p>
@@ -153,7 +157,7 @@ const MarcaSection = ({ ctx }: SectionProps) => {
                   </div>
                 </div>
                 <div className="flex items-center gap-2.5 flex-1">
-                  <input type="color" value={form.accent_color} onChange={(e) => setForm({ ...form, accent_color: e.target.value })}
+                  <input type="color" name="brand-accent-color" aria-label="Cor de destaque da marca" value={form.accent_color} onChange={(e) => setForm({ ...form, accent_color: e.target.value })}
                     className="w-10 h-10 rounded-xl border border-border cursor-pointer shrink-0" />
                   <div>
                     <p className="text-xs font-medium text-foreground">Destaque</p>
@@ -256,6 +260,8 @@ const MarcaSection = ({ ctx }: SectionProps) => {
                 ].map(font => (
                   <button
                     key={font.value}
+                    type="button"
+                    aria-pressed={form.font_family === font.value}
                     onClick={() => setForm({ ...form, font_family: font.value })}
                     className={`p-3 rounded-xl border text-center transition-all ${
                       form.font_family === font.value
@@ -276,7 +282,9 @@ const MarcaSection = ({ ctx }: SectionProps) => {
                 <Settings size={12} className="text-primary" /> Arredondamento
               </p>
               <div className="flex items-center gap-4">
-                <input
+                  <input
+                    name="border_radius"
+                    aria-label="Arredondamento dos cantos"
                   type="range"
                   min="0"
                   max="24"
@@ -302,12 +310,12 @@ const MarcaSection = ({ ctx }: SectionProps) => {
               </p>
               <div className="space-y-3">
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Título Principal</label>
-                  <input value={form.login_title} onChange={(e) => setForm({ ...form, login_title: e.target.value })} placeholder="CREDMAIS APP" className={inputCls} />
+                  <label htmlFor="login-brand-title" className="text-xs font-medium text-muted-foreground mb-1.5 block">Título Principal</label>
+                  <input id="login-brand-title" name="login_title" value={form.login_title} onChange={(e) => setForm({ ...form, login_title: e.target.value })} placeholder="CREDMAIS APP" className={inputCls} />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Subtítulo</label>
-                  <input value={form.login_subtitle} onChange={(e) => setForm({ ...form, login_subtitle: e.target.value })} placeholder="SISTEMA DE GESTÃO DE EMPRÉSTIMOS" className={inputCls} />
+                  <label htmlFor="login-brand-subtitle" className="text-xs font-medium text-muted-foreground mb-1.5 block">Subtítulo</label>
+                  <input id="login-brand-subtitle" name="login_subtitle" value={form.login_subtitle} onChange={(e) => setForm({ ...form, login_subtitle: e.target.value })} placeholder="SISTEMA DE GESTÃO DE EMPRÉSTIMOS" className={inputCls} />
                 </div>
               </div>
             </div>
@@ -318,8 +326,8 @@ const MarcaSection = ({ ctx }: SectionProps) => {
                 <Info size={12} className="text-primary" /> Rodapé
               </p>
               <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Texto do Rodapé</label>
-                <input value={form.footer_text} onChange={(e) => setForm({ ...form, footer_text: e.target.value })} placeholder={`© ${new Date().getFullYear()} CREDMAIS APP · TODOS OS DIREITOS RESERVADOS`} className={inputCls} />
+                <label htmlFor="brand-footer-text" className="text-xs font-medium text-muted-foreground mb-1.5 block">Texto do Rodapé</label>
+                <input id="brand-footer-text" name="footer_text" value={form.footer_text} onChange={(e) => setForm({ ...form, footer_text: e.target.value })} placeholder={`© ${new Date().getFullYear()} CREDMAIS APP · TODOS OS DIREITOS RESERVADOS`} className={inputCls} />
                 <p className="text-[10px] text-muted-foreground mt-1">Aparece no login e no portal do cliente</p>
               </div>
             </div>

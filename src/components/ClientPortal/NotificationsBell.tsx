@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Bell, AlertTriangle, TrendingUp, CheckCheck, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { formatBR } from "@/lib/dateUtils";
+import { formatBR, parseLocalDate } from "@/lib/dateUtils";
 
 export type ClientNotification = {
   id: string;
@@ -21,7 +21,9 @@ interface Props {
 }
 
 const timeAgo = (iso: string) => {
-  const diff = Date.now() - new Date(iso).getTime();
+  const date = parseLocalDate(iso);
+  if (!date) return "data indisponível";
+  const diff = Date.now() - date.getTime();
   const m = Math.floor(diff / 60000);
   if (m < 1) return "agora";
   if (m < 60) return `${m} min`;
@@ -46,7 +48,18 @@ export const NotificationsBell = ({ token }: Props) => {
         _token: token,
         _limit: 30,
       });
-      setItems((data as unknown as ClientNotification[]) || []);
+      const rows = Array.isArray(data) ? data as unknown as Array<Partial<ClientNotification>> : [];
+      setItems(rows.map((row: Partial<ClientNotification>, index) => ({
+        id: String(row.id || `portal-notification-${index}`),
+        type: String(row.type || "update"),
+        title: String(row.title || "Notificação"),
+        message: String(row.message || ""),
+        metadata: row.metadata && typeof row.metadata === "object" ? row.metadata : null,
+        is_read: Boolean(row.is_read),
+        created_at: String(row.created_at || new Date().toISOString()),
+        contract_id: row.contract_id || null,
+        installment_id: row.installment_id || null,
+      })));
     } finally {
       setLoading(false);
     }
@@ -85,6 +98,7 @@ export const NotificationsBell = ({ token }: Props) => {
   return (
     <div className="relative" ref={ref}>
       <button
+        type="button"
         onClick={openDropdown}
         className="portal-chip relative hover:brightness-125"
         aria-label="Notificações"
@@ -109,6 +123,7 @@ export const NotificationsBell = ({ token }: Props) => {
             <div className="flex items-center gap-1">
               {unread > 0 && (
                 <button
+                  type="button"
                   onClick={markAllRead}
                   className="rounded-lg px-2 py-1 text-[11px] text-white/70 hover:bg-white/5 hover:text-white"
                   title="Marcar todas como lidas"
@@ -117,6 +132,7 @@ export const NotificationsBell = ({ token }: Props) => {
                 </button>
               )}
               <button
+                type="button"
                 onClick={() => setOpen(false)}
                 className="rounded-lg p-1 text-white/60 hover:bg-white/5 hover:text-white"
               >

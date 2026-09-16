@@ -5,6 +5,11 @@ import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { isValidCNPJ, isValidCPF } from "@/lib/cpfCnpj";
 
+const safeNumber = (value: unknown) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+};
+
 const PuxadaDados = () => {
   const { toast } = useToast();
   const [documento, setDocumento] = useState("");
@@ -74,12 +79,14 @@ const PuxadaDados = () => {
       <div className="rounded-2xl border border-border bg-card p-6 space-y-4 max-w-xl">
         <div className="flex gap-2">
           <button
+            type="button"
             onClick={() => { setTipo("cpf"); setDocumento(""); setResultado(null); setErro(""); }}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${tipo === "cpf" ? "bg-primary text-primary-foreground" : "bg-accent text-foreground"}`}
           >
             CPF
           </button>
           <button
+            type="button"
             onClick={() => { setTipo("cnpj"); setDocumento(""); setResultado(null); setErro(""); }}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${tipo === "cnpj" ? "bg-primary text-primary-foreground" : "bg-accent text-foreground"}`}
           >
@@ -88,9 +95,11 @@ const PuxadaDados = () => {
         </div>
 
         <div>
-          <label className="text-xs font-medium text-muted-foreground mb-1 block">{tipo.toUpperCase()}</label>
+          <label htmlFor="document-search" className="text-xs font-medium text-muted-foreground mb-1 block">{tipo.toUpperCase()}</label>
           <div className="flex flex-col gap-2 min-[420px]:flex-row">
             <input
+              id="document-search"
+              name="document_search"
               aria-label={`Consultar ${tipo.toUpperCase()}`}
               value={documento}
               onChange={(e) => { setDocumento(formatDoc(e.target.value)); setErro(""); setResultado(null); }}
@@ -100,6 +109,7 @@ const PuxadaDados = () => {
               className={inputCls}
             />
             <button
+              type="button"
               aria-label={`Buscar ${tipo.toUpperCase()}`}
               onClick={handleSearch}
               disabled={loading}
@@ -167,7 +177,7 @@ const PuxadaDados = () => {
             ]} />
 
             <InfoCard title="Financeiro" icon={<DollarSign size={16} />} items={[
-              { label: "Capital Social", value: resultado.dados.capital_social ? `R$ ${Number(resultado.dados.capital_social).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : null },
+              { label: "Capital Social", value: safeNumber(resultado.dados.capital_social) > 0 ? `R$ ${safeNumber(resultado.dados.capital_social).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : null },
             ]} />
           </div>
 

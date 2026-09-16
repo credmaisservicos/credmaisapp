@@ -28,6 +28,7 @@ import {
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { getSignedUploadUrl } from "@/lib/storage";
+import { formatBRDateTime, parseLocalDate, todayLocalISO } from "@/lib/dateUtils";
 
 interface Conversation {
   id: string; user_id: string; client_id: string | null;
@@ -37,6 +38,31 @@ interface Conversation {
   unread_count: number; bot_paused: boolean; needs_human: boolean;
   blocked: boolean; tags: string[] | null; last_intent: string | null;
   bot_status?: string | null; human_takeover_at?: string | null; human_takeover_reason?: string | null;
+}
+
+function normalizeConversation(value: unknown): Conversation | null {
+  if (!value || typeof value !== "object") return null;
+  const row = value as Record<string, any>;
+  if (!row.id) return null;
+  return {
+    ...row,
+    id: String(row.id),
+    user_id: String(row.user_id || ""),
+    client_id: row.client_id ?? null,
+    phone: String(row.phone || ""),
+    jid: String(row.jid || ""),
+    contact_name: row.contact_name ? String(row.contact_name) : null,
+    last_message_at: row.last_message_at && !Number.isNaN(new Date(row.last_message_at).getTime())
+      ? String(row.last_message_at) : new Date().toISOString(),
+    last_message_preview: row.last_message_preview == null ? null : String(row.last_message_preview),
+    last_message_from: row.last_message_from == null ? null : String(row.last_message_from),
+    unread_count: Number.isFinite(Number(row.unread_count)) ? Number(row.unread_count) : 0,
+    bot_paused: Boolean(row.bot_paused),
+    needs_human: Boolean(row.needs_human),
+    blocked: Boolean(row.blocked),
+    tags: Array.isArray(row.tags) ? row.tags.map((tag: unknown) => String(tag || "")).filter(Boolean) : [],
+    last_intent: row.last_intent == null ? null : String(row.last_intent),
+  } as Conversation;
 }
 
 interface Message {
@@ -50,6 +76,16 @@ interface Template { id: string; name: string; content: string; }
 interface Note { id: string; content: string; created_at: string; author_name?: string | null; }
 
 type FilterKind = "all" | "unread" | "needs_human" | "bot" | "blocked";
+
+const safeDate = (value: unknown) => {
+  return parseLocalDate(typeof value === "string" || value instanceof Date ? value : null);
+};
+const safeRelativeTime = (value: unknown, addSuffix = false) => {
+  const date = safeDate(value);
+  return date ? formatDistanceToNow(date, { addSuffix, locale: ptBR }) : "data indisponível";
+};
+const safeTime = (value: unknown) => safeDate(value)?.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) || "—";
+const safeDateTime = (value: unknown) => formatBRDateTime(typeof value === "string" ? value : null) || "data indisponível";
 
 const INTENT_LABEL: Record<string, { label: string; color: string }> = {
   pagamento: { label: "💰 Pagamento", color: "bg-green-500/20 text-green-700 dark:text-green-300" },
@@ -126,7 +162,7 @@ export default function WhatsAppInbox() {
         .eq("user_id", user.id).order("last_message_at", { ascending: false }).limit(300);
       if (!mounted) return;
       if (error) setConversationsError(error.message);
-      else setConversations((data as Conversation[]) || []);
+      else setConversations((data || []).map(normalizeConversation).filter((item): item is Conversation => !!item));
       setLoadingConversations(false);
     };
     load();
@@ -154,7 +190,10 @@ export default function WhatsAppInbox() {
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
     const total = conversations.length;
-    const todayCount = conversations.filter(c => new Date(c.last_message_at) >= today).length;
+    const todayCount = conversations.filter(c => {
+      const lastMessage = parseLocalDate(c.last_message_at);
+      return !!lastMessage && lastMessage >= today;
+    }).length;
     const needsHuman = conversations.filter(c => c.needs_human).length;
     supabase.from("whatsapp_messages")
       .select("sender, created_at").eq("user_id", user.id)
@@ -258,9 +297,9 @@ export default function WhatsAppInbox() {
       if (filter === "blocked" && !c.blocked) return false;
       if (!q) return true;
       return (c.contact_name || "").toLowerCase().includes(q)
-        || c.phone.includes(q)
+        || (c.phone || "").includes(q)
         || (c.last_message_preview || "").toLowerCase().includes(q)
-        || (c.tags || []).some(t => t.toLowerCase().includes(q));
+        || (c.tags || []).some(t => String(t || "").toLowerCase().includes(q));
     });
   }, [conversations, search, filter]);
 
@@ -424,12 +463,12 @@ export default function WhatsAppInbox() {
     ];
     messages.forEach(m => {
       const who = m.direction === "in" ? "CLIENTE" : (m.sender === "bot" ? "BOT" : "OPERADOR");
-      const ts = new Date(m.created_at).toLocaleString("pt-BR");
+      const ts = safeDateTime(m.created_at);
       lines.push(`[${ts}] ${who}: ${m.content || `[${m.message_type}]`}`);
     });
     if (notes.length) {
       lines.push("", "─".repeat(60), "NOTAS INTERNAS", "");
-      notes.forEach(n => lines.push(`[${new Date(n.created_at).toLocaleString("pt-BR")}] ${n.content}`));
+      notes.forEach(n => lines.push(`[${safeDateTime(n.created_at)}] ${n.content}`));
     }
     const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -448,7 +487,7 @@ export default function WhatsAppInbox() {
       .eq("direction", "in").gte("created_at", since);
     const buckets = Array.from({ length: 24 }, (_, h) => ({ hour: h, count: 0 }));
     (data || []).forEach((m: any) => {
-      const h = new Date(m.created_at).getHours();
+      const h = safeDate(m.created_at)?.getHours() ?? 0;
       buckets[h].count++;
     });
     setHourlyStats(buckets);
@@ -589,7 +628,7 @@ export default function WhatsAppInbox() {
                       <div className="flex items-center justify-between gap-2">
                         <span className={`text-sm truncate ${c.unread_count > 0 ? "font-bold text-foreground" : "font-semibold text-foreground/90"}`}>{name}</span>
                         <span className="text-[10px] text-muted-foreground shrink-0">
-                          {formatDistanceToNow(new Date(c.last_message_at), { addSuffix: false, locale: ptBR })}
+                          {safeRelativeTime(c.last_message_at)}
                         </span>
                       </div>
                       <div className="flex items-center gap-1 mt-0.5 flex-wrap">
@@ -809,7 +848,7 @@ export default function WhatsAppInbox() {
                         )}
                         <div>{m.content || <em className="opacity-60">[{m.message_type}]</em>}</div>
                         <div className="text-[9px] opacity-60 mt-0.5 text-right">
-                          {new Date(m.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                          {safeTime(m.created_at)}
                         </div>
                       </div>
                     </div>
@@ -906,7 +945,7 @@ export default function WhatsAppInbox() {
                 <div key={n.id} className="text-xs p-2 bg-muted/40 rounded">
                   <p className="whitespace-pre-wrap">{n.content}</p>
                   <p className="text-[10px] text-muted-foreground mt-1">
-                    {new Date(n.created_at).toLocaleString("pt-BR")}
+                    {safeDateTime(n.created_at)}
                   </p>
                 </div>
               ))}
@@ -923,7 +962,7 @@ export default function WhatsAppInbox() {
             <Textarea value={scheduleText} onChange={(e) => setScheduleText(e.target.value)}
               placeholder="Mensagem..." rows={3} />
             <div className="grid grid-cols-2 gap-2">
-              <Input type="date" value={scheduleDate} onChange={(e) => setScheduleDate(e.target.value)} min={new Date().toISOString().slice(0,10)} />
+              <Input type="date" value={scheduleDate} onChange={(e) => setScheduleDate(e.target.value)} min={todayLocalISO()} />
               <Input type="time" value={scheduleTime} onChange={(e) => setScheduleTime(e.target.value)} />
             </div>
           </div>
@@ -998,7 +1037,7 @@ export default function WhatsAppInbox() {
                         <span className="font-mono font-semibold">{a.tool_name}</span>
                       </div>
                       <span className="text-muted-foreground text-[10px]">
-                        {formatDistanceToNow(new Date(a.created_at), { addSuffix: true, locale: ptBR })}
+                        {safeRelativeTime(a.created_at, true)}
                       </span>
                     </div>
                     {a.tool_input && Object.keys(a.tool_input).length > 0 && (

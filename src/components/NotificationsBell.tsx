@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "sonner";
-import { formatBR } from "@/lib/dateUtils";
+import { formatBR, parseLocalDate } from "@/lib/dateUtils";
 import { safeNotificationPath } from "@/lib/notification";
 
 interface NotificationItem {
@@ -34,7 +34,9 @@ const typeMeta = (type?: string | null) => {
 };
 
 const timeAgo = (dateStr: string) => {
-  const diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
+  const date = parseLocalDate(dateStr);
+  if (!date) return "data indisponível";
+  const diff = (Date.now() - date.getTime()) / 1000;
   if (diff < 60) return "agora";
   if (diff < 3600) return `${Math.floor(diff / 60)}min`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
@@ -60,7 +62,9 @@ const groupByDate = (items: NotificationItem[]) => {
   const week = new Date(today); week.setDate(week.getDate() - 7);
   const groups: Record<string, NotificationItem[]> = { Hoje: [], Ontem: [], "Esta semana": [], "Mais antigas": [] };
   for (const n of items) {
-    const d = new Date(n.created_at); d.setHours(0, 0, 0, 0);
+    const d = parseLocalDate(n.created_at);
+    if (!d) { groups["Mais antigas"].push(n); continue; }
+    d.setHours(0, 0, 0, 0);
     if (d.getTime() === today.getTime()) groups["Hoje"].push(n);
     else if (d.getTime() === yesterday.getTime()) groups["Ontem"].push(n);
     else if (d >= week) groups["Esta semana"].push(n);
@@ -247,7 +251,7 @@ const NotificationsBell = () => {
             className={`${
               isMobile
                 ? "fixed top-[6.75rem] right-3 left-3"
-                : "absolute right-0 top-12 w-[420px]"
+                : "absolute right-0 top-12 w-[min(420px,calc(100vw-1.5rem))]"
             } max-h-[calc(100vh-5rem)] flex flex-col bg-card border border-border/60 rounded-2xl shadow-2xl shadow-black/40 z-50 overflow-hidden animate-scale-in`}
           >
             {/* Header */}
@@ -265,7 +269,9 @@ const NotificationsBell = () => {
                   </div>
                 </div>
                 <button
+                  type="button"
                   onClick={() => setOpen(false)}
+                  aria-label="Fechar notificações"
                   className="p-1.5 rounded-lg hover:bg-muted/50 text-muted-foreground hover:text-foreground transition"
                 >
                   <X size={14} />
@@ -334,8 +340,9 @@ const NotificationsBell = () => {
                         {list.map((n) => {
                           const meta = typeMeta(n.type);
                           const Icon = meta.icon;
-                          const chips = extractHighlights(n.message);
-                          const isLong = n.message.length > 140;
+                          const message = String(n.message || "");
+                          const chips = extractHighlights(message);
+                          const isLong = message.length > 140;
                           return (
                             <div
                               key={n.id}
@@ -354,9 +361,9 @@ const NotificationsBell = () => {
                                 <div className="flex-1 min-w-0">
                                   <p
                                     className={`text-[13px] leading-snug ${!n.is_read ? "text-foreground font-medium" : "text-muted-foreground"} line-clamp-2 group-hover:line-clamp-none break-words`}
-                                    title={isLong ? n.message : undefined}
+                                    title={isLong ? message : undefined}
                                   >
-                                    {n.message}
+                                    {message || "Notificação sem mensagem"}
                                   </p>
                                   {chips.length > 0 && (
                                     <div className="flex items-center gap-1.5 mt-2 flex-wrap">

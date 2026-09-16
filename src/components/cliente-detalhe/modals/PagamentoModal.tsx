@@ -4,7 +4,7 @@ import { ModalPortal } from "@/components/ui/modal-portal";
 import { INPUT, fmt } from "../constants";
 import { calculateFeeDiscount } from "@/lib/lateFee";
 import { nextInterestDueDate } from "@/lib/interestOnly";
-import { formatBR } from "@/lib/dateUtils";
+import { formatBR, todayLocalISO } from "@/lib/dateUtils";
 
 type Props = {
   inst: any;
@@ -35,8 +35,7 @@ const METHODS = [
 export default function PagamentoModal(p: Props) {
   const [discountPercent, setDiscountPercent] = useState(0);
   const automaticNextDue = nextInterestDueDate(p.inst.due_date, p.frequency);
-  const renewableMode = ["percentage", "interest_only"].includes(String(p.inst.contracts?.loan_mode || "").toLowerCase());
-  const canPayInterestOnly = renewableMode && ["daily", "weekly", "biweekly", "monthly"].includes(String(p.frequency || p.inst.contracts?.frequency || "").toLowerCase());
+  const canPayInterestOnly = String(p.inst.contracts?.loan_mode || "").toLowerCase() === "bullet";
   const [renewInterest, setRenewInterest] = useState(false);
   const [nextDueDate, setNextDueDate] = useState(automaticNextDue);
   const discountableFee = calculateFeeDiscount(p.remainingDue, Number(p.feeTotal || 0), 0).discountable;
@@ -54,7 +53,7 @@ export default function PagamentoModal(p: Props) {
         <div className="sm:hidden mx-auto -mt-2 mb-1 h-1.5 w-10 rounded-full bg-muted-foreground/30" />
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-foreground">Pagamento</h2>
-          <button onClick={close} aria-label="Fechar" className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground"><X size={18} /></button>
+          <button type="button" onClick={close} aria-label="Fechar" className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground"><X size={18} /></button>
         </div>
         <div className="bg-muted/30 rounded-lg p-3">
           <p className="text-xs text-muted-foreground">Parcela #{p.inst.installment_number}</p>
@@ -64,11 +63,11 @@ export default function PagamentoModal(p: Props) {
         </div>
         <div>
           <label className="text-xs font-medium text-muted-foreground mb-1 block">Valor (R$)</label>
-          <input type="number" step="0.01" value={p.amount} onChange={e => p.setAmount(e.target.value)} placeholder={fmt(p.remainingDue)} className={INPUT} autoFocus />
+          <input type="number" name="payment_amount" aria-label="Valor do pagamento" step="0.01" value={p.amount} onChange={e => p.setAmount(e.target.value)} placeholder={fmt(p.remainingDue)} className={INPUT} autoFocus />
         </div>
         <div className="flex gap-2">
-          <button onClick={() => { applyDiscount(0); p.setAmount(String(p.remainingDue.toFixed(2))); }} className="flex-1 px-3 py-2 rounded-lg border border-border text-xs text-muted-foreground hover:bg-accent">Total</button>
-          <button onClick={() => p.setAmount(String((p.remainingDue / 2).toFixed(2)))} className="flex-1 px-3 py-2 rounded-lg border border-border text-xs text-muted-foreground hover:bg-accent">Metade</button>
+          <button type="button" onClick={() => { applyDiscount(0); p.setAmount(String(p.remainingDue.toFixed(2))); }} className="flex-1 px-3 py-2 rounded-lg border border-border text-xs text-muted-foreground hover:bg-accent">Total</button>
+          <button type="button" onClick={() => p.setAmount(String((p.remainingDue / 2).toFixed(2)))} className="flex-1 px-3 py-2 rounded-lg border border-border text-xs text-muted-foreground hover:bg-accent">Metade</button>
         </div>
         {discountableFee > 0 && (
           <div className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-3">
@@ -78,7 +77,7 @@ export default function PagamentoModal(p: Props) {
             </div>
             <input type="range" min="0" max="100" value={discountPercent} onChange={(e) => applyDiscount(Number(e.target.value))}
               aria-label="Percentual de desconto nos encargos" className="w-full accent-[hsl(var(--primary))]" />
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-2">
               <button type="button" onClick={() => applyDiscount(50)} className="rounded-lg border border-border px-2 py-2 text-xs text-muted-foreground hover:bg-accent">Dar 50%</button>
               <button type="button" onClick={() => applyDiscount(100)} className="rounded-lg bg-success/15 px-2 py-2 text-xs font-semibold text-success hover:bg-success/20">Remover multa</button>
             </div>
@@ -86,7 +85,7 @@ export default function PagamentoModal(p: Props) {
         )}
         {canPayInterestOnly && !!p.interestOnly && p.interestOnly > 0 && (
           <div className="space-y-1.5">
-            <button
+            <button type="button"
               onClick={() => { setRenewInterest(true); p.setAmount(String(p.interestOnly!.toFixed(2))); }}
               className="w-full px-3 py-2.5 rounded-lg border border-warning/40 bg-warning/10 text-xs font-semibold text-warning hover:bg-warning/20 transition-colors"
             >
@@ -99,7 +98,7 @@ export default function PagamentoModal(p: Props) {
               <div className="rounded-lg border border-warning/30 bg-warning/5 p-2.5 space-y-1.5">
                 <label htmlFor="client-interest-next-date" className="block text-xs font-semibold text-foreground">Novo vencimento</label>
                 <input id="client-interest-next-date" type="date" value={nextDueDate}
-                  min={new Date().toISOString().slice(0, 10)} onChange={(e) => setNextDueDate(e.target.value)} className={INPUT} />
+                  min={todayLocalISO()} onChange={(e) => setNextDueDate(e.target.value)} className={INPUT} />
                 <p className="text-[10px] text-muted-foreground">Automático pela frequência: {formatBR(automaticNextDue)}</p>
               </div>
             )}
@@ -123,7 +122,7 @@ export default function PagamentoModal(p: Props) {
             className="w-full text-xs text-muted-foreground file:mr-2 file:px-3 file:py-1.5 file:rounded-lg file:border file:border-border file:bg-card file:text-xs file:font-medium file:text-foreground file:cursor-pointer" />
           {p.receiptFile && <p className="text-[10px] text-muted-foreground mt-1 truncate">📎 {p.receiptFile.name}</p>}
         </div>
-        <button onClick={() => renewInterest ? p.onRenewInterest?.(nextDueDate) : p.onSubmit()}
+        <button type="button" onClick={() => renewInterest ? p.onRenewInterest?.(nextDueDate) : p.onSubmit()}
           disabled={!p.amount || parseFloat(p.amount) <= 0 || p.uploading || (renewInterest && !nextDueDate)}
           className="w-full px-4 py-2.5 rounded-xl text-sm font-semibold text-primary-foreground disabled:opacity-50" style={{ background: "var(--gradient-button)" }}>
           {p.uploading ? "Enviando..." : "Confirmar"}

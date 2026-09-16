@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
-import { formatBR } from "@/lib/dateUtils";
+import { formatBR, parseLocalDate } from "@/lib/dateUtils";
 import { renderMessage } from "@/lib/messageTemplate";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,14 @@ import defaultLogo from "@/assets/credmais-mark.svg";
 import { formatFrequency } from "@/components/cliente-detalhe/constants";
 
 const TOKEN_KEY = "cobrador-token";
+
+const safeNumber = (value: unknown) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+};
+const safeTime = (value: unknown) => {
+  return parseLocalDate(typeof value === "string" || value instanceof Date ? value : null)?.getTime() ?? null;
+};
 
 type PayMethod = "pix" | "dinheiro" | "transferencia";
 
@@ -154,7 +162,7 @@ const CobradorExterno = () => {
 
   const handleConfirmPayment = async () => {
     if (!payInstallment) return;
-    const amount = Number(payAmount.replace(",", "."));
+    const amount = safeNumber(payAmount.replace(",", "."));
     if (!amount || amount <= 0) {
       toast({ title: "Valor inválido", variant: "destructive" });
       return;
@@ -220,7 +228,7 @@ const CobradorExterno = () => {
     }
   };
 
-  const fmt = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+  const fmt = (v: number) => safeNumber(v).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
   const now = new Date();
   const portalLogo = portal?.branding?.portal_logo_url || portal?.branding?.company_logo_url || defaultLogo;
   const inputCls = "w-full px-4 py-2.5 rounded-xl bg-card border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all";
@@ -270,11 +278,11 @@ const CobradorExterno = () => {
   }
 
   const allPending = installments.filter((i: any) => isEmAberto(i));
-  const allOverdue = allPending.filter((i: any) => new Date(i.due_date) < now);
+  const allOverdue = allPending.filter((i: any) => isEmAtraso(i, now));
   const allPaid = installments.filter((i: any) => i.status === "paid");
   const totalPending = allPending.reduce((s: number, i: any) => s + portalInstallmentAmount(i, now), 0);
   const totalOverdue = allOverdue.reduce((s: number, i: any) => s + portalInstallmentAmount(i, now), 0);
-  const totalPaid = allPaid.reduce((s: number, i: any) => s + Number(i.paid_amount || i.amount), 0);
+  const totalPaid = allPaid.reduce((s: number, i: any) => s + safeNumber(i.paid_amount ?? i.amount), 0);
 
   return (
     <div
@@ -292,11 +300,11 @@ const CobradorExterno = () => {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => setShowProfile(!showProfile)} aria-label="Abrir perfil do cobrador"
+            <button type="button" onClick={() => setShowProfile(!showProfile)} aria-label="Abrir perfil do cobrador"
               className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors">
               <User size={18} />
             </button>
-            <button onClick={handleLogout} aria-label="Sair do portal"
+            <button type="button" onClick={handleLogout} aria-label="Sair do portal"
               className="p-2 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
               <LogOut size={18} />
             </button>
@@ -345,7 +353,7 @@ const CobradorExterno = () => {
               </div>
             </div>
             {ownerProfile?.pix_key && (
-              <button onClick={copyPix} className="w-full p-3 rounded-xl bg-primary/5 border border-primary/10 hover:bg-primary/10 transition-colors text-left flex items-center justify-between">
+              <button type="button" onClick={copyPix} className="w-full p-3 rounded-xl bg-primary/5 border border-primary/10 hover:bg-primary/10 transition-colors text-left flex items-center justify-between">
                 <div>
                   <p className="text-[10px] text-muted-foreground uppercase mb-1">Chave PIX do Credor</p>
                   <p className="text-sm font-medium text-primary">{ownerProfile.pix_key}</p>
@@ -405,7 +413,7 @@ const CobradorExterno = () => {
             className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-card border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all"
           />
           {search && (
-            <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+            <button type="button" onClick={() => setSearch("")} aria-label="Limpar busca" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
               <X size={14} />
             </button>
           )}
@@ -418,7 +426,7 @@ const CobradorExterno = () => {
             { key: "atrasadas" as const, label: "Atrasadas", count: allOverdue.length, color: "text-destructive" },
             { key: "pagas" as const, label: "Recebidas", count: allPaid.length, color: "text-success" },
           ].map(t => (
-            <button key={t.key} onClick={() => setTab(t.key)}
+              <button type="button" key={t.key} onClick={() => setTab(t.key)}
               className={`flex items-center gap-1.5 px-4 py-2 rounded-t-xl text-sm font-medium transition-colors ${
                 tab === t.key
                   ? "bg-card border border-b-0 border-border text-foreground -mb-[1px]"
@@ -458,7 +466,10 @@ const CobradorExterno = () => {
 
               const isExpanded = expandedClient === a.client_id;
               const clientTotalPending = clientAll.filter((i: any) => isEmAberto(i));
-              const clientTotalOverdue = clientTotalPending.filter((i: any) => new Date(i.due_date) < now);
+              const clientTotalOverdue = clientTotalPending.filter((i: any) => {
+                const due = parseLocalDate(i.due_date);
+                return !!due && due < now;
+              });
               const clientPendingAmount = clientTotalPending.reduce((s: number, i: any) => s + portalInstallmentAmount(i, now), 0);
 
               return (
@@ -531,7 +542,8 @@ const CobradorExterno = () => {
                       <div className="divide-y divide-border/30">
                         {clientFiltered.map((inst: any) => {
                           const isOverdue = isEmAtraso(inst, now);
-                          const daysLate = isOverdue ? Math.floor((now.getTime() - new Date(inst.due_date).getTime()) / 86400000) : 0;
+                              const dueTime = safeTime(inst.due_date);
+                              const daysLate = isOverdue && dueTime !== null ? Math.floor((now.getTime() - dueTime) / 86400000) : 0;
                           const isPaid = inst.status === "paid";
 
                           return (
@@ -686,7 +698,7 @@ const CobradorExterno = () => {
             </div>
 
             {payMethod === "pix" && ownerProfile?.pix_key && (
-              <button onClick={copyPix} className="w-full p-3 rounded-xl bg-primary/5 border border-primary/10 hover:bg-primary/10 text-left flex items-center justify-between">
+              <button type="button" onClick={copyPix} className="w-full p-3 rounded-xl bg-primary/5 border border-primary/10 hover:bg-primary/10 text-left flex items-center justify-between">
                 <div className="min-w-0">
                   <p className="text-[10px] text-muted-foreground uppercase">Chave PIX do credor</p>
                   <p className="text-sm font-medium text-primary truncate">{ownerProfile.pix_key}</p>

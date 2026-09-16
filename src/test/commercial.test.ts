@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addBillingPeriod, rentalPeriods, splitReceivables } from '@/lib/commercial';
+import { addBillingPeriod, money, rentalPeriods, splitReceivables } from '@/lib/commercial';
 
 describe('operações comerciais', () => {
   it('divide venda parcelada em centavos exatos e preserva o vencimento mensal', () => {
@@ -17,5 +17,9 @@ describe('operações comerciais', () => {
 
   it('recusa parcela menor que um centavo', () => {
     expect(() => splitReceivables(0.02, 0, 3, '2026-01-01', 'monthly')).toThrow();
+  });
+
+  it('exibe zero quando um valor financeiro legado é inválido', () => {
+    expect(money('valor inválido')).toContain('0,00');
   });
 });

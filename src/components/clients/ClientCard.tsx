@@ -20,7 +20,8 @@ type Props = {
 };
 
 function ClientCardImpl({ client: c, summary, isSel, onToggle, onOpen, onDelete }: Props) {
-  const sc = Number(c.credit_score || 0);
+  const parsedScore = Number(c.credit_score ?? 0);
+  const sc = Number.isFinite(parsedScore) ? Math.max(0, Math.min(100, parsedScore)) : 0;
   return (
     <div
       onClick={() => onOpen(c.id)}

@@ -1,11 +1,15 @@
 import { useState, useMemo } from "react";
 import { ModalPortal } from "@/components/ui/modal-portal";
 import { CheckCircle, CalendarDays, AlertTriangle, Loader2 } from "lucide-react";
-import { formatBR } from "@/lib/dateUtils";
+import { formatBR, todayLocalISO } from "@/lib/dateUtils";
 import { calculateFeeDiscount, type LateFeeBreakdown } from "@/lib/lateFee";
 import { interestOnlyAmount, nextInterestDueDate } from "@/lib/interestOnly";
 
-const fmt = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const safeNumber = (value: unknown) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+};
+const fmt = (v: number) => safeNumber(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 interface Props {
   inst: any;
@@ -19,14 +23,19 @@ interface Props {
 
 const PayModal = ({ inst, fee, alreadyPaid, remaining, daysLate, onCancel, onConfirm }: Props) => {
   const [mode, setMode] = useState<"full" | "partial" | "interest_only" | "settle" | "discount_fee" | "no_fee">("full");
-  const [raw, setRaw] = useState<string>(remaining.toFixed(2).replace(".", ","));
+  const safeRemaining = safeNumber(remaining);
+  const [raw, setRaw] = useState<string>(safeRemaining.toFixed(2).replace(".", ","));
   const [discountPercent, setDiscountPercent] = useState(50);
   const [saving, setSaving] = useState(false);
   const automaticNextDue = nextInterestDueDate(inst.due_date, inst.contracts?.frequency);
   const [nextDueDate, setNextDueDate] = useState(automaticNextDue);
-  const renewableMode = ["percentage", "interest_only"].includes(String(inst.contracts?.loan_mode || "").toLowerCase());
-  const canPayInterestOnly = renewableMode && ["daily", "weekly", "biweekly", "monthly"].includes(String(inst.contracts?.frequency || "").toLowerCase());
-  const capitalSettlement = Math.max(0, Number(inst.contracts?.capital || 0)) + remaining;
+  const loanMode = String(inst.contracts?.loan_mode || "").toLowerCase();
+  const renewableMode = ["percentage", "interest_only"].includes(loanMode);
+  // In a bullet loan the single due amount contains the whole interest cycle.
+  // Paying only that interest rolls the principal into the next cycle.
+  const canPayInterestOnly = loanMode === "bullet";
+  const canSettleRenewable = renewableMode && ["daily", "weekly", "biweekly", "monthly"].includes(String(inst.contracts?.frequency || "").toLowerCase());
+  const capitalSettlement = Math.max(0, safeNumber(inst.contracts?.capital)) + safeRemaining;
 
   const value = useMemo(() => {
     const n = Number(String(raw).replace(/\./g, "").replace(",", "."));
@@ -142,9 +151,9 @@ const PayModal = ({ inst, fee, alreadyPaid, remaining, daysLate, onCancel, onCon
         </div>
 
         {/* Modo */}
-        <div className="payment-mode-grid grid grid-cols-2 gap-2">
-          <button
-            onClick={() => { setMode("full"); setRaw(remaining.toFixed(2).replace(".", ",")); }}
+        <div className="payment-mode-grid grid grid-cols-1 min-[420px]:grid-cols-2 gap-2">
+          <button type="button"
+            onClick={() => { setMode("full"); setRaw(safeRemaining.toFixed(2).replace(".", ",")); }}
             className={`min-w-0 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
               mode === "full" ? "bg-success text-success-foreground" : "border border-border text-muted-foreground hover:bg-accent"
             }`}
@@ -152,7 +161,7 @@ const PayModal = ({ inst, fee, alreadyPaid, remaining, daysLate, onCancel, onCon
             Quitar total
           </button>
           
-          {canPayInterestOnly && <button
+          {canPayInterestOnly && <button type="button"
             onClick={() => setMode("interest_only")}
             className={`min-w-0 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-sm ${
               mode === "interest_only" ? "bg-amber-500 text-white border-amber-600" : "border border-border text-muted-foreground hover:bg-accent"
@@ -161,16 +170,16 @@ const PayModal = ({ inst, fee, alreadyPaid, remaining, daysLate, onCancel, onCon
             Pagar só juros
           </button>}
 
-          {canPayInterestOnly && <button
+          {canSettleRenewable && <button type="button"
             onClick={() => setMode("settle")}
-            className={`col-span-2 min-w-0 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+            className={`min-[420px]:col-span-2 min-w-0 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
               mode === "settle" ? "bg-primary text-primary-foreground border-primary" : "border border-border text-muted-foreground hover:bg-accent"
             }`}
           >
             Quitar capital + juros
           </button>}
 
-          <button
+          <button type="button"
             onClick={() => setMode("partial")}
             className={`min-w-0 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
               mode === "partial" ? "bg-primary text-primary-foreground" : "border border-border text-muted-foreground hover:bg-accent"
@@ -181,7 +190,7 @@ const PayModal = ({ inst, fee, alreadyPaid, remaining, daysLate, onCancel, onCon
 
           {fee.total > 0 && (
             <>
-              <button
+              <button type="button"
                 onClick={() => setMode("discount_fee")}
                 className={`min-w-0 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
                   mode === "discount_fee" ? "bg-primary text-primary-foreground" : "border border-border text-muted-foreground hover:bg-accent"
@@ -189,7 +198,7 @@ const PayModal = ({ inst, fee, alreadyPaid, remaining, daysLate, onCancel, onCon
               >
                 Dar desconto
               </button>
-              <button
+              <button type="button"
                 onClick={() => setMode("no_fee")}
                 className={`min-w-0 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
                   mode === "no_fee" ? "bg-success text-success-foreground" : "border border-border text-muted-foreground hover:bg-accent"
@@ -224,7 +233,7 @@ const PayModal = ({ inst, fee, alreadyPaid, remaining, daysLate, onCancel, onCon
             </p>
             <div>
               <label htmlFor="interest-next-due" className="block text-xs font-semibold text-foreground mb-1.5">Novo vencimento</label>
-              <input id="interest-next-due" type="date" value={nextDueDate} min={new Date().toISOString().slice(0, 10)}
+              <input id="interest-next-due" type="date" value={nextDueDate} min={todayLocalISO()}
                 onChange={(e) => setNextDueDate(e.target.value)}
                 className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground" />
               <button type="button" onClick={() => setNextDueDate(automaticNextDue)} className="mt-1.5 text-[11px] font-semibold text-primary hover:underline">
@@ -234,9 +243,9 @@ const PayModal = ({ inst, fee, alreadyPaid, remaining, daysLate, onCancel, onCon
           </div>
         )}
 
-        {canPayInterestOnly && mode === "settle" && (
+        {canSettleRenewable && mode === "settle" && (
           <div className="p-3 rounded-xl bg-primary/10 border border-primary/20">
-            <p className="text-xs text-foreground leading-relaxed">Esta baixa encerra o contrato e recebe <strong>R$ {fmt(capitalSettlement)}</strong>, incluindo o capital de R$ {fmt(Number(inst.contracts?.capital || 0))} e os juros do ciclo.</p>
+            <p className="text-xs text-foreground leading-relaxed">Esta baixa encerra o contrato e recebe <strong>R$ {fmt(capitalSettlement)}</strong>, incluindo o capital de R$ {fmt(safeNumber(inst.contracts?.capital))} e os juros do ciclo.</p>
           </div>
         )}
 
@@ -277,7 +286,7 @@ const PayModal = ({ inst, fee, alreadyPaid, remaining, daysLate, onCancel, onCon
         )}
 
         <div className="flex gap-2">
-          <button disabled={saving} onClick={onCancel} className="flex-1 px-4 py-2.5 rounded-2xl border border-border text-sm text-muted-foreground hover:bg-accent transition-colors disabled:opacity-50">Cancelar</button>
+          <button type="button" disabled={saving} onClick={onCancel} className="flex-1 px-4 py-2.5 rounded-2xl border border-border text-sm text-muted-foreground hover:bg-accent transition-colors disabled:opacity-50">Cancelar</button>
           <button
             onClick={confirm}
             disabled={saving || (finalValue <= 0 && !canSettleWithoutNewMoney) || (mode === "interest_only" && !nextDueDate)}

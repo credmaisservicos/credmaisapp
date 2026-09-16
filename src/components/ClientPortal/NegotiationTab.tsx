@@ -72,6 +72,7 @@ export const NegotiationTab = ({ clientId, sessionToken }: { clientId: string, s
               assistantMessage += content;
               
               setMessages(prev => {
+                if (prev.length === 0) return prev;
                 const updated = [...prev];
                 updated[updated.length - 1].content = assistantMessage;
                 return updated;
@@ -83,6 +84,7 @@ export const NegotiationTab = ({ clientId, sessionToken }: { clientId: string, s
             // Suporte a stream direto de texto se não for formato SSE
             assistantMessage += line;
             setMessages(prev => {
+              if (prev.length === 0) return prev;
               const updated = [...prev];
               updated[updated.length - 1].content = assistantMessage;
               return updated;
@@ -139,7 +141,7 @@ export const NegotiationTab = ({ clientId, sessionToken }: { clientId: string, s
               </div>
             </div>
           ))}
-          {isLoading && messages[messages.length - 1].role === "user" && (
+          {isLoading && messages.at(-1)?.role === "user" && (
             <div className="flex justify-start">
               <div className="flex gap-2 items-center text-muted-foreground">
                 <div className="w-7 h-7 rounded-full bg-accent flex items-center justify-center animate-pulse">
@@ -158,6 +160,8 @@ export const NegotiationTab = ({ clientId, sessionToken }: { clientId: string, s
           className="flex gap-2"
         >
           <Input
+            name="negotiation_message"
+            aria-label="Mensagem da negociação"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Digite sua proposta ou dúvida..."

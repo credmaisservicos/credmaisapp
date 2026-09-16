@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, Minus, TrendingUp } from "lucide-react";
+import { parseLocalDate } from "@/lib/dateUtils";
 
 type Props = {
   installments: any[];
@@ -12,7 +13,11 @@ const OPTIONS: { v: Period; label: string; days: number }[] = [
   { v: "90d", label: "90 dias", days: 90 },
 ];
 
-const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+const safeNumber = (value: unknown) => {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? number : 0;
+};
+const fmt = (v: number) => safeNumber(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 
 export default function PeriodComparison({ installments }: Props) {
   const [period, setPeriod] = useState<Period>("30d");
@@ -26,11 +31,11 @@ export default function PeriodComparison({ installments }: Props) {
 
     const sumPaid = (from: Date, to: Date) =>
       installments
-        .filter((i) => i.status === "paid" && i.paid_at && new Date(i.paid_at) >= from && new Date(i.paid_at) < to)
-        .reduce((s, i) => s + Number(i.paid_amount || i.amount || 0), 0);
+        .filter((i) => { const date = parseLocalDate(i.paid_at); return i.status === "paid" && !!date && date >= from && date < to; })
+        .reduce((s, i) => s + safeNumber(i.paid_amount || i.amount), 0);
 
     const countPaid = (from: Date, to: Date) =>
-      installments.filter((i) => i.status === "paid" && i.paid_at && new Date(i.paid_at) >= from && new Date(i.paid_at) < to).length;
+      installments.filter((i) => { const date = parseLocalDate(i.paid_at); return i.status === "paid" && !!date && date >= from && date < to; }).length;
 
     const current = sumPaid(currentStart, now);
     const previous = sumPaid(previousStart, currentStart);
@@ -68,6 +73,7 @@ export default function PeriodComparison({ installments }: Props) {
         <div className="inline-flex items-center gap-1 p-1 rounded-full glass-card">
           {OPTIONS.map((o) => (
             <button
+              type="button"
               key={o.v}
               onClick={() => setPeriod(o.v)}
               className={`px-3 py-1.5 rounded-full text-[10px] font-semibold uppercase tracking-wider transition-all ${

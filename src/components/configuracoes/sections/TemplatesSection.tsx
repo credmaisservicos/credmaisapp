@@ -99,11 +99,11 @@ const TemplatesSection = ({ ctx }: SectionProps) => {
                 navigator.clipboard?.writeText(t);
                 notify(`${t} copiado`);
               }} />
-              <input value={newTemplate.name} onChange={(e) => setNewTemplate({ ...newTemplate, name: e.target.value })} placeholder="Nome do template" className={inputCls} />
-              <textarea value={newTemplate.content} onChange={(e) => setNewTemplate({ ...newTemplate, content: e.target.value })} placeholder="Olá {nome}, sua parcela de {valor} está atrasada há {dias} dias..." className={`${inputCls} min-h-[80px] resize-none`} />
+              <input id="template-name" name="template_name" value={newTemplate.name} onChange={(e) => setNewTemplate({ ...newTemplate, name: e.target.value })} placeholder="Nome do template" className={inputCls} aria-label="Nome do template" />
+              <textarea id="template-content" name="template_content" value={newTemplate.content} onChange={(e) => setNewTemplate({ ...newTemplate, content: e.target.value })} placeholder="Olá {nome}, sua parcela de {valor} está atrasada há {dias} dias..." className={`${inputCls} min-h-[80px] resize-none`} aria-label="Conteúdo do template" />
               <VariaveisNaoReconhecidas texto={newTemplate.content} />
-              <input type="number" value={newTemplate.trigger_days} onChange={(e) => setNewTemplate({ ...newTemplate, trigger_days: e.target.value })} placeholder="Dias de atraso para disparar (opcional)" className={inputCls} />
-              <button onClick={onAddTemplate} disabled={!newTemplate.name || !newTemplate.content}
+              <input id="template-trigger-days" name="template_trigger_days" type="number" value={newTemplate.trigger_days} onChange={(e) => setNewTemplate({ ...newTemplate, trigger_days: e.target.value })} placeholder="Dias de atraso para disparar (opcional)" className={inputCls} aria-label="Dias de atraso para disparar" />
+              <button type="button" onClick={onAddTemplate} disabled={!newTemplate.name || !newTemplate.content}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-primary-foreground disabled:opacity-50 focus-ring"
                 style={{ background: "var(--gradient-button)" }}>
                 <Plus size={14} /> Adicionar Template

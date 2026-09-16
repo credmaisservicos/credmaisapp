@@ -19,7 +19,7 @@ export default function EditParcelaModal({ inst, form, setForm, saving, onClose,
         <div className="sm:hidden mx-auto -mt-2 mb-1 h-1.5 w-10 rounded-full bg-muted-foreground/30" />
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-foreground">Editar Parcela #{inst.installment_number}</h2>
-          <button onClick={onClose} aria-label="Fechar" className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground"><X size={18} /></button>
+          <button type="button" onClick={onClose} aria-label="Fechar" className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground"><X size={18} /></button>
         </div>
         <div>
           <label className="text-xs font-medium text-muted-foreground mb-1 block">Valor (R$)</label>
@@ -33,8 +33,8 @@ export default function EditParcelaModal({ inst, form, setForm, saving, onClose,
           <p className="text-[11px] text-amber-500">Atenção: esta parcela já está paga. A alteração não estorna o pagamento.</p>
         )}
         <div className="flex gap-2 pt-2">
-          <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-2xl border border-border text-sm text-muted-foreground">Cancelar</button>
-          <button onClick={onSave} disabled={saving}
+          <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 rounded-2xl border border-border text-sm text-muted-foreground">Cancelar</button>
+          <button type="button" onClick={onSave} disabled={saving}
             className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-primary-foreground disabled:opacity-50" style={{ background: "var(--gradient-button)" }}>
             {saving ? "Salvando..." : "Salvar"}
           </button>

@@ -46,6 +46,10 @@ describe("menu compartilhado (sidebar + celular)", () => {
     expect(paths).toContain("/perfil");
     expect(paths).toContain("/admin?secao=logs");
   });
+  it("não expõe seções de admin com query para usuário comum", () => {
+    const paths = allPaths(filterMenuSections(platformSections, { isPlatformAdmin: false, hasAutomations: true }));
+    expect(paths).toEqual(["/perfil"]);
+  });
   it("prioriza uma rota filha em vez de ativar o pai junto", () => {
     const paths = ["/comunicacao", "/comunicacao/inbox"];
     expect(isMenuPathActive("/comunicacao", "/comunicacao/inbox", "", paths)).toBe(false);

@@ -137,6 +137,8 @@ const BuscarClientes = () => {
           <div className="relative flex-1">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
+              name="client_search_term"
+              aria-label={isCpf ? "Buscar cliente por CPF ou CNPJ" : "Buscar cliente por nome"}
               value={term}
               onChange={(e) => {
                 setValidationError(null);

@@ -9,9 +9,14 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { generateInvestorStatementPdf } from "@/utils/investorPdf";
 import defaultLogo from "@/assets/credmais-mark.svg";
+import { formatBR, parseLocalDate } from "@/lib/dateUtils";
 
-const brl = (n: number) => (n || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-const fmtDate = (d?: string | null) => (d ? new Date(d + "T00:00:00").toLocaleDateString("pt-BR") : "-");
+const safeNumber = (value: unknown) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+};
+const brl = (n: number) => safeNumber(n).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const fmtDate = (d?: string | null) => d ? formatBR(d) || "-" : "-";
 
 type PortalPayload = {
   investor: { id: string; name: string; email: string | null; cpf_cnpj: string | null; whatsapp: string | null };
@@ -28,6 +33,36 @@ type PortalPayload = {
     portal_contact_phone?: string; portal_contact_email?: string;
   };
 };
+
+function normalizePortalPayload(payload: unknown): PortalPayload | null {
+  if (!payload || typeof payload !== "object") return null;
+  const raw = payload as Record<string, any>;
+  if (!raw.investor || typeof raw.investor !== "object") return null;
+  return {
+    investor: {
+      id: String(raw.investor.id || ""),
+      name: String(raw.investor.name || "Investidor"),
+      email: raw.investor.email ?? null,
+      cpf_cnpj: raw.investor.cpf_cnpj ?? null,
+      whatsapp: raw.investor.whatsapp ?? null,
+    },
+    loans: (Array.isArray(raw.loans) ? raw.loans : []).map((loan: any) => ({
+      ...loan,
+      id: String(loan?.id || ""),
+      principal: safeNumber(loan?.principal),
+      interest_rate: safeNumber(loan?.interest_rate),
+      total_due: safeNumber(loan?.total_due),
+      paid_amount: safeNumber(loan?.paid_amount),
+      payments: (Array.isArray(loan?.payments) ? loan.payments : []).map((payment: any) => ({
+        ...payment,
+        id: String(payment?.id || ""),
+        amount: safeNumber(payment?.amount),
+      })),
+    })),
+    owner: raw.owner && typeof raw.owner === "object" ? raw.owner : {},
+    branding: raw.branding && typeof raw.branding === "object" ? raw.branding : {},
+  };
+}
 
 export default function PortalInvestidor() {
   const { token } = useParams<{ token: string }>();
@@ -48,7 +83,7 @@ export default function PortalInvestidor() {
         setLoading(false);
         return;
       }
-      setData((payload as any) || null);
+      setData(normalizePortalPayload(payload));
       setLoading(false);
     })();
   }, [attempt, token]);
@@ -57,9 +92,9 @@ export default function PortalInvestidor() {
     if (!data) return { capital: 0, receber: 0, recebido: 0, prox: null as string | null };
     const active = data.loans.filter((l) => l.status !== "paid");
     return {
-      capital: active.reduce((s, l) => s + Number(l.principal), 0),
-      receber: active.reduce((s, l) => s + (Number(l.total_due) - Number(l.paid_amount)), 0),
-      recebido: data.loans.reduce((s, l) => s + Number(l.paid_amount), 0),
+      capital: active.reduce((s, l) => s + safeNumber(l.principal), 0),
+      receber: active.reduce((s, l) => s + (safeNumber(l.total_due) - safeNumber(l.paid_amount)), 0),
+      recebido: data.loans.reduce((s, l) => s + safeNumber(l.paid_amount), 0),
       prox: active.map((l) => l.due_date).sort()[0] || null,
     };
   }, [data]);
@@ -158,16 +193,19 @@ export default function PortalInvestidor() {
           ) : (
             <ul className="space-y-3">
               {data.loans.map((l) => {
-                const saldo = Number(l.total_due) - Number(l.paid_amount);
-                const pct = Math.min(100, (Number(l.paid_amount) / Number(l.total_due)) * 100);
-                const overdue = l.status !== "paid" && new Date(l.due_date) < new Date();
+                const saldo = safeNumber(l.total_due) - safeNumber(l.paid_amount);
+                const pct = safeNumber(l.total_due) > 0
+                  ? Math.min(100, Math.max(0, (safeNumber(l.paid_amount) / safeNumber(l.total_due)) * 100))
+                  : 0;
+                const dueDate = parseLocalDate(l.due_date);
+                const overdue = l.status !== "paid" && !!dueDate && dueDate < new Date();
                 return (
                   <li key={l.id} className="rounded-2xl border border-white/5 bg-white/[0.03] p-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <p className="font-mono text-2xl font-bold">{brl(Number(l.total_due))}</p>
                         <p className="mt-1 text-xs text-white/60">
-                          Capital {brl(Number(l.principal))} • Juros {l.interest_rate}% • Iniciado em {fmtDate(l.start_date)}
+                          Capital {brl(safeNumber(l.principal))} • Juros {safeNumber(l.interest_rate)}% • Iniciado em {fmtDate(l.start_date)}
                         </p>
                       </div>
                       <div className="text-right">
@@ -185,7 +223,7 @@ export default function PortalInvestidor() {
                       <div className="h-full bg-gradient-to-r from-primary to-violet-400" style={{ width: `${pct}%` }} />
                     </div>
                     <div className="mt-1 flex justify-between text-[11px] text-white/50">
-                      <span>Já recebido: {brl(Number(l.paid_amount))}</span>
+                      <span>Já recebido: {brl(safeNumber(l.paid_amount))}</span>
                       <span>Saldo: {brl(saldo)}</span>
                     </div>
                     {l.payments.length > 0 && (
@@ -196,8 +234,8 @@ export default function PortalInvestidor() {
                         <ul className="mt-2 space-y-1 border-t border-white/5 pt-2 text-xs">
                           {l.payments.map((p) => (
                             <li key={p.id} className="flex justify-between text-white/70">
-                              <span>{new Date(p.paid_at).toLocaleDateString("pt-BR")} • {p.method || "—"}</span>
-                              <span className="font-mono font-semibold text-emerald-300">{brl(Number(p.amount))}</span>
+                              <span>{fmtDate(p.paid_at)} • {p.method || "—"}</span>
+                              <span className="font-mono font-semibold text-emerald-300">{brl(safeNumber(p.amount))}</span>
                             </li>
                           ))}
                         </ul>
@@ -220,7 +258,15 @@ export default function PortalInvestidor() {
                 <p className="mt-0.5 break-all font-mono text-sm">{data.owner.pix_key}</p>
               </div>
               <button
-                onClick={() => { navigator.clipboard.writeText(data.owner.pix_key!); toast({ title: "Chave copiada!" }); }}
+                type="button"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(String(data.owner?.pix_key || ""));
+                    toast({ title: "Chave copiada!" });
+                  } catch {
+                    toast({ title: "Não foi possível copiar a chave", variant: "destructive" });
+                  }
+                }}
                 className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs hover:bg-white/15"
               >
                 <Copy className="h-3.5 w-3.5" /> Copiar

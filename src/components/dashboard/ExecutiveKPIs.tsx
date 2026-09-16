@@ -2,13 +2,21 @@ import { useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { TrendingUp, TrendingDown, Clock, Target, Repeat, Calendar, LineChart } from "lucide-react";
 import { isEmAtraso, isEmAberto } from "@/lib/dashboardMetrics";
+import { parseLocalDate } from "@/lib/dateUtils";
 
 interface Props {
   contracts: any[];
   installments: any[];
 }
 
-const fmt = (v: number) => `R$ ${Number(v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const safeNumber = (value: unknown) => {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? number : 0;
+};
+const safeDate = (value: unknown) => {
+  return parseLocalDate(typeof value === "string" || value instanceof Date ? value : null);
+};
+const fmt = (v: number) => `R$ ${safeNumber(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const ExecutiveKPIs = ({ contracts, installments }: Props) => {
   const kpis = useMemo(() => {
@@ -21,15 +29,17 @@ const ExecutiveKPIs = ({ contracts, installments }: Props) => {
 
     // DSO — média de dias entre vencimento e pagamento (últimos 90d)
     const paid90 = paid.filter((i) => {
-      const d = new Date(i.paid_at);
-      return (now.getTime() - d.getTime()) / 86400000 <= 90;
+      const paidAt = safeDate(i.paid_at);
+      const dueDate = safeDate(i.due_date);
+      return !!paidAt && !!dueDate && (now.getTime() - paidAt.getTime()) / 86400000 <= 90;
     });
     let dso = 0;
     if (paid90.length) {
       const sum = paid90.reduce((s, i) => {
-        const due = new Date(i.due_date).getTime();
-        const p = new Date(i.paid_at).getTime();
-        return s + Math.max(0, (p - due) / 86400000);
+        const due = safeDate(i.due_date);
+        const paidAt = safeDate(i.paid_at);
+        if (!due || !paidAt) return s;
+        return s + Math.max(0, (paidAt.getTime() - due.getTime()) / 86400000);
       }, 0);
       dso = sum / paid90.length;
     }
@@ -37,13 +47,13 @@ const ExecutiveKPIs = ({ contracts, installments }: Props) => {
     // PMR — prazo médio dos contratos ativos (dias até liquidação prevista)
     const activePending = pending.filter((i) => {
       const c = contracts.find((c) => c.id === i.contract_id);
-      return c && (c.status === "active" || c.status === "overdue");
+      return c && (c.status === "active" || c.status === "overdue") && !!safeDate(i.due_date);
     });
     let pmr = 0;
     if (activePending.length) {
       const sum = activePending.reduce((s, i) => {
-        const due = new Date(i.due_date).getTime();
-        return s + Math.max(0, (due - now.getTime()) / 86400000);
+        const due = safeDate(i.due_date);
+        return due ? s + Math.max(0, (due.getTime() - now.getTime()) / 86400000) : s;
       }, 0);
       pmr = sum / activePending.length;
     }
@@ -51,14 +61,14 @@ const ExecutiveKPIs = ({ contracts, installments }: Props) => {
     // Taxa de recuperação — % de parcelas atrasadas que acabaram sendo pagas nos últimos 180d
     const recovery = (() => {
       const totalOverdueEver = paid.filter((i) => {
-        const due = new Date(i.due_date);
-        const p = new Date(i.paid_at);
-        return p > due;
+        const due = safeDate(i.due_date);
+        const paidAt = safeDate(i.paid_at);
+        return !!due && !!paidAt && paidAt > due;
       }).length + overdue.length;
       const recovered = paid.filter((i) => {
-        const due = new Date(i.due_date);
-        const p = new Date(i.paid_at);
-        return p > due;
+        const due = safeDate(i.due_date);
+        const paidAt = safeDate(i.paid_at);
+        return !!due && !!paidAt && paidAt > due;
       }).length;
       if (!totalOverdueEver) return 0;
       return (recovered / totalOverdueEver) * 100;
@@ -70,10 +80,10 @@ const ExecutiveKPIs = ({ contracts, installments }: Props) => {
       const end = new Date(now.getTime() + to * 86400000);
       return pending
         .filter((i) => {
-          const d = new Date(i.due_date);
-          return d >= start && d < end;
+          const d = safeDate(i.due_date);
+          return !!d && d >= start && d < end;
         })
-        .reduce((s, i) => s + Number(i.amount || 0), 0);
+        .reduce((s, i) => s + safeNumber(i.amount), 0);
     };
 
     const cash30 = bucket(0, 30);
@@ -84,7 +94,7 @@ const ExecutiveKPIs = ({ contracts, installments }: Props) => {
     // Ticket médio ativo
     const activeContracts = contracts.filter((c) => c.status === "active" || c.status === "overdue");
     const ticket = activeContracts.length
-      ? activeContracts.reduce((s, c) => s + Number(c.capital || 0), 0) / activeContracts.length
+      ? activeContracts.reduce((s, c) => s + safeNumber(c.capital), 0) / activeContracts.length
       : 0;
 
     return { dso, pmr, recovery, cash30, cash60, cash90, cashTotal, ticket };

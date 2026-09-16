@@ -72,7 +72,11 @@ const Simulador = () => {
 
 
 
-  const fmt = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const safeNumber = (value: unknown) => {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : 0;
+  };
+  const fmt = (v: number) => safeNumber(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const presets = [
     { label: "Mensal Simples", valor: "1000", taxa: "10", parcelas: "", mode: "percentage" as LoanMode, freq: "monthly" as Frequency },
@@ -316,7 +320,7 @@ const Simulador = () => {
           <label className="text-label mb-1.5 block">Valor do Empréstimo (R$)</label>
           <div className="relative">
             <DollarSign size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input type="text" inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="1.000,00" className={`${inputCls} pl-10`} />
+            <input type="text" name="simulator_amount" aria-label="Valor do empréstimo" inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="1.000,00" className={`${inputCls} pl-10`} />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-4">
@@ -330,7 +334,7 @@ const Simulador = () => {
               </label>
               <div className="relative">
                 <Percent size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <input type="text" inputMode="decimal" value={taxa} onChange={(e) => setTaxa(e.target.value)} placeholder="10" className={`${inputCls} pl-10`} />
+                <input type="text" name="simulator_interest_rate" aria-label="Taxa de juros" inputMode="decimal" value={taxa} onChange={(e) => setTaxa(e.target.value)} placeholder="10" className={`${inputCls} pl-10`} />
               </div>
             </div>
           ) : (
@@ -338,11 +342,11 @@ const Simulador = () => {
               <label className="text-label mb-1.5 block">Valor da Parcela (R$)</label>
               <div className="relative">
                 <DollarSign size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <input type="text" inputMode="decimal" value={installmentValue} onChange={(e) => setInstallmentValue(e.target.value)} placeholder="120,00" className={`${inputCls} pl-10`} />
+                <input type="text" name="simulator_installment_value" aria-label="Valor da parcela" inputMode="decimal" value={installmentValue} onChange={(e) => setInstallmentValue(e.target.value)} placeholder="120,00" className={`${inputCls} pl-10`} />
               </div>
               {calc && (calc as any).derivedRate !== undefined && (
                 <p className="text-[10px] text-muted-foreground mt-1">
-                  Taxa equivalente: {(calc as any).derivedRate.toFixed(2)}% por {calc.perPeriodLabel}
+                  Taxa equivalente: {safeNumber((calc as any).derivedRate).toFixed(2)}% por {calc.perPeriodLabel}
                 </p>
               )}
             </div>
@@ -390,7 +394,7 @@ const Simulador = () => {
           <div className="bg-muted/30 rounded-lg p-3">
             <p className="text-xs text-muted-foreground">
               💡 R$ {fmt(valorNum)} em {parcelasNum}x de R$ {fmt(installmentNum)} ={" "}
-              <strong className="text-foreground">{(calc as any).derivedRate.toFixed(2)}%</strong> por {calc.perPeriodLabel}
+                <strong className="text-foreground">{safeNumber((calc as any).derivedRate).toFixed(2)}%</strong> por {calc.perPeriodLabel}
             </p>
           </div>
         )}
@@ -419,7 +423,7 @@ const Simulador = () => {
                   />
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-lg font-bold text-foreground">{lucroPercent.toFixed(0)}%</span>
+                  <span className="text-lg font-bold text-foreground">{safeNumber(lucroPercent).toFixed(0)}%</span>
                   <span className="text-[9px] text-muted-foreground uppercase">Lucro</span>
                 </div>
               </div>

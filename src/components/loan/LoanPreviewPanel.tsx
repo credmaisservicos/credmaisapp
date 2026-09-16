@@ -25,8 +25,10 @@ interface Props {
   compact?: boolean;
 }
 
-const fmt = (v: number) =>
-  v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmt = (v: number) => {
+  const number = Number(v);
+  return (Number.isFinite(number) ? number : 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
 
 const dayBadge = (iso: string) => {
   if (isBrazilianHoliday(iso)) return { label: "Feriado", cls: "bg-destructive/15 text-destructive" };
@@ -149,7 +151,7 @@ export default function LoanPreviewPanel({
                 <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-muted-foreground">
                   <span>Lucro sobre capital</span>
                   <span className="font-bold text-success">
-                    {((result.totalInterest / Math.max(input.capital, 1)) * 100).toFixed(1)}%
+                    {((Number.isFinite(result.totalInterest) ? result.totalInterest : 0) / Math.max(Number.isFinite(input.capital) ? input.capital : 0, 1) * 100).toFixed(1)}%
                   </span>
                 </div>
                 <div className="h-1.5 rounded-full bg-muted overflow-hidden">

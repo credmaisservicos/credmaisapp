@@ -1,5 +1,5 @@
 import { loadPdfLib } from "@/utils/pdfLib";
-import { formatBR } from "@/lib/dateUtils";
+import { formatBR, todayLocalISO } from "@/lib/dateUtils";
 import { portalInstallmentAmount } from "@/lib/portalAmounts";
 import { formatFrequency } from "@/components/cliente-detalhe/constants";
 
@@ -43,7 +43,8 @@ export const generatePortalReceiptPdf = async (client: any, installment: any, co
   doc.text("DETALHES DO PAGAMENTO", 20, 110);
   doc.line(20, 112, 80, 112);
 
-  const amount = Number(installment.paid_amount || installment.amount);
+  const amountValue = Number(installment.paid_amount ?? installment.amount ?? 0);
+  const amount = Number.isFinite(amountValue) ? amountValue : 0;
   const data = [
     ["Descrição", "Parcela #" + installment.installment_number],
     ["Vencimento Original", formatBR(installment.due_date)],
@@ -71,14 +72,15 @@ export const generatePortalReceiptPdf = async (client: any, installment: any, co
   doc.setTextColor(150, 150, 150);
   doc.text(`Gerado em ${new Date().toLocaleString("pt-BR")} pelo Portal do Cliente`, pageWidth / 2, 285, { align: "center" });
 
-  doc.save(`Recibo_Parcela_${installment.installment_number}_${client.name.replace(/\s+/g, "_")}.pdf`);
+  const clientFileName = String(client?.name || "cliente").replace(/\s+/g, "_");
+  doc.save(`Recibo_Parcela_${installment.installment_number}_${clientFileName}.pdf`);
 };
 
 export const generatePortalStatementPdf = async (client: any, contracts: any[], company: any) => {
   const { jsPDF, autoTable } = await loadPdfLib();
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
-  const fmt = (v: number) => `R$ ${Number(v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+  const fmt = (v: number) => { const number = Number(v); return `R$ ${(Number.isFinite(number) ? number : 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`; };
 
   // Header
   doc.setFillColor(15, 23, 42);
@@ -108,10 +110,10 @@ export const generatePortalStatementPdf = async (client: any, contracts: any[], 
   // Totais consolidados
   let totalCap = 0, totalDivida = 0, totalPago = 0, totalOverdue = 0;
   contracts.forEach((c: any) => {
-    totalCap += Number(c.capital || 0);
-    totalDivida += Number(c.total_amount || 0);
+    totalCap += Number.isFinite(Number(c.capital)) ? Number(c.capital) : 0;
+    totalDivida += Number.isFinite(Number(c.total_amount)) ? Number(c.total_amount) : 0;
     (c.installments || []).forEach((i: any) => {
-      if (i.status === "paid") totalPago += Number(i.paid_amount || i.amount || 0);
+      if (i.status === "paid") totalPago += Number.isFinite(Number(i.paid_amount ?? i.amount)) ? Number(i.paid_amount ?? i.amount) : 0;
       if (i.status === "overdue") {
         totalOverdue += portalInstallmentAmount({
           ...i,
@@ -172,5 +174,6 @@ export const generatePortalStatementPdf = async (client: any, contracts: any[], 
     doc.text(`Página ${p}/${pages}  ·  Gerado pelo Portal do Cliente`, pageWidth / 2, 290, { align: "center" });
   }
 
-  doc.save(`Extrato_${client.name.replace(/\s+/g, "_")}_${new Date().toISOString().slice(0, 10)}.pdf`);
+  const clientFileName = String(client?.name || "cliente").replace(/\s+/g, "_");
+  doc.save(`Extrato_${clientFileName}_${todayLocalISO()}.pdf`);
 };

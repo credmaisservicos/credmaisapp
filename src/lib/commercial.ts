@@ -7,7 +7,10 @@ export type BusinessPayment = { id: string; operation_id: string; kind: string; 
 export type Collateral = { id: string; contract_id: string; client_id: string; description: string; category: string; identifier: string; estimated_value: number; condition: string; storage_location: string; photos: string[]; notes: string; status: string; received_at: string; returned_at?: string; return_note?: string; };
 export type CollateralInput = Pick<Collateral, 'description' | 'category' | 'identifier' | 'estimated_value' | 'condition' | 'storage_location' | 'photos' | 'notes'>;
 export const emptyCollateral = (): CollateralInput => ({ description: '', category: 'Celular', identifier: '', estimated_value: 0, condition: '', storage_location: '', photos: [], notes: '' });
-export const money = (value: number | string) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+export const money = (value: number | string | null | undefined) => {
+  const number = Number(value ?? 0);
+  return (Number.isFinite(number) ? number : 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+};
 export const billingLabels: Record<Billing,string> = { daily:'Diária', weekly:'Semanal', monthly:'Mensal' };
 export const assetLabels: Record<AssetKind,string> = { phone:'Celular', car:'Carro', motorcycle:'Moto' };
 export const statusLabels: Record<string,string> = { available:'Disponível', sold:'Vendido', rented:'Alugado', maintenance:'Manutenção', archived:'Arquivado', active:'Em andamento', completed:'Concluído', cancelled:'Cancelado', pending:'Em aberto', paid:'Pago', held:'Sob guarda', returned:'Devolvido' };

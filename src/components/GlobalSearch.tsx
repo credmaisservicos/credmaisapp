@@ -9,6 +9,11 @@ import {
   Bell, Settings, MessageSquare, Bot, Wallet, BarChart3, History, Zap, Clock
 } from "lucide-react";
 
+const safeNumber = (value: unknown) => {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? number : 0;
+};
+
 type Group = "Ações" | "Páginas" | "Clientes" | "Contratos" | "Recentes";
 
 interface SearchResult {
@@ -125,16 +130,16 @@ const GlobalSearch = ({ open, onClose }: { open: boolean; onClose: () => void })
       }
 
       const clients: SearchResult[] = matchedClients.map((c: any) => ({
-        id: `c-${c.id}`, group: "Clientes", title: c.name, subtitle: c.cpf_cnpj || "Sem CPF",
+        id: `c-${c.id}`, group: "Clientes", title: String(c.name || "Cliente sem nome"), subtitle: c.cpf_cnpj || "Sem CPF",
         path: `/clientes/${c.id}`, Icon: Users,
       }));
 
       const contracts: SearchResult[] = (contractsRes.data || [])
-        .filter((c: any) => c.clients?.name?.toLowerCase().includes(q))
+        .filter((c: any) => String(c.clients?.name || "").toLowerCase().includes(q))
         .slice(0, 5)
         .map((c: any) => ({
-          id: `k-${c.id}`, group: "Contratos", title: c.clients?.name,
-          subtitle: `R$ ${Number(c.capital).toLocaleString("pt-BR")} • ${c.status}`,
+          id: `k-${c.id}`, group: "Contratos", title: String(c.clients?.name || "Cliente sem nome"),
+          subtitle: `R$ ${safeNumber(c.capital).toLocaleString("pt-BR")} • ${c.status || "Status indisponível"}`,
           path: `/clientes/${c.clients?.id || ""}`, Icon: FileSignature,
         }));
 
@@ -142,7 +147,14 @@ const GlobalSearch = ({ open, onClose }: { open: boolean; onClose: () => void })
       setLoading(false);
     };
 
-    const timer = setTimeout(fetchData, 220);
+    const timer = setTimeout(() => {
+      fetchData().catch(() => {
+        if (!cancelled) {
+          setDynamicResults([]);
+          setLoading(false);
+        }
+      });
+    }, 220);
     return () => { cancelled = true; clearTimeout(timer); };
   }, [query, user]);
 
@@ -161,7 +173,7 @@ const GlobalSearch = ({ open, onClose }: { open: boolean; onClose: () => void })
       return [...recents, ...ACTIONS, ...PAGES.slice(0, 10)];
     }
     const match = (r: SearchResult) =>
-      r.title.toLowerCase().includes(q) ||
+      String(r.title || "").toLowerCase().includes(q) ||
       (r.keywords || "").toLowerCase().includes(q) ||
       (r.subtitle || "").toLowerCase().includes(q);
 

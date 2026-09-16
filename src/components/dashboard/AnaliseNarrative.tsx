@@ -13,8 +13,13 @@ type Props = {
   forecast30: number;
 };
 
-const fmt = (v: number) =>
-  v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const safeNumber = (value: unknown) => {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? number : 0;
+};
+
+const fmt = (v: unknown) =>
+  safeNumber(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /**
  * Bloco de storytelling que abre a página de Análises — explica em uma frase
@@ -32,11 +37,13 @@ export default function AnaliseNarrative({
   overdueCount,
   forecast30,
 }: Props) {
-  const goodReceived = deltaReceived >= 0;
-  const goodProfit = deltaProfit >= 0;
+  const receivedDelta = safeNumber(deltaReceived);
+  const profitDelta = safeNumber(deltaProfit);
+  const goodReceived = receivedDelta >= 0;
+  const goodProfit = profitDelta >= 0;
 
   const veredicto =
-    deltaProfit > 10
+    profitDelta > 10
       ? "Período de alta — mantenha o ritmo de novos contratos."
       : deltaProfit >= 0
         ? "Período estável, seguindo a média."
@@ -65,7 +72,7 @@ export default function AnaliseNarrative({
             }`}
           >
             {goodReceived ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-            {Math.abs(deltaReceived).toFixed(1)}%
+            {Math.abs(receivedDelta).toFixed(1)}%
           </span>{" "}
           e lucrou{" "}
           <span className="text-primary">R$ {fmt(totalProfit)}</span>{" "}
@@ -75,7 +82,7 @@ export default function AnaliseNarrative({
             }`}
           >
             {goodProfit ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-            {Math.abs(deltaProfit).toFixed(1)}%
+            {Math.abs(profitDelta).toFixed(1)}%
           </span>
           .
         </p>

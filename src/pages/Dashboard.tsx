@@ -22,9 +22,14 @@ import NarrativeHero from "@/components/dashboard/NarrativeHero";
 import ExecutiveKPIs from "@/components/dashboard/ExecutiveKPIs";
 import BentoKPI from "@/components/dashboard/BentoKPI";
 import PendingCenter from "@/components/dashboard/PendingCenter";
-import { formatBR } from "@/lib/dateUtils";
+import { formatBR, parseLocalDate } from "@/lib/dateUtils";
 import { fetchAll } from "@/lib/fetchAll";
 import { computeDashboardMetrics } from "@/lib/dashboardMetrics";
+
+const safeNumber = (value: unknown) => {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? number : 0;
+};
 
 const Dashboard = () => {
   const { user, profile } = useAuth();
@@ -77,8 +82,14 @@ const Dashboard = () => {
     const d30 = new Date(now.getTime() - 30 * 86400000);
     const d60 = new Date(now.getTime() - 60 * 86400000);
     const paid = data.installments.filter((i: any) => i.status === "paid" && i.paid_at);
-    const cur = paid.filter((i: any) => new Date(i.paid_at) >= d30).reduce((s: number, i: any) => s + Number(i.paid_amount || i.amount || 0), 0);
-    const prev = paid.filter((i: any) => { const d = new Date(i.paid_at); return d >= d60 && d < d30; }).reduce((s: number, i: any) => s + Number(i.paid_amount || i.amount || 0), 0);
+    const cur = paid.filter((i: any) => {
+      const date = parseLocalDate(i.paid_at);
+      return !!date && date >= d30;
+    }).reduce((s: number, i: any) => s + safeNumber(i.paid_amount ?? i.amount), 0);
+    const prev = paid.filter((i: any) => {
+      const date = parseLocalDate(i.paid_at);
+      return !!date && date >= d60 && date < d30;
+    }).reduce((s: number, i: any) => s + safeNumber(i.paid_amount ?? i.amount), 0);
     if (prev === 0) return cur > 0 ? 100 : 0;
     return ((cur - prev) / prev) * 100;
   }, [data]);
@@ -116,7 +127,7 @@ const Dashboard = () => {
   }
 
 
-  const fmt = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmt = (v: unknown) => safeNumber(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const hour = currentTime.getHours();
   const greeting = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
   const timeStr = currentTime.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
@@ -372,7 +383,9 @@ const Dashboard = () => {
                 </div>
                 <div className="p-5 space-y-4">
                   {metrics.goals.slice(0, 3).map((g: any) => {
-                    const pct = Math.min(100, (Number(g.current_amount) / Number(g.target_amount)) * 100);
+                    const currentAmount = safeNumber(g.current_amount);
+                    const targetAmount = safeNumber(g.target_amount);
+                    const pct = targetAmount > 0 ? Math.min(100, Math.max(0, (currentAmount / targetAmount) * 100)) : 0;
                     return (
                       <div key={g.id} className="space-y-1.5">
                         <div className="flex items-center justify-between">
@@ -383,7 +396,7 @@ const Dashboard = () => {
                           <div className="h-full rounded-full transition-all duration-700 ease-out bg-gradient-to-r from-primary/60 to-primary" style={{ width: `${pct}%` }} />
                         </div>
                         <p className="text-[10px] text-muted-foreground tabular-nums">
-                          R$ {fmt(Number(g.current_amount))} / R$ {fmt(Number(g.target_amount))}
+                          R$ {fmt(currentAmount)} / R$ {fmt(targetAmount)}
                         </p>
                       </div>
                     );
@@ -501,7 +514,7 @@ const Dashboard = () => {
                           </p>
                         </div>
                         <span className="text-sm font-bold text-success whitespace-nowrap tabular-nums">
-                          +R$ {fmt(Number(item.paid_amount || item.amount))}
+                            +R$ {fmt(item.paid_amount ?? item.amount)}
                         </span>
                       </div>
                     );

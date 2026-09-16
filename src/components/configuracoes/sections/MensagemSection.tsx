@@ -32,6 +32,9 @@ const MensagemSection = ({ ctx }: SectionProps) => {
             <div>
               <VariaveisDisponiveis onCopiar={(t) => { navigator.clipboard?.writeText(t); notify(`${t} copiado`); }} />
               <textarea
+                id="billing-message"
+                name="billing_message"
+                aria-label="Mensagem padrão de cobrança"
                 value={form.billing_message}
                 onChange={(e) => setForm({ ...form, billing_message: e.target.value })}
                 rows={5}
@@ -49,6 +52,8 @@ const MensagemSection = ({ ctx }: SectionProps) => {
               ].map((preset) => (
                 <button
                   key={preset.label}
+                  type="button"
+                  aria-pressed={form.billing_message === preset.text}
                   onClick={() => setForm({ ...form, billing_message: preset.text })}
                   className={`w-full text-left p-3 rounded-xl border transition-colors ${
                     form.billing_message === preset.text

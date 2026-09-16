@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
 import EmptyState from "@/components/EmptyState";
 import ErrorState from "@/components/feedback/ErrorState";
+import { formatBR, formatBRDateTime } from "@/lib/dateUtils";
 
 const actionLabels: Record<string, string> = {
   contract_created: "Contrato criado",
@@ -67,7 +68,7 @@ const Historico = () => {
     const term = search.trim().toLocaleLowerCase("pt-BR");
     return logs.filter((l: any) => {
       const matchSearch = !term ||
-        (actionLabels[l.action] || l.action).toLocaleLowerCase("pt-BR").includes(term) ||
+        String(actionLabels[l.action] || l.action || "").toLocaleLowerCase("pt-BR").includes(term) ||
         JSON.stringify(l.details || {}).toLocaleLowerCase("pt-BR").includes(term);
       const matchType = typeFilter === "all" || l.entity_type === typeFilter;
       return matchSearch && matchType;
@@ -78,7 +79,7 @@ const Historico = () => {
   const grouped = useMemo(() => {
     const result: Record<string, any[]> = {};
     filtered.forEach((log: any) => {
-      const date = new Date(log.created_at).toLocaleDateString("pt-BR");
+      const date = formatBR(log.created_at) || "Data indisponível";
       if (!result[date]) result[date] = [];
       result[date].push(log);
     });
@@ -107,6 +108,7 @@ const Historico = () => {
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input
             type="text"
+            name="history_search"
             placeholder="Buscar atividade..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -117,6 +119,7 @@ const Historico = () => {
         <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
           <Filter size={16} className="text-muted-foreground" />
           <button
+            type="button"
             onClick={() => setTypeFilter("all")}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
               typeFilter === "all" ? "bg-primary text-primary-foreground" : "bg-card border border-border text-muted-foreground hover:bg-accent"
@@ -126,6 +129,7 @@ const Historico = () => {
           </button>
           {entityTypes.map((t: string) => (
             <button
+              type="button"
               key={t}
               onClick={() => setTypeFilter(t)}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
@@ -190,7 +194,7 @@ const Historico = () => {
                         </p>
                       )}
                       <p className="text-xs text-muted-foreground/60 mt-1">
-                        {new Date(log.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                        {formatBRDateTime(log.created_at) || "data indisponível"}
                       </p>
                     </div>
                     <Badge variant="outline" className={`max-w-24 shrink-0 truncate text-[10px] ${entityColors[log.entity_type] || ""}`}>
@@ -204,6 +208,7 @@ const Historico = () => {
           {hasNextPage && (
             <div className="text-center">
               <button
+                type="button"
                 onClick={() => fetchNextPage()}
                 disabled={isFetchingNextPage}
                 className="rounded-xl border border-border px-4 py-2 text-sm hover:bg-accent disabled:opacity-50"

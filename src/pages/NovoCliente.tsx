@@ -84,7 +84,12 @@ const parseCurrency = (v: string) => {
   return n ? (parseInt(n) / 100).toString() : "";
 };
 
-const fmt = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const safeNumber = (value: unknown) => {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? number : 0;
+};
+
+const fmt = (v: unknown) => safeNumber(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 type Frequency = "monthly" | "weekly" | "daily" | "biweekly" | "custom";
 type DailyMode = "mon-fri" | "mon-sat" | "mon-sun";
@@ -333,7 +338,7 @@ const NovoCliente = () => {
 
   const duplicateFrom = (c: any) => {
     setCapital(String(c.capital || ""));
-    setCapitalDisplay(Number(c.capital || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 }));
+    setCapitalDisplay(safeNumber(c.capital).toLocaleString("pt-BR", { minimumFractionDigits: 2 }));
     setTaxaJuros(String(c.interest_rate || ""));
     setNumInstallments(String(c.num_installments || ""));
     if (c.frequency) setFrequency((c.frequency.startsWith("daily") ? "daily" : c.frequency) as Frequency);
@@ -816,7 +821,7 @@ const NovoCliente = () => {
         toast({ title: "Sem WhatsApp/telefone", description: "Cadastre um número para enviar.", variant: "destructive" });
         return;
       }
-      window.open(`https://wa.me/55${phoneDigits}?text=${encodeURIComponent(shareMessage)}`, "_blank");
+      window.open(`https://wa.me/55${phoneDigits}?text=${encodeURIComponent(shareMessage)}`, "_blank", "noopener,noreferrer");
     };
 
     const sendEmail = () => {
@@ -833,6 +838,7 @@ const NovoCliente = () => {
           <h1 className="text-xl font-bold text-foreground">Contrato Gerado</h1>
           <div className="flex flex-wrap gap-2">
             <button
+              type="button"
               onClick={sendWhatsApp}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition-colors"
               title={phoneDigits ? `Enviar para ${phoneDigits}` : "Sem número cadastrado"}
@@ -840,6 +846,7 @@ const NovoCliente = () => {
               <MessageCircle size={16} /> Enviar WhatsApp
             </button>
             <button
+              type="button"
               onClick={sendEmail}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border border-border hover:bg-accent transition-colors"
               title={email ? `Enviar para ${email}` : "Sem e-mail cadastrado"}
@@ -847,12 +854,14 @@ const NovoCliente = () => {
               <Send size={16} /> E-mail
             </button>
             <button
+              type="button"
               onClick={() => window.print()}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border border-border hover:bg-accent transition-colors"
             >
               <Printer size={16} /> Imprimir
             </button>
             <button
+              type="button"
               onClick={() => navigate(existingClientId ? `/clientes/${existingClientId}` : "/clientes")}
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-primary-foreground transition-opacity"
               style={{ background: "var(--gradient-button)" }}
@@ -876,6 +885,7 @@ const NovoCliente = () => {
             de baixo; no computador nada muda. */}
         <div className="page-hero-content flex flex-wrap items-center gap-3">
           <button
+            type="button"
             onClick={() => {
               if (isNewContractOnly) {
                 if (step > 2) setStep(step - 1);
@@ -934,10 +944,10 @@ const NovoCliente = () => {
             <span className="text-foreground"><strong>Rascunho encontrado</strong> da última vez que você esteve aqui.</span>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={discardDraft} className="text-xs text-muted-foreground hover:text-foreground px-2 py-1">
+            <button type="button" onClick={discardDraft} className="text-xs text-muted-foreground hover:text-foreground px-2 py-1">
               Descartar
             </button>
-            <button onClick={restoreDraft} className="flex items-center gap-1.5 text-xs font-semibold text-primary-foreground bg-primary px-3 py-1.5 rounded-lg hover:opacity-90">
+            <button type="button" onClick={restoreDraft} className="flex items-center gap-1.5 text-xs font-semibold text-primary-foreground bg-primary px-3 py-1.5 rounded-lg hover:opacity-90">
               <RotateCcw size={12} /> Restaurar
             </button>
           </div>
@@ -983,7 +993,7 @@ const NovoCliente = () => {
                 </div>
                 <div>
                   <label htmlFor="loan-nascimento" className="text-xs font-semibold text-foreground mb-1.5 block">Data de nascimento</label>
-                  <input id="loan-nascimento" aria-label="Data de nascimento" type="date" value={nascimento} onChange={(e) => setNascimento(e.target.value)} className={INPUT} max={new Date().toISOString().slice(0, 10)} />
+                  <input id="loan-nascimento" aria-label="Data de nascimento" type="date" value={nascimento} onChange={(e) => setNascimento(e.target.value)} className={INPUT} max={todayLocalISO()} />
                   <p className="text-xs text-muted-foreground mt-1">É com ela, junto do CPF, que o cliente entra no portal.</p>
                 </div>
               </div>
@@ -1129,7 +1139,7 @@ const NovoCliente = () => {
                     className="group shrink-0 rounded-xl border border-white/[.08] bg-white/[0.025] px-3.5 py-2.5 text-left transition-colors hover:border-primary/35 hover:bg-primary/[.06]"
                   >
                     <p className="text-xs font-bold text-foreground truncate max-w-[150px] group-hover:text-primary transition-colors">{(c.clients as any)?.name || "—"}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">R$ {Number(c.capital).toLocaleString("pt-BR")} · {c.num_installments}x · {c.interest_rate}%</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">R$ {safeNumber(c.capital).toLocaleString("pt-BR")} · {c.num_installments || 0}x · {safeNumber(c.interest_rate)}%</p>
                   </button>
                 ))}
               </div>
@@ -1835,9 +1845,9 @@ const NovoCliente = () => {
         </div>
       )}
 
-      {/* Sticky live summary on step 2 */}
+      {/* Live summary stays in the form flow so it never covers fields or actions. */}
       {step === 2 && calc && parseFloat(capital) > 0 && (
-        <div className="fixed bottom-20 left-3 right-3 z-20 md:bottom-6 md:left-auto md:right-6 md:w-[420px]">
+        <div className="relative z-10 mx-auto mt-5 w-full max-w-[520px] md:sticky md:top-4 md:ml-auto md:mr-0">
           <div className="rounded-2xl border border-primary/25 bg-card/95 p-3 shadow-xl shadow-black/20 backdrop-blur">
             <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-[0.16em] text-primary">Resumo ao vivo</p>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -1955,6 +1965,7 @@ const NovoCliente = () => {
       {/* ═══ NAV BAR ═══ */}
       <div className="mobile-dock sticky bottom-3 z-10 flex items-center justify-between gap-2 rounded-2xl border border-border bg-card/95 p-3 backdrop-blur sm:p-4">
         <button
+          type="button"
           onClick={() => {
             if (isNewContractOnly) {
               if (step > 2) setStep(step - 1);
@@ -1970,7 +1981,7 @@ const NovoCliente = () => {
           {isNewContractOnly ? (step > 2 ? "Voltar" : "Cancelar") : step > 1 ? "Voltar" : "Cancelar"}
         </button>
         {step < 3 ? (
-          <button onClick={goNext}
+          <button type="button" onClick={goNext}
             disabled={step === 2 && !calc}
             title={step === 2 && !calc ? "Preencha os valores do empréstimo para continuar" : undefined}
             className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40 sm:px-6">

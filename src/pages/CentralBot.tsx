@@ -115,7 +115,7 @@ const Overview = () => {
 
   return (
     <div className="space-y-5">
-      {statsError && <div role="alert" className="rounded-xl border border-destructive/30 p-4 text-sm">Não foi possível carregar os indicadores. <button className="underline min-h-11 px-2" onClick={() => void retryStats()}>Tentar novamente</button></div>}
+      {statsError && <div role="alert" className="rounded-xl border border-destructive/30 p-4 text-sm">Não foi possível carregar os indicadores. <button type="button" className="underline min-h-11 px-2" onClick={() => void retryStats()}>Tentar novamente</button></div>}
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Card className="p-5 border-border/50 bg-gradient-to-br from-primary/5 to-transparent">
@@ -160,7 +160,7 @@ const Overview = () => {
           <h3 className="font-bold">Diagnóstico do Bot</h3>
         </div>
         {settingsError || instancesError ? (
-          <div role="alert" className="text-sm">Não foi possível verificar o atendimento. <button className="underline min-h-11 px-2" onClick={() => { void retrySettings(); void retryInstances(); }}>Tentar novamente</button></div>
+          <div role="alert" className="text-sm">Não foi possível verificar o atendimento. <button type="button" className="underline min-h-11 px-2" onClick={() => { void retrySettings(); void retryInstances(); }}>Tentar novamente</button></div>
         ) : isLoading || instancesLoading ? (
           <div className="flex items-center gap-2 py-6 text-muted-foreground text-sm">
             <Loader2 className="animate-spin" size={14} /> Verificando...

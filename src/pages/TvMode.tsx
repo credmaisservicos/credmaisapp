@@ -10,7 +10,11 @@ import { ArrowLeft, Wallet, TrendingUp, AlertCircle, Users, FileSignature, Activ
 import { todayLocalISO } from "@/lib/dateUtils";
 import ErrorState from "@/components/feedback/ErrorState";
 
-const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+const safeNumber = (value: unknown) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+};
+const fmt = (v: number) => safeNumber(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 
 export default function TvMode() {
   const { user } = useAuth();
@@ -46,11 +50,11 @@ export default function TvMode() {
     const activeIds = new Set(active.map((c: any) => c.id));
     const capital = computeOutstandingPrincipal(active as any, data.installments as any);
     const paid = data.installments.filter((i: any) => i.status === "paid");
-    const received = paid.reduce((s: number, i: any) => s + Number(i.paid_amount || i.amount), 0);
+    const received = paid.reduce((s: number, i: any) => s + safeNumber(i.paid_amount ?? i.amount), 0);
     const overdue = data.installments.filter((i: any) => activeIds.has(i.contract_id) && isEmAtraso(i, today));
-    const overdueAmt = overdue.reduce((s: number, i: any) => s + Number(i.amount), 0);
+    const overdueAmt = overdue.reduce((s: number, i: any) => s + safeNumber(i.amount), 0);
     const paidToday = paid.filter((p: any) => p.paid_at?.startsWith(todayStr));
-    const paidTodayAmt = paidToday.reduce((s: number, p: any) => s + Number(p.paid_amount || p.amount), 0);
+    const paidTodayAmt = paidToday.reduce((s: number, p: any) => s + safeNumber(p.paid_amount ?? p.amount), 0);
     return { capital, received, overdue: overdueAmt, paidToday: paidTodayAmt, paidTodayCount: paidToday.length, contratos: active.length, clientes: data.clients.length, overdueCount: overdue.length };
   }, [data]);
 
@@ -74,6 +78,7 @@ export default function TvMode() {
   return (
     <div className="fixed inset-0 bg-background overflow-auto">
       <button
+        type="button"
         onClick={() => navigate("/dashboard")}
         className="absolute top-4 left-4 z-10 flex items-center gap-2 px-3 py-2 rounded-xl bg-card/80 backdrop-blur border border-border hover:bg-card text-xs text-muted-foreground hover:text-foreground transition"
       >

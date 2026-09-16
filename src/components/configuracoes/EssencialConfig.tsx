@@ -14,11 +14,11 @@ const EssencialConfig = ({ ctx }: { ctx: SettingsCtx }) => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-2">
-          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+          <label htmlFor="essential-company-name" className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
             <Building className="w-3 h-3" /> Nome da Empresa
           </label>
           <input
-            value={ctx.form.company_name}
+            id="essential-company-name" name="company_name" autoComplete="organization" value={ctx.form.company_name}
             onChange={(e) => ctx.setForm({ ...ctx.form, company_name: e.target.value })}
             className={ctx.inputCls}
             placeholder="Ex: Minha Empresa LTDA"
@@ -26,11 +26,11 @@ const EssencialConfig = ({ ctx }: { ctx: SettingsCtx }) => {
         </div>
 
         <div className="space-y-2">
-          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+          <label htmlFor="essential-company-cnpj" className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
             <Hash className="w-3 h-3" /> CNPJ / CPF
           </label>
           <input
-            value={ctx.form.company_cnpj}
+            id="essential-company-cnpj" name="company_cnpj" value={ctx.form.company_cnpj}
             onChange={(e) => ctx.setForm({ ...ctx.form, company_cnpj: e.target.value })}
             className={ctx.inputCls}
             placeholder="00.000.000/0001-00"
@@ -38,11 +38,11 @@ const EssencialConfig = ({ ctx }: { ctx: SettingsCtx }) => {
         </div>
 
         <div className="space-y-2">
-          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+          <label htmlFor="essential-company-phone" className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
             <Phone className="w-3 h-3" /> WhatsApp Comercial
           </label>
           <input
-            value={ctx.form.company_phone}
+            id="essential-company-phone" name="company_phone" autoComplete="tel" value={ctx.form.company_phone}
             onChange={(e) => ctx.setForm({ ...ctx.form, company_phone: e.target.value })}
             className={ctx.inputCls}
             placeholder="+55 (11) 99999-9999"
@@ -50,11 +50,11 @@ const EssencialConfig = ({ ctx }: { ctx: SettingsCtx }) => {
         </div>
 
         <div className="space-y-2">
-          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+          <label htmlFor="essential-company-address" className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
             <MapPin className="w-3 h-3" /> Endereço
           </label>
           <input
-            value={ctx.form.company_address}
+            id="essential-company-address" name="company_address" autoComplete="street-address" value={ctx.form.company_address}
             onChange={(e) => ctx.setForm({ ...ctx.form, company_address: e.target.value })}
             className={ctx.inputCls}
             placeholder="Rua, Número, Bairro, Cidade - UF"

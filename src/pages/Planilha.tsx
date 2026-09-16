@@ -9,7 +9,11 @@ import { Badge } from "@/components/ui/badge";
 import ErrorState from "@/components/feedback/ErrorState";
 import { buildClientSpreadsheetRows } from "@/lib/clientSpreadsheet";
 
-const fmt = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+const safeNumber = (value: unknown) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+};
+const fmt = (v: number) => safeNumber(v).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
 const csvCell = (value: unknown) => {
   let text = String(value ?? "");
   if (/^[=+\-@]/.test(text.trimStart())) text = `'${text}`;
@@ -68,9 +72,9 @@ const Planilha = () => {
 
   const sorted = [...filtered].sort((a, b) => {
     const dir = sortDir === "asc" ? 1 : -1;
-    if (sortBy === "name") return a.name.localeCompare(b.name) * dir;
-    if (sortBy === "capital") return (a.totalCapital - b.totalCapital) * dir;
-    return (a.overdueCount - b.overdueCount) * dir;
+    if (sortBy === "name") return String(a.name || "").localeCompare(String(b.name || ""), "pt-BR") * dir;
+    if (sortBy === "capital") return (safeNumber(a.totalCapital) - safeNumber(b.totalCapital)) * dir;
+    return String(a.status || "").localeCompare(String(b.status || ""), "pt-BR") * dir;
   });
 
   const toggleSort = (col: typeof sortBy) => {
@@ -87,7 +91,7 @@ const Planilha = () => {
 
   const handleExportCSV = () => {
     const header = ["Nome", "CPF/CNPJ", "Telefone", "Status", "Capital", "Total", "Pago", "Contratos", "Parcelas Pagas", "Parcelas Total", "Atrasadas"].map(csvCell).join(",");
-    const rows = sorted.map(c => [c.name, c.cpf_cnpj, c.phone, c.status, c.totalCapital.toFixed(2), c.totalAmount.toFixed(2), c.totalPaid.toFixed(2), c.contractCount, c.paidCount, c.totalInstallments, c.overdueCount].map(csvCell).join(",")).join("\r\n");
+    const rows = sorted.map(c => [c.name, c.cpf_cnpj, c.phone, c.status, safeNumber(c.totalCapital).toFixed(2), safeNumber(c.totalAmount).toFixed(2), safeNumber(c.totalPaid).toFixed(2), c.contractCount, c.paidCount, c.totalInstallments, c.overdueCount].map(csvCell).join(",")).join("\r\n");
     const blob = new Blob([`\uFEFF${header}\r\n${rows}`], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -112,7 +116,7 @@ const Planilha = () => {
               <p className="text-muted-foreground text-sm mt-0.5">Visão completa dos dados de todos os clientes</p>
             </div>
           </div>
-          <button onClick={handleExportCSV} disabled={loading || sorted.length === 0} className="btn-premium disabled:opacity-50 disabled:cursor-not-allowed">
+          <button type="button" onClick={handleExportCSV} disabled={loading || sorted.length === 0} className="btn-premium disabled:opacity-50 disabled:cursor-not-allowed">
             <Download size={16} /> Exportar CSV
           </button>
         </div>
@@ -142,7 +146,7 @@ const Planilha = () => {
         <input type="text" placeholder="Buscar cliente..." value={search} onChange={(e) => setSearch(e.target.value)}
           aria-label="Buscar cliente na planilha" className="w-full pl-10 pr-10 py-3 rounded-2xl bg-card border border-border text-foreground placeholder:text-muted-foreground text-sm input-enhanced" />
         {search && (
-          <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-md hover:bg-accent text-muted-foreground"><X size={14} /></button>
+          <button type="button" onClick={() => setSearch("")} aria-label="Limpar busca" className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-md hover:bg-accent text-muted-foreground"><X size={14} /></button>
         )}
       </div>
 
@@ -166,9 +170,12 @@ const Planilha = () => {
                   { key: "capital" as const, label: "Capital" },
                   { key: "status" as const, label: "Status" },
                 ].map(col => (
-                  <th key={col.key} className="text-left px-4 py-3 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer hover:text-foreground transition-colors"
-                    onClick={() => toggleSort(col.key)}>
-                    <span className="flex items-center gap-1">{col.label} <ArrowUpDown size={10} className={sortBy === col.key ? "text-primary" : "opacity-30"} /></span>
+                  <th key={col.key} aria-sort={sortBy === col.key ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
+                    className="text-left px-4 py-3 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    <button type="button" onClick={() => toggleSort(col.key)}
+                      className="inline-flex items-center gap-1 rounded-md text-left hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60">
+                      {col.label} <ArrowUpDown size={10} className={sortBy === col.key ? "text-primary" : "opacity-30"} />
+                    </button>
                   </th>
                 ))}
                 <th className="text-left px-4 py-3 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Total</th>
@@ -179,9 +186,16 @@ const Planilha = () => {
             </thead>
             <tbody>
               {sorted.map((c) => {
-                const pct = c.totalInstallments > 0 ? Math.round((c.paidCount / c.totalInstallments) * 100) : 0;
+                const pct = c.totalInstallments > 0
+                  ? Math.max(0, Math.min(100, Math.round((c.paidCount / c.totalInstallments) * 100)))
+                  : 0;
                 return (
-                  <tr key={c.id} onClick={() => navigate(`/clientes/${c.id}`)}
+                  <tr key={c.id} role="link" tabIndex={0} aria-label={`Abrir cliente ${c.name}`} onClick={() => navigate(`/clientes/${c.id}`)} onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      navigate(`/clientes/${c.id}`);
+                    }
+                  }}
                     className="border-t border-border hover:bg-accent/30 cursor-pointer transition-colors group">
                     <td className="px-4 py-3">
                       <p className="font-medium text-foreground group-hover:text-primary transition-colors">{c.name}</p>

@@ -173,7 +173,7 @@ const Tarefas = () => {
           { label: "Pendentes", value: pending.length, accent: "text-warning", f: "pending" as const },
           { label: "Concluídas", value: done.length, accent: "text-success", f: "done" as const },
         ].map(s => (
-          <button key={s.label} onClick={() => setFilter(s.f)}
+          <button type="button" key={s.label} onClick={() => setFilter(s.f)}
             className={`rounded-2xl border p-4 text-center transition-all card-hover ${filter === s.f ? "border-primary/30 bg-primary/5" : "border-border bg-card"}`}>
             <p className={`text-2xl font-bold ${s.accent}`}>{s.value}</p>
             <p className="text-[11px] text-muted-foreground uppercase tracking-wider mt-0.5">{s.label}</p>
@@ -184,6 +184,9 @@ const Tarefas = () => {
       {/* Add */}
       <div className="flex gap-2">
         <input
+          id="new-task"
+          name="new_task"
+          aria-label="Nova tarefa"
           type="text"
           placeholder="Nova tarefa... (Enter para adicionar)"
           value={newTask}
@@ -201,7 +204,7 @@ const Tarefas = () => {
       {/* Clear done */}
       {done.length > 0 && (
         <div className="flex justify-end">
-          <button onClick={handleClearDone} className="text-xs text-muted-foreground hover:text-destructive transition-colors flex items-center gap-1">
+          <button type="button" onClick={handleClearDone} className="text-xs text-muted-foreground hover:text-destructive transition-colors flex items-center gap-1">
             <Trash2 size={12} /> Limpar concluídas ({done.length})
           </button>
         </div>
@@ -227,7 +230,7 @@ const Tarefas = () => {
               <div key={t.id}
                 className={`rounded-2xl border bg-card p-3.5 flex items-center gap-3 group card-hover animate-fade-in ${isDone ? "border-border/50 opacity-60" : "border-border"}`}
                 style={{ animationDelay: `${i * 30}ms` }}>
-                <button onClick={() => handleToggle(t.id, t.is_complete)} disabled={busyId === t.id}
+                <button type="button" onClick={() => handleToggle(t.id, t.is_complete)} disabled={busyId === t.id}
                   aria-label={isDone ? `Reabrir tarefa ${t.task}` : `Concluir tarefa ${t.task}`}
                   className={`shrink-0 transition-all duration-200 disabled:opacity-50 ${isDone ? "text-success" : "text-muted-foreground hover:text-primary"}`}>
                   {isDone ? <CheckCircle size={22} /> : <Circle size={22} />}
@@ -239,7 +242,7 @@ const Tarefas = () => {
                 <span className="text-[10px] text-muted-foreground/50 hidden sm:block">
                   {formatBR(t.created_at)}
                 </span>
-                <button onClick={() => handleDelete(t.id)} disabled={busyId === t.id}
+                <button type="button" onClick={() => handleDelete(t.id)} disabled={busyId === t.id}
                   aria-label={`Excluir tarefa ${t.task}`}
                   className="p-1 text-muted-foreground transition-all hover:rounded-lg hover:bg-destructive/10 hover:text-destructive disabled:opacity-50 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100">
                   <Trash2 size={14} />

@@ -19,7 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMultiTableRealtime } from "@/hooks/useRealtimeSubscription";
 import CalendarView from "@/components/cobrancas/CalendarView";
-import { formatBR, parseLocalDate } from "@/lib/dateUtils";
+import { formatBR, parseLocalDate, todayLocalISO, toDateInputValue } from "@/lib/dateUtils";
 import EmptyState from "@/components/EmptyState";
 import { SkeletonList } from "@/components/feedback/Skeletons";
 import ErrorState from "@/components/feedback/ErrorState";
@@ -32,9 +32,14 @@ import { isEmAberto, isEmAtraso } from "../../supabase/functions/_shared/install
 import { portalInstallmentAmount } from "@/lib/portalAmounts";
 import "@/cobrancas-overrides.css";
 
-const fmt = (v: number) => (Number(v) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const safeNumber = (value: unknown, fallback = 0) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+};
+const fmt = (v: number) => safeNumber(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const relTime = (iso: string) => {
   const d = new Date(iso).getTime();
+  if (!Number.isFinite(d)) return "—";
   const diff = Math.max(0, Date.now() - d);
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return "agora";
@@ -74,8 +79,8 @@ type SortKey = "priority" | "due_asc" | "due_desc" | "amount_desc" | "amount_asc
 const collectionPriority = (installment: any) => {
   const due = parseLocalDate(installment.due_date);
   const days = due ? Math.max(0, Math.floor((Date.now() - due.getTime()) / 86400000)) : 0;
-  const amount = Number(installment.amount || 0);
-  const score = Number(installment.clients?.credit_score ?? 100);
+  const amount = safeNumber(installment.amount);
+  const score = safeNumber(installment.clients?.credit_score, 100);
   return (isEmAtraso(installment) ? 10_000 : 0) + days * 100 + Math.min(amount, 10_000) + Math.max(0, 100 - score) * 10;
 };
 
@@ -107,7 +112,7 @@ const Cobrancas = () => {
   const [bulkPreview, setBulkPreview] = useState<null | { groups: { clientId: string; clientName: string; phone: string; message: string; items: any[] }[]; skipped: number; totalItems: number }>(null);
   const [bulkSending, setBulkSending] = useState(false);
   const [previewEditIdx, setPreviewEditIdx] = useState<number | null>(null);
-  const todayISO = new Date().toISOString().slice(0, 10);
+  const todayISO = todayLocalISO();
   const [cobrarAteDate, setCobrarAteDate] = useState<string>(todayISO);
   const [cobrarAteSelected, setCobrarAteSelected] = useState<Set<string>>(new Set());
   const [focoDia, setFocoDia] = useSessionPreference<boolean>(preferenceKey + "focoDia", false);
@@ -230,7 +235,7 @@ const Cobrancas = () => {
   // numa transação. Elimina os estados inconsistentes das escritas separadas.
   const markPaidOne = async (inst: any, paidValue?: number) => {
     if (!user) return;
-    const paid = Number(paidValue ?? computeLateFeeBreakdown(inst).withFees);
+    const paid = Math.max(0, safeNumber(paidValue ?? computeLateFeeBreakdown(inst).withFees));
     const { error } = await supabase.rpc("pay_installment", {
       _installment_id: inst.id,
       _paid_total: paid,
@@ -241,8 +246,8 @@ const Cobrancas = () => {
 
   const markPaidPartial = async (inst: any, amount: number) => {
     if (!user) return;
-    const prev = Number(inst.paid_amount || 0);
-    const next = Math.round((prev + amount) * 100) / 100;
+    const prev = Math.max(0, safeNumber(inst.paid_amount));
+    const next = Math.round((prev + Math.max(0, safeNumber(amount))) * 100) / 100;
     const { error } = await supabase.rpc("pay_installment", {
       _installment_id: inst.id,
       _paid_total: next,
@@ -313,11 +318,11 @@ const Cobrancas = () => {
       return;
     }
     const { withFees, base } = computeLateFeeBreakdown(inst);
-    const appliedDiscount = Math.max(0, Math.min(Number(feeDiscount || 0), Math.max(0, withFees - base)));
+    const appliedDiscount = Math.max(0, Math.min(safeNumber(feeDiscount), Math.max(0, withFees - base)));
     const totalDue = Math.round((withFees - appliedDiscount) * 100) / 100;
     const alreadyPaid = Number(inst.paid_amount || 0);
     const remaining = Math.max(0, Math.round((totalDue - alreadyPaid) * 100) / 100);
-    const value = Math.max(0, Number(paidValue ?? remaining));
+    const value = Math.max(0, safeNumber(paidValue ?? remaining));
     if (value <= 0 && totalDue > alreadyPaid + 0.005) { toast({ title: "Informe um valor válido", variant: "destructive" }); return; }
 
     const isFull = value + 0.005 >= remaining;
@@ -425,7 +430,7 @@ const Cobrancas = () => {
     if (withPix && (profile as any)?.pix_key) {
       navigator.clipboard?.writeText((profile as any).pix_key).catch(() => {});
     }
-    window.open(`https://wa.me/${phone.startsWith("55") ? phone : "55" + phone}?text=${encodeURIComponent(message)}`, "_blank");
+    window.open(`https://wa.me/${phone.startsWith("55") ? phone : "55" + phone}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
     logAttempt(inst, "whatsapp", message);
   };
 
@@ -434,7 +439,7 @@ const Cobrancas = () => {
     const totalSub = inst.contracts?.num_installments;
     const subject = `Cobrança - Parcela ${inst.installment_number}${totalSub ? ` de ${totalSub}` : ""}`;
     const body = buildMessage(inst, { includePix: true });
-    window.open(`mailto:${inst.client_email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, "_blank");
+    window.open(`mailto:${inst.client_email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, "_blank", "noopener,noreferrer");
     logAttempt(inst, "email", body);
   };
 
@@ -534,7 +539,7 @@ const Cobrancas = () => {
     if (pix) navigator.clipboard?.writeText(pix).catch(() => {});
     bulkPreview.groups.forEach((g, idx) => {
       setTimeout(() => {
-        window.open(`https://wa.me/${g.phone}?text=${encodeURIComponent(g.message)}`, "_blank");
+        window.open(`https://wa.me/${g.phone}?text=${encodeURIComponent(g.message)}`, "_blank", "noopener,noreferrer");
         g.items.forEach((i: any) => logAttempt(i, "whatsapp", g.message));
       }, idx * 400);
     });
@@ -611,8 +616,8 @@ const Cobrancas = () => {
     if (sort === "priority") arr = [...arr].sort((a, b) => collectionPriority(b) - collectionPriority(a));
     else if (sort === "due_asc") arr = [...arr].sort((a, b) => ts(a.due_date) - ts(b.due_date));
     else if (sort === "due_desc") arr = [...arr].sort((a, b) => ts(b.due_date) - ts(a.due_date));
-    else if (sort === "amount_desc") arr = [...arr].sort((a, b) => Number(b.amount) - Number(a.amount));
-    else if (sort === "amount_asc") arr = [...arr].sort((a, b) => Number(a.amount) - Number(b.amount));
+    else if (sort === "amount_desc") arr = [...arr].sort((a, b) => safeNumber(b.amount) - safeNumber(a.amount));
+    else if (sort === "amount_asc") arr = [...arr].sort((a, b) => safeNumber(a.amount) - safeNumber(b.amount));
     else if (sort === "overdue_days") arr = [...arr].sort((a, b) => overdueDays(b) - overdueDays(a));
     return arr;
   }, [installments, filter, period, sort, dSearch, focoDia, bucket]);
@@ -639,18 +644,18 @@ const Cobrancas = () => {
       if (inst.contract_id && !set.has(inst.contract_id)) {
         set.add(inst.contract_id);
         const c = inst.contracts || {};
-        agg.loaned += Number(c.capital || 0);
-        agg.totalInstallments += Number(c.num_installments || 0);
+        agg.loaned += safeNumber(c.capital);
+        agg.totalInstallments += safeNumber(c.num_installments);
       }
-      agg.grossExpected += Number(inst.amount || 0);
+      agg.grossExpected += safeNumber(inst.amount);
       if (inst.status === "paid") {
         agg.paidCount += 1;
         // Usa o valor contratual da parcela (sem multa) para "recebido"
-        agg.paidAmount += Number(inst.amount || 0);
+        agg.paidAmount += safeNumber(inst.amount);
       }
       if (inst.status === "overdue") {
         agg.overdueCount += 1;
-        agg.overdueAmount += Number(inst.amount || 0);
+        agg.overdueAmount += safeNumber(inst.amount);
         agg.overdueFees += computeLateFee(inst);
       }
     }
@@ -667,7 +672,7 @@ const Cobrancas = () => {
       const g = map.get(inst.client_id)!;
       g.items.push(inst);
       if (isEmAberto(inst)) {
-        const base = Number(inst.amount) || 0;
+        const base = safeNumber(inst.amount);
         const fee = computeLateFee(inst);
         g.total += base;
         g.totalFees += fee;
@@ -695,8 +700,8 @@ const Cobrancas = () => {
     groups.forEach((g: any) => {
       g.items.sort((a: any, b: any) => {
         if (sort === "priority") return collectionPriority(b) - collectionPriority(a);
-        if (sort === "amount_desc") return Number(b.amount) - Number(a.amount);
-        if (sort === "amount_asc") return Number(a.amount) - Number(b.amount);
+        if (sort === "amount_desc") return safeNumber(b.amount) - safeNumber(a.amount);
+        if (sort === "amount_asc") return safeNumber(a.amount) - safeNumber(b.amount);
         if (sort === "overdue_days") {
           const da = parseLocalDate(a.due_date) ? Math.max(0, Math.floor((Date.now() - parseLocalDate(a.due_date)!.getTime()) / 86400000)) : 0;
           const db = parseLocalDate(b.due_date) ? Math.max(0, Math.floor((Date.now() - parseLocalDate(b.due_date)!.getTime()) / 86400000)) : 0;
@@ -717,7 +722,7 @@ const Cobrancas = () => {
     const totalPending = pending.reduce((s: number, i: any) => s + portalInstallmentAmount(i), 0)
       + overdue.reduce((s: number, i: any) => s + portalInstallmentAmount(i), 0);
     const totalOverdue = overdue.reduce((s: number, i: any) => s + portalInstallmentAmount(i), 0);
-    const totalPaid = paid.reduce((s: number, i: any) => s + Number(i.paid_amount || i.amount), 0);
+    const totalPaid = paid.reduce((s: number, i: any) => s + safeNumber(i.paid_amount ?? i.amount), 0);
     const totalContracts = installments.length;
     const inadimplencia = totalContracts > 0 ? (overdue.length / totalContracts) * 100 : 0;
     return {
@@ -822,7 +827,7 @@ const Cobrancas = () => {
     let totalFees = 0;
     const lines = unpaid.map((i: any) => {
       const bd = computeLateFeeBreakdown(i);
-      const paid = Number(i.paid_amount || 0);
+      const paid = safeNumber(i.paid_amount);
       const due = Math.max(0, Math.round((bd.withFees - paid) * 100) / 100);
       total += due;
       totalFees += bd.total;
@@ -832,7 +837,7 @@ const Cobrancas = () => {
     const portalUrl = `${window.location.origin}/portal-cliente?o=${user!.id}`;
     const feesBlock = totalFees > 0 ? `\nJuros de atraso incluídos: R$ ${fmt(totalFees)}` : "";
     const msg = `Olá ${group.client_name}, tudo bem?\n\nIdentificamos ${unpaid.length} parcelas pendentes totalizando R$ ${fmt(total)}:\n${lines}${feesBlock}\n\nVocê pode regularizar via PIX ou pelo portal: ${portalUrl}`;
-    window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, "_blank");
+    window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, "_blank", "noopener,noreferrer");
   };
 
   const toggleGroupSelect = (group: any) => {
@@ -1037,6 +1042,10 @@ const Cobrancas = () => {
               <div className="relative flex-1 min-w-0 group">
                 <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" />
                 <input
+                  id="collections-search"
+                  name="collections_search"
+                  aria-label="Buscar cobranças"
+                  autoComplete="off"
                   ref={searchRef}
                   type="text"
                   placeholder="Buscar por cliente, parcela # ou valor…"
@@ -1046,7 +1055,7 @@ const Cobrancas = () => {
                 />
                 <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
                   {search ? (
-                    <button aria-label="Limpar busca" onClick={() => setSearch("")} className="p-1.5 rounded-md hover:bg-accent text-muted-foreground"><X size={14} /></button>
+                    <button type="button" aria-label="Limpar busca" onClick={() => setSearch("")} className="p-1.5 rounded-md hover:bg-accent text-muted-foreground"><X size={14} /></button>
                   ) : (
                     <kbd className="hidden md:inline-flex items-center px-1.5 py-0.5 rounded-md border border-border/40 bg-muted/40 text-[10px] font-mono text-muted-foreground">/</kbd>
                   )}
@@ -1058,6 +1067,8 @@ const Cobrancas = () => {
                 <div className="relative min-w-0 flex-1 xl:flex-none">
                   <ArrowUpDown size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                   <select
+                    id="collections-sort"
+                    name="collections_sort"
                     value={sort}
                     onChange={(e) => setSort(e.target.value as SortKey)}
                     className="w-full appearance-none pl-8 pr-8 h-11 rounded-xl text-xs font-semibold bg-background/60 text-foreground border border-border/50 hover:border-primary/30 focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer"
@@ -1243,7 +1254,7 @@ const Cobrancas = () => {
             // Next unpaid due date
             const nextUnpaid = [...groupSelectable]
               .filter((x: any) => !!x.due_date)
-              .sort((a: any, b: any) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())[0];
+              .sort((a: any, b: any) => (parseLocalDate(a.due_date)?.getTime() ?? Number.MAX_SAFE_INTEGER) - (parseLocalDate(b.due_date)?.getTime() ?? Number.MAX_SAFE_INTEGER))[0];
             const nextDueDate = nextUnpaid?.due_date ? parseLocalDate(nextUnpaid.due_date) : null;
             const nextDueLabel = nextDueDate && !isNaN(nextDueDate.getTime())
               ? nextDueDate.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })
@@ -1255,7 +1266,9 @@ const Cobrancas = () => {
               : "ring-border bg-muted/40 text-muted-foreground";
             // Extra metrics
             const maxDaysLate = groupSelectable.reduce((max: number, it: any) => {
-              const d = Math.floor((Date.now() - new Date(it.due_date + "T00:00:00").getTime()) / 86400000);
+              const due = parseLocalDate(it.due_date);
+              if (!due) return max;
+              const d = Math.floor((Date.now() - due.getTime()) / 86400000);
               return d > max ? d : max;
             }, 0);
             const avgTicket = agg && totalActiveInst > 0 ? (agg.grossExpected / totalActiveInst) : 0;
@@ -1686,7 +1699,7 @@ const Cobrancas = () => {
                         const d = new Date();
                         if (p.days === -1) { d.setMonth(d.getMonth() + 1, 0); }
                         else d.setDate(d.getDate() + p.days);
-                        setCobrarAteDate(d.toISOString().slice(0, 10));
+                        setCobrarAteDate(toDateInputValue(d));
                         setCobrarAteSelected(new Set());
                       }}
                       className="px-2.5 py-1 rounded-lg bg-muted/30 text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors"

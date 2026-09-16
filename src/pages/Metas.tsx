@@ -51,7 +51,11 @@ const Metas = () => {
     return () => { supabase.removeChannel(ch); };
   }, [user]);
 
-  const fmt = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const safeNumber = (value: unknown) => {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : 0;
+  };
+  const fmt = (v: number) => safeNumber(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const inputCls = "w-full px-4 py-3 rounded-2xl bg-card border border-border text-foreground placeholder:text-muted-foreground text-sm input-enhanced";
 
   const handleAdd = async () => {
@@ -117,10 +121,10 @@ const Metas = () => {
     fetchGoals();
   };
 
-  const totalTarget = goals.reduce((s, g) => s + Number(g.target_amount), 0);
-  const totalCurrent = goals.reduce((s, g) => s + Number(g.current_amount), 0);
+  const totalTarget = goals.reduce((s, g) => s + safeNumber(g.target_amount), 0);
+  const totalCurrent = goals.reduce((s, g) => s + safeNumber(g.current_amount), 0);
   const overallPct = totalTarget > 0 ? Math.min((totalCurrent / totalTarget) * 100, 100) : 0;
-  const completedGoals = goals.filter(g => Number(g.current_amount) >= Number(g.target_amount)).length;
+  const completedGoals = goals.filter(g => safeNumber(g.current_amount) >= safeNumber(g.target_amount) && safeNumber(g.target_amount) > 0).length;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -135,7 +139,7 @@ const Metas = () => {
               <p className="text-muted-foreground text-sm mt-0.5">Defina e acompanhe suas metas financeiras</p>
             </div>
           </div>
-          <button onClick={() => setShowForm(!showForm)} className="btn-premium w-full sm:w-auto justify-center">
+          <button type="button" onClick={() => setShowForm(!showForm)} className="btn-premium w-full sm:w-auto justify-center">
             <Plus size={16} /> Nova Meta
           </button>
         </div>
@@ -188,16 +192,16 @@ const Metas = () => {
         <div className="rounded-2xl border border-border bg-card p-6 space-y-4 animate-scale-in">
           <div>
             <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Descrição da Meta</label>
-            <input type="text" value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Ex: Lucrar R$ 10.000 este mês" className={inputCls} />
+            <input type="text" name="goal_description" aria-label="Descrição da meta" value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Ex: Lucrar R$ 10.000 este mês" className={inputCls} />
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Valor Alvo (R$)</label>
-              <input type="text" inputMode="decimal" value={target} onChange={(e) => setTarget(e.target.value)} placeholder="10.000,00" className={inputCls} />
+              <input type="text" name="goal_target" aria-label="Valor alvo da meta" inputMode="decimal" value={target} onChange={(e) => setTarget(e.target.value)} placeholder="10.000,00" className={inputCls} />
             </div>
             <div>
               <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Frequência</label>
-              <select value={frequency} onChange={(e) => setFrequency(e.target.value)} className={inputCls}>
+              <select name="goal_frequency" aria-label="Frequência da meta" value={frequency} onChange={(e) => setFrequency(e.target.value)} className={inputCls}>
                 <option value="Diária">Diária</option>
                 <option value="Semanal">Semanal</option>
                 <option value="Mensal">Mensal</option>
@@ -207,7 +211,7 @@ const Metas = () => {
           </div>
           <div className="flex gap-2">
             <LoadingButton onClick={handleAdd} loading={saving} loadingText="Salvando…">Criar Meta</LoadingButton>
-            <button onClick={() => setShowForm(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">Cancelar</button>
+            <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">Cancelar</button>
           </div>
         </div>
       )}
@@ -227,11 +231,13 @@ const Metas = () => {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 stagger-fade-in">
           {goals.map((g) => {
-            const pct = g.target_amount > 0 ? Math.min((Number(g.current_amount) / Number(g.target_amount)) * 100, 100) : 0;
+            const targetAmount = safeNumber(g.target_amount);
+            const currentAmount = safeNumber(g.current_amount);
+            const pct = targetAmount > 0 ? Math.min(Math.max((currentAmount / targetAmount) * 100, 0), 100) : 0;
             const isComplete = pct >= 100;
             return (
               <div key={g.id} className={`rounded-2xl border bg-card p-5 relative group card-hover ${isComplete ? "border-success/30" : "border-border"}`}>
-                <button onClick={() => handleDelete(g.id)} disabled={updatingId === g.id}
+                <button type="button" onClick={() => handleDelete(g.id)} disabled={updatingId === g.id}
                   aria-label={`Excluir meta ${g.description}`}
                   className="absolute right-3 top-3 rounded-lg p-1.5 text-muted-foreground transition-all hover:bg-destructive/10 hover:text-destructive disabled:opacity-50 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100">
                   <X size={14} />
@@ -261,24 +267,24 @@ const Metas = () => {
                 {/* Quick increment */}
                 {incrementId === g.id ? (
                   <div className="mt-3 flex items-center gap-2 animate-fade-in">
-                    <input type="text" inputMode="decimal" value={incrementVal} onChange={(e) => setIncrementVal(e.target.value)}
+                    <input type="text" name="goal_increment" aria-label="Valor do incremento da meta" inputMode="decimal" value={incrementVal} onChange={(e) => setIncrementVal(e.target.value)}
                       placeholder="Valor" className="flex-1 px-3 py-2 rounded-lg bg-card border border-border text-sm text-foreground" autoFocus />
-                    <button onClick={() => handleIncrement(g.id, Number(g.current_amount))} disabled={updatingId === g.id}
+                    <button type="button" onClick={() => handleIncrement(g.id, currentAmount)} disabled={updatingId === g.id}
                       aria-label="Confirmar atualização da meta" className="px-3 py-2 rounded-lg bg-success/10 text-success text-xs font-semibold hover:bg-success/20 transition-all disabled:opacity-50">
                       <Plus size={14} />
                     </button>
-                    <button onClick={() => setIncrementId(null)}
+                    <button type="button" onClick={() => setIncrementId(null)}
                       className="px-2 py-2 rounded-lg text-muted-foreground hover:bg-accent text-xs"><X size={14} /></button>
                   </div>
                 ) : (
                   <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <button onClick={() => { setIncrementId(g.id); setIncrementVal(""); }}
+                    <button type="button" onClick={() => { setIncrementId(g.id); setIncrementVal(""); }}
                       className="flex items-center gap-1.5 text-xs text-primary hover:bg-primary/10 px-3 py-1.5 rounded-lg font-medium transition-all">
                       <TrendingUp size={12} /> Atualizar valor
                     </button>
                     {[100, 500, 1000].map(v => (
                       <button key={v} disabled={updatingId === g.id} onClick={() => {
-                        void handleIncrement(g.id, Number(g.current_amount), String(v));
+                        void handleIncrement(g.id, currentAmount, String(v));
                       }}
                         className="text-[10px] px-2 py-1 rounded-md bg-accent/50 text-muted-foreground hover:text-foreground hover:bg-accent transition-all disabled:opacity-50">
                         +{v}

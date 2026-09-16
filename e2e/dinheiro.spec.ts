@@ -16,9 +16,12 @@ import { test, expect } from "@playwright/test";
 
 const SUPABASE =
   process.env.E2E_SUPABASE_URL ??
+  process.env.VITE_SUPABASE_URL ??
   "https://credmaisapp-supabase.fcoipz.easypanel.host";
 const ANON =
-  process.env.E2E_ANON_KEY ?? "";
+  process.env.E2E_ANON_KEY ??
+  process.env.VITE_SUPABASE_PUBLISHABLE_KEY ??
+  "";
 
 test.describe("rotas de administração não podem estar abertas", () => {
   // A admin-create-lifetime já rodou exposta na internet: criava conta vitalícia

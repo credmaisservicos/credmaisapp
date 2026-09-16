@@ -12,6 +12,7 @@ import EmptyState from "@/components/EmptyState";
 import { differenceInDays } from "date-fns";
 import { computeLateFee } from "@/lib/lateFee";
 import ErrorState from "@/components/feedback/ErrorState";
+import { parseLocalDate } from "@/lib/dateUtils";
 
 interface Installment {
   id: string;
@@ -33,6 +34,15 @@ interface Client {
   phone: string | null;
   credit_score: number | null;
 }
+
+const safeNumber = (value: unknown) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+};
+
+const safeDate = (value: unknown) => {
+  return parseLocalDate(typeof value === "string" || value instanceof Date ? value : null);
+};
 
 interface OverdueRow {
   client: Client;
@@ -130,10 +140,12 @@ const InadimplenciaPanel = () => {
     let total = 0;
 
     for (const inst of installments) {
-      const days = differenceInDays(today, new Date(inst.due_date));
+      const dueDate = safeDate(inst.due_date);
+      if (!dueDate) continue;
+      const days = differenceInDays(today, dueDate);
       if (days < 1) continue;
       const liveFee = computeLateFee(inst as any, today);
-      const due = Number(inst.amount) + liveFee;
+      const due = safeNumber(inst.amount) + safeNumber(liveFee);
       total += due;
       const bucket: OverdueRow["bucket"] = days <= 30 ? "0-30" : days <= 60 ? "31-60" : days <= 90 ? "61-90" : "90+";
       buckets[bucket] += due;
@@ -173,7 +185,7 @@ const InadimplenciaPanel = () => {
     const num = (c.whatsapp || c.phone || "").replace(/\D/g, "");
     if (!num) return;
     const msg = encodeURIComponent(`Olá ${c.name}, identificamos um saldo em aberto de ${fmtBRL(totalDue)}. Podemos regularizar?`);
-    window.open(`https://wa.me/55${num}?text=${msg}`, "_blank");
+    window.open(`https://wa.me/55${num}?text=${msg}`, "_blank", "noopener,noreferrer");
   };
 
   const maxBucket = Math.max(...Object.values(byBucket), 1);

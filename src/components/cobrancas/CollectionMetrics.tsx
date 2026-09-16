@@ -4,8 +4,16 @@ import { useAuth } from "@/contexts/AuthContext";
 import { fetchAll } from "@/lib/fetchAll";
 import { TrendingUp, MessageSquare, Mail, Target, Sparkles, Activity } from "lucide-react";
 import ErrorState from "@/components/feedback/ErrorState";
+import { parseLocalDate } from "@/lib/dateUtils";
 
-const fmtPct = (n: number) => `${n.toFixed(1)}%`;
+const safeNumber = (value: unknown) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+};
+const safeDate = (value: unknown) => {
+  return parseLocalDate(typeof value === "string" || value instanceof Date ? value : null)?.getTime() ?? null;
+};
+const fmtPct = (n: number) => `${safeNumber(n).toFixed(1)}%`;
 
 const CollectionMetrics = () => {
   const { user } = useAuth();
@@ -43,24 +51,28 @@ const CollectionMetrics = () => {
 
       const recoveredClients = new Set(
         paid?.filter((p: any) =>
-          logs?.some((l: any) => l.entity_id === p.client_id && new Date(l.created_at) <= new Date(p.paid_at))
+        logs?.some((l: any) => l.entity_id === p.client_id && safeDate(l.created_at) !== null && safeDate(p.paid_at) !== null && safeDate(l.created_at)! <= safeDate(p.paid_at)!)
         ).map((p: any) => p.client_id)
       ).size;
 
       const recoveryRate = contactedClients ? (recoveredClients / contactedClients) * 100 : 0;
       const recoveredAmount = paid?.reduce((s: number, p: any) =>
-        logs?.some((l: any) => l.entity_id === p.client_id) ? s + Number(p.amount) : s, 0
+        logs?.some((l: any) => l.entity_id === p.client_id) ? s + safeNumber(p.amount) : s, 0
       ) || 0;
 
       // Avg response time (msg -> payment, hours)
       let avgHours = 0; let respCount = 0;
       paid?.forEach((p: any) => {
         const firstMsg = logs
-          ?.filter((l: any) => l.entity_id === p.client_id && new Date(l.created_at) <= new Date(p.paid_at))
-          ?.sort((a: any, b: any) => +new Date(a.created_at) - +new Date(b.created_at))[0];
+          ?.filter((l: any) => l.entity_id === p.client_id && safeDate(l.created_at) !== null && safeDate(p.paid_at) !== null && safeDate(l.created_at)! <= safeDate(p.paid_at)!)
+          ?.sort((a: any, b: any) => (safeDate(a.created_at) ?? 0) - (safeDate(b.created_at) ?? 0))[0];
         if (firstMsg) {
-          avgHours += (+new Date(p.paid_at) - +new Date(firstMsg.created_at)) / 3600000;
-          respCount++;
+          const paidAt = safeDate(p.paid_at);
+          const messageAt = safeDate(firstMsg.created_at);
+          if (paidAt !== null && messageAt !== null && paidAt >= messageAt) {
+            avgHours += (paidAt - messageAt) / 3600000;
+            respCount++;
+          }
         }
       });
       avgHours = respCount ? avgHours / respCount : 0;

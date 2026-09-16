@@ -15,7 +15,14 @@ export function useCommercial(clientId?: string) {
       fetchAll<BusinessReceivable>((f,t)=>table('business_receivables').order('due_date').range(f,t)),
       fetchAll<BusinessPayment>((f,t)=>table('business_payments').order('created_at',{ascending:false}).range(f,t)),
       fetchAll<Collateral>((f,t)=>(clientId?table('loan_collateral').eq('client_id',clientId):table('loan_collateral')).order('received_at',{ascending:false}).range(f,t)),
-    ]);return {assets,operations,receivables,payments,collateral};
+    ]);
+    // A operação legada pode não ter client_id; normalize antes de qualquer
+    // renderização para que a tela não quebre ao montar o resumo.
+    const normalizedOperations = operations.map((operation) => ({
+      ...operation,
+      client_id: String(operation.client_id || ""),
+    }));
+    return {assets,operations: normalizedOperations,receivables,payments,collateral};
   }});
   const refresh=()=>Promise.all(['commercial','carteira-business','client-transactions','dashboard-data'].map(key=>queryClient.invalidateQueries({queryKey:[key]})));
   return {...query,data:query.data||{assets:[],operations:[],receivables:[],payments:[],collateral:[]},refresh};

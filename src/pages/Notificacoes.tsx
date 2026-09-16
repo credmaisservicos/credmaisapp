@@ -8,6 +8,7 @@ import EmptyState from "@/components/EmptyState";
 import ErrorState from "@/components/feedback/ErrorState";
 import { notificationCategory, safeNotificationPath } from "@/lib/notification";
 import { fetchAll } from "@/lib/fetchAll";
+import { formatBR, parseLocalDate } from "@/lib/dateUtils";
 import "@/notificacoes-overrides.css";
 
 interface NotificationItem {
@@ -45,6 +46,13 @@ const typeFilters = [
 ];
 
 const PAGE_SIZE = 30;
+
+const notificationDate = (value: unknown) => {
+  const date = parseLocalDate(typeof value === "string" ? value : null);
+  return date
+    ? date.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })
+    : "data indisponível";
+};
 
 const Notificacoes = () => {
   const { user } = useAuth();
@@ -95,7 +103,7 @@ const Notificacoes = () => {
       if (typeFilter !== "all" && notificationCategory(n.type) !== typeFilter) return false;
       if (search) {
         const q = search.toLowerCase();
-        if (!n.message.toLowerCase().includes(q) && !(n.from || "").toLowerCase().includes(q)) return false;
+        if (!String(n.message || "").toLowerCase().includes(q) && !(n.from || "").toLowerCase().includes(q)) return false;
       }
       return true;
     });
@@ -112,7 +120,10 @@ const Notificacoes = () => {
   const stats = useMemo(() => ({
     total: items.length,
     unread: items.filter((n) => !n.is_read).length,
-    today: items.filter((n) => new Date(n.created_at).toDateString() === new Date().toDateString()).length,
+    today: items.filter((n) => {
+      const date = parseLocalDate(n.created_at);
+      return !!date && formatBR(date) === formatBR(new Date());
+    }).length,
     urgent: items.filter((n) => !n.is_read && ["error", "warning"].includes(notificationCategory(n.type))).length,
   }), [items]);
 
@@ -167,7 +178,7 @@ const Notificacoes = () => {
     setActionBusy(false);
   };
 
-  const fmtDate = (s: string) => new Date(s).toLocaleString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+  const fmtDate = (s: string) => notificationDate(s);
 
   return (
     <div className="notifications-page lg:p-6 space-y-5">
@@ -186,6 +197,7 @@ const Notificacoes = () => {
           <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:items-center">
             {stats.unread > 0 && (
               <button
+                type="button"
                 onClick={() => markRead(items.filter((n) => !n.is_read).map((n) => n.id), true)}
                 disabled={actionBusy}
                 className="text-xs font-semibold px-3 py-2 rounded-xl bg-primary/15 text-primary hover:bg-primary/25 transition flex items-center gap-1.5 border border-primary/20"
@@ -195,6 +207,7 @@ const Notificacoes = () => {
             )}
             {items.some((n) => n.is_read) && (
               <button
+                type="button"
                 onClick={() => remove(items.filter((n) => n.is_read).map((n) => n.id))}
                 disabled={actionBusy}
                 className="text-xs font-semibold px-3 py-2 rounded-xl bg-muted/40 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition flex items-center gap-1.5"
@@ -209,6 +222,7 @@ const Notificacoes = () => {
       {/* Stats */}
       <div className="notifications-stats grid grid-cols-2 lg:grid-cols-4 gap-3">
         <button
+          type="button"
           onClick={() => setStatusFilter("all")}
           className={`text-left rounded-2xl border p-4 transition ${statusFilter === "all" ? "border-primary/40 bg-primary/5" : "border-border bg-card hover:border-border/80"}`}
         >
@@ -216,6 +230,7 @@ const Notificacoes = () => {
           <div className="text-2xl font-bold text-foreground mt-1">{stats.total}</div>
         </button>
         <button
+          type="button"
           onClick={() => setStatusFilter("unread")}
           className={`text-left rounded-2xl border p-4 transition ${statusFilter === "unread" ? "border-primary/40 bg-primary/5" : "border-border bg-card hover:border-border/80"}`}
         >
@@ -227,6 +242,7 @@ const Notificacoes = () => {
           <div className="text-2xl font-bold text-success mt-1">{stats.today}</div>
         </div>
         <button
+          type="button"
           onClick={() => { setStatusFilter("unread"); setTypeFilter("error"); }}
           className={`text-left rounded-2xl border p-4 transition ${typeFilter === "error" && statusFilter === "unread" ? "border-destructive/40 bg-destructive/5" : "border-border bg-card hover:border-destructive/30"}`}
         >
@@ -242,26 +258,30 @@ const Notificacoes = () => {
           <div className="flex items-center gap-2 flex-1 min-w-0 sm:min-w-[200px] px-3 py-2 rounded-xl bg-muted/30 border border-border/40">
             <Search size={14} className="text-muted-foreground" />
             <input
+              id="notifications-search"
+              name="notifications_search"
+              autoComplete="off"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar por mensagem ou remetente..."
               aria-label="Buscar notificações" className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60"
             />
             {search && (
-              <button onClick={() => setSearch("")} className="text-muted-foreground hover:text-foreground">
+              <button type="button" aria-label="Limpar busca de notificações" onClick={() => setSearch("")} className="text-muted-foreground hover:text-foreground">
                 <X size={14} />
               </button>
             )}
           </div>
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
-          <div className="notification-status-switch" role="group" aria-label="Status"><button className={statusFilter === "all" ? "is-active" : ""} onClick={() => setStatusFilter("all")}>Todas</button><button className={statusFilter === "unread" ? "is-active" : ""} onClick={() => setStatusFilter("unread")}>Não lidas</button><button className={statusFilter === "read" ? "is-active" : ""} onClick={() => setStatusFilter("read")}>Lidas</button></div>
+          <div className="notification-status-switch" role="group" aria-label="Status"><button type="button" aria-pressed={statusFilter === "all"} className={statusFilter === "all" ? "is-active" : ""} onClick={() => setStatusFilter("all")}>Todas</button><button type="button" aria-pressed={statusFilter === "unread"} className={statusFilter === "unread" ? "is-active" : ""} onClick={() => setStatusFilter("unread")}>Não lidas</button><button type="button" aria-pressed={statusFilter === "read"} className={statusFilter === "read" ? "is-active" : ""} onClick={() => setStatusFilter("read")}>Lidas</button></div>
           <Filter size={12} className="text-muted-foreground mr-1" />
           {typeFilters.map((f) => {
             const Icon = f.icon;
             const active = typeFilter === f.value;
             return (
               <button
+                type="button"
                 key={f.value}
                 onClick={() => setTypeFilter(f.value)}
                 className={`text-[11px] font-semibold px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition ${
@@ -285,18 +305,21 @@ const Notificacoes = () => {
           </span>
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={() => markRead(Array.from(selected), true)}
               className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-card hover:bg-muted/50 transition flex items-center gap-1.5"
             >
               <Check size={12} /> Marcar lidas
             </button>
             <button
+              type="button"
               onClick={() => remove(Array.from(selected))}
               className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20 transition flex items-center gap-1.5"
             >
               <Trash2 size={12} /> Excluir
             </button>
             <button
+              type="button"
               onClick={() => setSelected(new Set())}
               className="text-xs px-2 py-1.5 rounded-lg hover:bg-muted/50 transition text-muted-foreground"
             >
@@ -311,6 +334,9 @@ const Notificacoes = () => {
         {paginated.length > 0 && (
           <div className="px-4 py-2.5 border-b border-border/40 bg-muted/10 flex items-center gap-3">
             <input
+              id="notifications-select-page"
+              name="notifications_select_page"
+              aria-label={allSelectedOnPage ? "Desmarcar todas as notificações" : "Selecionar todas as notificações"}
               type="checkbox"
               checked={allSelectedOnPage}
               onChange={toggleSelectAll}
@@ -360,6 +386,9 @@ const Notificacoes = () => {
                 >
                   <div className="flex gap-3 items-start">
                     <input
+                      id={`notification-select-${n.id}`}
+                      name={`notification_select_${n.id}`}
+                      aria-label={`Selecionar notificação: ${n.message}`}
                       type="checkbox"
                       checked={isSelected}
                       onChange={() => toggleOne(n.id)}
@@ -397,6 +426,8 @@ const Notificacoes = () => {
                     </div>
                     <div className="flex items-center gap-0.5 opacity-100 transition-opacity sm:opacity-60 sm:group-hover:opacity-100">
                       <button
+                        type="button"
+                        aria-label={n.is_read ? "Marcar notificação como não lida" : "Marcar notificação como lida"}
                         onClick={() => markRead([n.id], !n.is_read)}
                         disabled={actionBusy}
                         className="p-1.5 rounded-lg hover:bg-muted/60 text-muted-foreground hover:text-success transition"
@@ -405,6 +436,8 @@ const Notificacoes = () => {
                         <Check size={13} />
                       </button>
                       <button
+                        type="button"
+                        aria-label={`Excluir notificação: ${n.message}`}
                         onClick={() => remove([n.id])}
                         disabled={actionBusy}
                         className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition"
@@ -420,6 +453,7 @@ const Notificacoes = () => {
             {hasMore && (
               <div className="p-4 text-center">
                 <button
+                  type="button"
                   onClick={() => setPage(page + 1)}
                   className="text-xs font-semibold px-4 py-2 rounded-xl bg-muted/40 text-muted-foreground hover:bg-muted/60 hover:text-foreground transition"
                 >

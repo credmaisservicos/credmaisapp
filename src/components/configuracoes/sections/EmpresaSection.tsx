@@ -25,18 +25,18 @@ const EmpresaSection = ({ ctx }: SectionProps) => {
               <h2 className="font-semibold text-foreground">Dados da Empresa</h2>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div><label className="text-label mb-1.5 block">Nome da Empresa</label><input value={form.company_name} onChange={(e) => setForm({ ...form, company_name: e.target.value })} placeholder="Minha Empresa" className={inputCls} /></div>
-              <div><label className="text-label mb-1.5 block">CNPJ</label><input value={form.company_cnpj} onChange={(e) => setForm({ ...form, company_cnpj: e.target.value })} placeholder="00.000.000/0001-00" className={inputCls} /></div>
+              <div><label htmlFor="company-name" className="text-label mb-1.5 block">Nome da Empresa</label><input id="company-name" name="company_name" autoComplete="organization" value={form.company_name} onChange={(e) => setForm({ ...form, company_name: e.target.value })} placeholder="Minha Empresa" className={inputCls} /></div>
+              <div><label htmlFor="company-cnpj" className="text-label mb-1.5 block">CNPJ</label><input id="company-cnpj" name="company_cnpj" value={form.company_cnpj} onChange={(e) => setForm({ ...form, company_cnpj: e.target.value })} placeholder="00.000.000/0001-00" className={inputCls} /></div>
               <div className="sm:col-span-2">
-                <label className="text-label mb-1.5 block">Endereço</label>
-                <input value={form.company_address} onChange={(e) => setForm({ ...form, company_address: e.target.value })} placeholder="Rua, número, bairro, cidade/UF" className={inputCls} />
+                <label htmlFor="company-address" className="text-label mb-1.5 block">Endereço</label>
+                <input id="company-address" name="company_address" autoComplete="street-address" value={form.company_address} onChange={(e) => setForm({ ...form, company_address: e.target.value })} placeholder="Rua, número, bairro, cidade/UF" className={inputCls} />
                 <p className="text-[10px] text-muted-foreground mt-1">
                   Entra na qualificação do credor no contrato, pela variável <code className="bg-muted px-1 rounded">{"{{empresa_endereco}}"}</code>. Preencha uma vez e vale para todos.
                 </p>
               </div>
               <div>
-                <label className="text-label mb-1.5 block">Telefone</label>
-                <input value={form.company_phone} onChange={(e) => setForm({ ...form, company_phone: e.target.value })} placeholder="(00) 00000-0000" className={inputCls} />
+                <label htmlFor="company-phone" className="text-label mb-1.5 block">Telefone</label>
+                <input id="company-phone" name="company_phone" autoComplete="tel" value={form.company_phone} onChange={(e) => setForm({ ...form, company_phone: e.target.value })} placeholder="(00) 00000-0000" className={inputCls} />
                 <p className="text-[10px] text-muted-foreground mt-1">Variável <code className="bg-muted px-1 rounded">{"{{empresa_telefone}}"}</code>.</p>
               </div>
             </div>

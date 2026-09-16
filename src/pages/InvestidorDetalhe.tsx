@@ -9,6 +9,7 @@ import { toast } from "@/hooks/use-toast";
 import ErrorState from "@/components/feedback/ErrorState";
 import { friendlyError } from "@/lib/friendlyError";
 import { fetchAll } from "@/lib/fetchAll";
+import { formatBR, parseLocalDate } from "@/lib/dateUtils";
 import {
   ArrowLeft, Landmark, Plus, RefreshCw, Wallet, TrendingUp, CheckCircle2,
   ExternalLink, Trash2, Copy, DollarSign, CalendarDays, Pencil, Undo2,
@@ -18,8 +19,15 @@ import {
   type Investor, type Loan,
 } from "./Investidores";
 
-const brl = (n: number) => (n || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-const fmtDate = (d?: string | null) => (d ? new Date(d + "T00:00:00").toLocaleDateString("pt-BR") : "-");
+const brl = (n: number) => {
+  const value = Number(n ?? 0);
+  return (Number.isFinite(value) ? value : 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+};
+const safeNumber = (value: unknown) => {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? number : 0;
+};
+const fmtDate = (d?: string | null) => d ? formatBR(d) || "-" : "-";
 
 export default function InvestidorDetalhe() {
   const { id } = useParams<{ id: string }>();
@@ -64,12 +72,18 @@ export default function InvestidorDetalhe() {
   const s = useMemo(() => {
     const active = loans.filter((l) => l.status !== "paid");
     const today = new Date(); today.setHours(0, 0, 0, 0);
-    const totalDue = active.reduce((a, l) => a + Number(l.total_due), 0);
-    const capital = active.reduce((a, l) => a + Number(l.principal), 0);
-    const paid = payments.reduce((a, p) => a + Number(p.amount || 0), 0);
-    const paidActive = active.reduce((a, l) => a + Number(l.paid_amount), 0);
-    const overdue = active.filter((l) => new Date(l.due_date + "T00:00:00") < today).length;
-    const prox = active.map((l) => l.due_date).sort()[0] || null;
+    const totalDue = active.reduce((a, l) => a + safeNumber(l.total_due), 0);
+    const capital = active.reduce((a, l) => a + safeNumber(l.principal), 0);
+    const paid = payments.reduce((a, p) => a + safeNumber(p.amount), 0);
+    const paidActive = active.reduce((a, l) => a + safeNumber(l.paid_amount), 0);
+    const overdue = active.filter((l) => {
+      const due = parseLocalDate(l.due_date);
+      return !!due && due < today;
+    }).length;
+    const prox = active
+      .map((l) => l.due_date)
+      .filter((value): value is string => !!parseLocalDate(value))
+      .sort((a, b) => (parseLocalDate(a)?.getTime() ?? Number.MAX_SAFE_INTEGER) - (parseLocalDate(b)?.getTime() ?? Number.MAX_SAFE_INTEGER))[0] || null;
     return { capital, totalDue, paid, saldo: Math.max(0, totalDue - paidActive), overdue, prox, count: active.length };
   }, [loans, payments]);
 
@@ -111,7 +125,9 @@ export default function InvestidorDetalhe() {
 
   /** Abre o pagamento do empréstimo aberto mais próximo do vencimento. */
   const darBaixa = () => {
-    const aberto = loans.filter((l) => l.status !== "paid").sort((a, b) => a.due_date.localeCompare(b.due_date))[0];
+    const aberto = loans
+      .filter((l) => l.status !== "paid")
+      .sort((a, b) => String(a.due_date || "9999-12-31").localeCompare(String(b.due_date || "9999-12-31")))[0];
     if (!aberto) { toast({ title: "Nenhum empréstimo em aberto", variant: "destructive" }); return; }
     setPayOpen(aberto.id);
   };
@@ -207,7 +223,7 @@ export default function InvestidorDetalhe() {
           <Button size="sm" variant="outline" onClick={() => setEditOpen(true)} className="gap-1.5"><Pencil size={14} /> Editar perfil</Button>
           <Button size="sm" variant="outline" onClick={() => setNewLoanOpen(true)} className="gap-1.5"><Plus size={14} /> Novo empréstimo</Button>
           <Button size="sm" variant="outline" onClick={() => void copyPortal()} className="gap-1.5"><Copy size={14} /> Copiar link</Button>
-          <Button size="sm" variant="outline" onClick={() => window.open(`/investidor/${investor.access_token}`, "_blank")} className="gap-1.5">
+          <Button size="sm" variant="outline" onClick={() => window.open(`/investidor/${investor.access_token}`, "_blank", "noopener,noreferrer")} className="gap-1.5">
             <ExternalLink size={14} /> Abrir portal
           </Button>
           <Button size="sm" variant="outline" onClick={regenerateToken} className="gap-1.5"><RefreshCw size={14} /> Novo link</Button>
@@ -280,7 +296,7 @@ export default function InvestidorDetalhe() {
         {payments.length === 0 ? <p className="rounded-xl border border-dashed border-border/60 py-6 text-center text-xs text-muted-foreground">Nenhum pagamento registrado.</p> : (
           <div className="overflow-hidden rounded-xl border border-border/60">
             {payments.slice(0, 30).map((payment) => <div key={payment.id} className="flex items-center justify-between gap-3 border-b border-border/40 bg-background/30 px-3 py-2.5 last:border-0">
-              <div><p className="text-xs font-semibold text-foreground">{payment.payment_type === "interest_only" ? "Somente juros" : "Baixa de saldo"}</p><p className="text-[10px] text-muted-foreground">{new Date(payment.paid_at || payment.created_at).toLocaleDateString("pt-BR")} · {payment.method || "não informado"}{payment.notes ? ` · ${payment.notes}` : ""}</p></div>
+              <div><p className="text-xs font-semibold text-foreground">{payment.payment_type === "interest_only" ? "Somente juros" : "Baixa de saldo"}</p><p className="text-[10px] text-muted-foreground">{fmtDate(payment.paid_at || payment.created_at)} · {payment.method || "não informado"}{payment.notes ? ` · ${payment.notes}` : ""}</p></div>
               <span className="font-mono text-sm font-bold text-emerald-400">{brl(Number(payment.amount))}</span>
             </div>)}
           </div>

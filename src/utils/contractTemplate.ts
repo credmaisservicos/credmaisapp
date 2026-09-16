@@ -41,8 +41,10 @@ export interface ContractPlaceholderData {
   companyPhone?: string;
 }
 
-const fmtMoney = (v: number) =>
-  "R$ " + Number(v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtMoney = (v: unknown) => {
+  const number = Number(v ?? 0);
+  return "R$ " + (Number.isFinite(number) ? number : 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
 const fmtDate = (d: string) => {
   if (!d) return "";
   try {

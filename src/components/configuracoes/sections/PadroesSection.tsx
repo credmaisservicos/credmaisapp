@@ -35,9 +35,9 @@ const PadroesSection = ({ ctx }: SectionProps) => {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
-                <label className="text-label mb-1.5 block">Taxa de juros padrão (% por período)</label>
+                <label htmlFor="default-interest-rate" className="text-label mb-1.5 block">Taxa de juros padrão (% por período)</label>
                 <input
-                  type="number"
+                  id="default-interest-rate" name="default_interest_rate" aria-label="Taxa de juros padrão por período" type="number"
                   step="0.01"
                   min="0"
                   value={form.default_interest_rate}
@@ -51,27 +51,27 @@ const PadroesSection = ({ ctx }: SectionProps) => {
               </div>
 
               <div>
-                <label className="text-label mb-1.5 block">Juros de atraso (% ao dia)</label>
-                <input type="number" step="0.01" value={form.default_daily_interest} onChange={(e) => setForm({ ...form, default_daily_interest: e.target.value })} className={inputCls} />
+                <label htmlFor="default-daily-interest" className="text-label mb-1.5 block">Juros de atraso (% ao dia)</label>
+                <input id="default-daily-interest" name="default_daily_interest" aria-label="Juros de atraso ao dia" type="number" step="0.01" value={form.default_daily_interest} onChange={(e) => setForm({ ...form, default_daily_interest: e.target.value })} className={inputCls} />
                 <p className="text-[10px] text-muted-foreground mt-1">Composto sobre o valor acumulado. Padrão: 4% ao dia.</p>
               </div>
               <div>
-                <label className="text-label mb-1.5 block">Multa fixa</label>
-                <input type="number" value="0" disabled className={inputCls + " opacity-60"} />
+                <label htmlFor="default-fixed-fine" className="text-label mb-1.5 block">Multa fixa</label>
+                <input id="default-fixed-fine" name="default_fixed_fine" aria-label="Multa fixa desativada" type="number" value="0" disabled className={inputCls + " opacity-60"} />
                 <p className="text-[10px] text-muted-foreground mt-1">Desativada — agora só existe o juros diário.</p>
               </div>
 
               <div className="col-span-2">
-                <label className="text-label mb-1.5 block">Frequência Padrão</label>
-                <select value={form.default_frequency} onChange={(e) => setForm({ ...form, default_frequency: e.target.value })} className={inputCls}>
+                <label htmlFor="default-frequency" className="text-label mb-1.5 block">Frequência Padrão</label>
+                <select id="default-frequency" name="default_frequency" value={form.default_frequency} onChange={(e) => setForm({ ...form, default_frequency: e.target.value })} className={inputCls}>
                   <option value="daily">Diário</option><option value="weekly">Semanal</option><option value="biweekly">Quinzenal</option><option value="monthly">Mensal</option>
                 </select>
               </div>
 
               <div>
-                <label className="text-label mb-1.5 block">Nº de parcelas padrão</label>
+                <label htmlFor="default-installments" className="text-label mb-1.5 block">Nº de parcelas padrão</label>
                 <input
-                  type="number" min="1" step="1" placeholder="Ex: 6"
+                  id="default-installments" name="default_num_installments" aria-label="Número de parcelas padrão" type="number" min="1" step="1" placeholder="Ex: 6"
                   value={form.default_num_installments}
                   onChange={(e) => setForm({ ...form, default_num_installments: e.target.value })}
                   className={inputCls}
@@ -80,8 +80,8 @@ const PadroesSection = ({ ctx }: SectionProps) => {
               </div>
 
               <div>
-                <label className="text-label mb-1.5 block">Forma de pagamento padrão</label>
-                <select value={form.default_payment_method} onChange={(e) => setForm({ ...form, default_payment_method: e.target.value })} className={inputCls}>
+                <label htmlFor="default-payment-method" className="text-label mb-1.5 block">Forma de pagamento padrão</label>
+                <select id="default-payment-method" name="default_payment_method" value={form.default_payment_method} onChange={(e) => setForm({ ...form, default_payment_method: e.target.value })} className={inputCls}>
                   <option value="pix">PIX</option>
                   <option value="cash">Dinheiro</option>
                   <option value="boleto">Boleto</option>
@@ -90,9 +90,9 @@ const PadroesSection = ({ ctx }: SectionProps) => {
               </div>
 
               <div className="col-span-2">
-                <label className="text-label mb-1.5 block">Teto dos juros de atraso (%)</label>
+                <label htmlFor="default-max-interest-cap" className="text-label mb-1.5 block">Teto dos juros de atraso (%)</label>
                 <input
-                  type="number" min="0" step="1" placeholder="Ex: 100 — os juros nunca passam do valor da parcela"
+                  id="default-max-interest-cap" name="default_max_interest_cap" aria-label="Teto dos juros de atraso" type="number" min="0" step="1" placeholder="Ex: 100 — os juros nunca passam do valor da parcela"
                   value={form.default_max_interest_cap}
                   onChange={(e) => setForm({ ...form, default_max_interest_cap: e.target.value })}
                   className={inputCls}

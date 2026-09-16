@@ -8,7 +8,7 @@ export default tseslint.config(
   {
     // `types.ts` é gerado pelo Supabase. As Edge Functions usam Deno e já são
     // verificadas separadamente por scripts/checar-funcoes.mjs no CI.
-    ignores: ["dist", "src/integrations/supabase/types.ts", "supabase/functions/**", "latest*.js", "z-index-*.js", "live-*.js", "*-release*.js"],
+    ignores: ["dist", "test-results/**", "playwright-report/**", "src/integrations/supabase/types.ts", "supabase/functions/**", "latest*.js", "z-index-*.js", "live-*.js", "*-release*.js"],
   },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
