@@ -156,6 +156,14 @@ export function SiteFooter() {
       <div className="mx-auto mt-12 flex w-full max-w-[1160px] flex-col gap-2 border-t border-white/[0.06] pt-6 text-[11px] text-white/60 sm:flex-row sm:justify-between">
         <span>© {new Date().getFullYear()} CredMais App</span>
         <span>São Paulo, Brasil</span>
+        <a
+          href="https://focussdev.art/"
+          target="_blank"
+          rel="noreferrer"
+          className="transition-colors hover:text-white"
+        >
+          Desenvolvido por FocussDev
+        </a>
       </div>
     </footer>
   );
