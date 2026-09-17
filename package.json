@@ -14,7 +14,7 @@
     "check": "npm run typecheck && npm run lint && npm run check:functions && npm run test:functions && npm run test && npm run build",
     "check:functions": "node scripts/checar-funcoes.mjs",
     "test:functions": "deno test supabase/functions/_shared/*_test.ts --allow-env --allow-net",
-    "lint": "eslint . --max-warnings 0",
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern backups --max-warnings 0",
     "preview": "vite preview",
     "deploy:cloudflare": "npm run build && npx wrangler pages deploy dist --project-name credmaisapp",
     "test": "vitest run",
