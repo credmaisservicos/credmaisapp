@@ -1471,10 +1471,28 @@ const ClienteDetalhe = () => {
                 <Camera size={12} className="text-primary-foreground" />
                 <input type="file" accept="image/*" onChange={async (e) => {
                   const file = e.target.files?.[0];
-                  if (!file || !id) return;
-                  const ext = file.name.split(".").pop();
-                  const path = `${user!.id}/client-avatars/${id}.${ext}`;
-                  const { error: upErr } = await supabase.storage.from("uploads").upload(path, file, { upsert: true });
+                  e.currentTarget.value = "";
+                  if (!file || !id || !user) return;
+                  const extensions: Record<string, string> = {
+                    "image/jpeg": "jpg",
+                    "image/png": "png",
+                    "image/webp": "webp",
+                  };
+                  const ext = extensions[file.type];
+                  if (!ext) {
+                    toast({ title: "Formato de foto não suportado", description: "Envie uma imagem JPG, PNG ou WebP.", variant: "destructive" });
+                    return;
+                  }
+                  if (file.size > 5 * 1024 * 1024) {
+                    toast({ title: "Foto muito grande", description: "O tamanho máximo é de 5 MB.", variant: "destructive" });
+                    return;
+                  }
+                  const path = `${user.id}/client-avatars/${id}.${ext}`;
+                  const { error: upErr } = await supabase.storage.from("uploads").upload(path, file, {
+                    upsert: true,
+                    contentType: file.type,
+                    cacheControl: "3600",
+                  });
                   if (!upErr) {
                     const url = await getSignedUploadUrl(path);
                     if (!url) {
