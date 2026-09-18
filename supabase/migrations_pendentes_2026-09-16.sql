@@ -1036,6 +1036,8 @@ NOTIFY pgrst, 'reload schema';
 -- escolhida pelo usuário. Usado pelo pagamento único (bullet), por
 -- porcentagem e por só-juros. Sem essa função a chamada do front falhava
 -- com "Could not find the function" e a renovação nunca era concluída.
+DROP FUNCTION IF EXISTS public.renew_installment_interest(uuid, date, text, text);
+DROP FUNCTION IF EXISTS public.renew_installment_interest(uuid, date, text, text, text);
 CREATE OR REPLACE FUNCTION public.renew_installment_interest(
   _installment_id uuid,
   _next_due_date date,
