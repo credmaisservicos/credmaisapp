@@ -19,7 +19,6 @@ serve(async (req) => {
 
 
   try {
-    const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     
@@ -33,13 +32,6 @@ serve(async (req) => {
       });
     }
     const { messages, clientId, sessionToken } = payload;
-    if (!anthropicKey) {
-      return new Response(JSON.stringify({ error: "Assistente temporariamente indisponível" }), {
-        status: 503,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
     const { data: portalSession } = await supabase
       .from("portal_sessions").select("client_id")
       .eq("token", sessionToken)
@@ -48,6 +40,14 @@ serve(async (req) => {
     if (!portalSession || portalSession.client_id !== clientId) {
       return new Response(JSON.stringify({ error: "Sessão inválida ou expirada" }), {
         status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
+    if (!anthropicKey) {
+      return new Response(JSON.stringify({ error: "Assistente temporariamente indisponível" }), {
+        status: 503,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
