@@ -836,7 +836,12 @@ const ClienteDetalhe = () => {
     });
     if (error) {
       qc.setQueryData(["client-installments", id], snapshot);
-      toast({ ...friendlyError(error, "Não foi possível quitar a parcela."), variant: "destructive" });
+      const paymentFailure = friendlyError(error, "Não foi possível quitar a parcela.");
+      toast({
+        ...paymentFailure,
+        description: (error as any)?.message || paymentFailure.description,
+        variant: "destructive",
+      });
       return false;
     }
     invAll();
