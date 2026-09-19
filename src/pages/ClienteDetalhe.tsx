@@ -832,6 +832,7 @@ const ClienteDetalhe = () => {
       _mark_paid: true,
       _method: method,
       _receipt_url: receiptUrl,
+      _source_key: null,
     });
     if (error) {
       qc.setQueryData(["client-installments", id], snapshot);
@@ -879,6 +880,7 @@ const ClienteDetalhe = () => {
         _mark_paid: false,
         _method: payMethod,
         _receipt_url: receiptUrl,
+        _source_key: null,
       });
       if (error) {
         qc.setQueryData(["client-installments", id], snapshot);

@@ -241,6 +241,9 @@ const Cobrancas = () => {
       _installment_id: inst.id,
       _paid_total: paid,
       _mark_paid: true,
+      _method: "pix",
+      _receipt_url: null,
+      _source_key: null,
     });
     if (error) throw error;
   };
@@ -253,6 +256,9 @@ const Cobrancas = () => {
       _installment_id: inst.id,
       _paid_total: next,
       _mark_paid: false,
+      _method: "pix",
+      _receipt_url: null,
+      _source_key: null,
     });
     if (error) throw error;
   };

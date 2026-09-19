@@ -134,6 +134,8 @@ const QuickPaymentModal = ({ open, onClose }: Props) => {
       _paid_total: amount,
       _mark_paid: true,
       _method: method,
+      _receipt_url: null,
+      _source_key: null,
     });
     setSaving(null);
     if (error) { toast.error("Erro ao registrar pagamento"); return; }
@@ -176,6 +178,8 @@ const QuickPaymentModal = ({ open, onClose }: Props) => {
         _paid_total: safeNumber(i.paid_amount) + remainingDue(i),
         _mark_paid: true,
         _method: method,
+        _receipt_url: null,
+        _source_key: null,
       })
     ));
     setBulkSaving(false);
@@ -226,6 +230,8 @@ const QuickPaymentModal = ({ open, onClose }: Props) => {
       _paid_total: accumulated,
       _mark_paid: false,
       _method: method,
+      _receipt_url: null,
+      _source_key: null,
     });
     setSaving(null);
     if (error) { toast.error("Erro ao registrar pagamento parcial"); return; }

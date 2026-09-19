@@ -122,6 +122,8 @@ const CobrarAgoraModal = ({ open, onClose, title = "Cobrar agora", installments 
             _paid_total: accumulatedPaymentTotal(i, portalInstallmentAmount(i)),
             _mark_paid: true,
             _method: method,
+            _receipt_url: null,
+            _source_key: null,
           })
         )
       );

@@ -286,6 +286,9 @@ const Hoje = () => {
             _installment_id: inst.id,
             _paid_total: alreadyPaid + received,
             _mark_paid: isFull,
+            _method: "pix",
+            _receipt_url: null,
+            _source_key: null,
           });
       if (result.error) throw result.error;
       setPendingPayment(null);
