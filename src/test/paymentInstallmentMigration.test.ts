@@ -13,6 +13,8 @@ describe("migração de baixa de parcelas", () => {
     expect(migration).toMatch(/UPDATE public\.contract_installments[\s\S]+paid_amount = new_paid/i);
     expect(migration).toMatch(/INSERT INTO public\.transactions[\s\S]+installment_id/i);
     expect(migration).toMatch(/INSERT INTO public\.profits[\s\S]+interest_delta \+ fee_delta/i);
+    expect(migration).toMatch(/_source_key text DEFAULT NULL/i);
+    expect(migration).toMatch(/source_key\)[\s\S]+NULLIF\(trim\(_source_key\)/i);
   });
 
   it("protege o estorno e recarrega o schema cache", () => {

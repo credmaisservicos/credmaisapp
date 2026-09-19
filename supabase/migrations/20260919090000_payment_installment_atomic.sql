@@ -1,13 +1,15 @@
 -- Baixa de parcelas usada por Cobrancas, Hoje, ClienteDetalhe e portal interno.
 -- A operacao e idempotente e grava parcela + razao na mesma transacao.
 
+DROP FUNCTION IF EXISTS public.pay_installment(uuid, numeric, boolean, text, text, text);
 DROP FUNCTION IF EXISTS public.pay_installment(uuid, numeric, boolean, text, text);
 CREATE OR REPLACE FUNCTION public.pay_installment(
   _installment_id uuid,
   _paid_total numeric,
   _mark_paid boolean DEFAULT true,
   _method text DEFAULT 'pix',
-  _receipt_url text DEFAULT NULL
+  _receipt_url text DEFAULT NULL,
+  _source_key text DEFAULT NULL
 ) RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -51,6 +53,16 @@ BEGIN
 
   total_due := round(greatest(0, COALESCE(inst.amount, 0)) + greatest(0, COALESCE(inst.late_fee, 0)), 2);
   old_paid := round(greatest(0, COALESCE(inst.paid_amount, 0)), 2);
+
+  -- O mesmo comprovante pode chegar novamente por retry do WhatsApp/Evolution.
+  -- O marcador é verificado antes de qualquer mutação financeira.
+  IF NULLIF(trim(_source_key), '') IS NOT NULL AND EXISTS (
+    SELECT 1 FROM public.transactions
+    WHERE user_id = uid AND source_key = trim(_source_key)
+  ) THEN
+    RETURN jsonb_build_object('ok', true, 'idempotent', true, 'installment_id', inst.id,
+      'paid_total', old_paid, 'status', inst.status);
+  END IF;
 
   -- Repeticao do mesmo clique/rede nao cria novo lancamento.
   IF inst.status = 'paid' THEN
@@ -98,13 +110,13 @@ BEGIN
 
   INSERT INTO public.transactions (
     user_id, amount, type, category, description, client_id, contract_id,
-    installment_id, principal_amount, interest_amount, fee_amount
+    installment_id, principal_amount, interest_amount, fee_amount, source_key
   ) VALUES (
     uid, received, 'payment', 'loan_payment',
     CASE WHEN next_status = 'paid' THEN 'Pagamento da parcela #' ELSE 'Pagamento parcial da parcela #' END
       || COALESCE(inst.installment_number::text, '-'),
     inst.client_id, inst.contract_id, inst.id,
-    principal_delta, interest_delta, fee_delta
+    principal_delta, interest_delta, fee_delta, NULLIF(trim(_source_key), '')
   );
 
   IF interest_delta + fee_delta > 0 THEN
@@ -163,9 +175,9 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.pay_installment(uuid, numeric, boolean, text, text),
+REVOKE ALL ON FUNCTION public.pay_installment(uuid, numeric, boolean, text, text, text),
   public.reverse_installment_payment(uuid) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.pay_installment(uuid, numeric, boolean, text, text),
+GRANT EXECUTE ON FUNCTION public.pay_installment(uuid, numeric, boolean, text, text, text),
   public.reverse_installment_payment(uuid) TO authenticated;
 
 NOTIFY pgrst, 'reload schema';

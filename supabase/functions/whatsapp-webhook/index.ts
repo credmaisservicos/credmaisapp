@@ -3033,6 +3033,7 @@ Ex6 — "queria mais 3 mil emprestado":
             _method: "pix",
             _receipt_url: null,
             _origin: "bot WhatsApp",
+            _source_key: mediaHash ? `whatsapp-payment:${mediaHash}` : null,
           });
           if (distributionError) throw distributionError;
 
@@ -3074,6 +3075,8 @@ Ex6 — "queria mais 3 mil emprestado":
           _paid_total: valorPago,
           _method: "pix",
           _origem: "bot WhatsApp",
+          _receipt_url: null,
+          _source_key: mediaHash ? `whatsapp-payment:${mediaHash}` : null,
         });
 
         if (razaoErr) {
@@ -3084,6 +3087,9 @@ Ex6 — "queria mais 3 mil emprestado":
             toolInput: { installment_id: target.id, erro: razaoErr.message },
             success: false, errorMessage: razaoErr.message,
           });
+          // Nunca confirme ao cliente um pagamento que não foi persistido.
+          // O retry do webhook é seguro quando o comprovante tem source_key.
+          throw razaoErr;
         }
         // Não existe `contract_installments.notes`. A observação que eu gravava
         // aqui derrubava a escrita inteira sem avisar — e era redundante: o
