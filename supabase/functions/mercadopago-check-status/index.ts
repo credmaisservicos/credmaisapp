@@ -25,9 +25,6 @@ serve(async (req) => {
   const rl = await rateLimitGuard(req, "mp-status", 60, 1, corsHeaders);
   if (rl) return rl;
 
-  const token = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
-  if (!token) return json({ error: "payment_unavailable" }, 500);
-
   let id: string | null = null;
   try {
     if (req.method === "POST") {
@@ -41,6 +38,8 @@ serve(async (req) => {
   }
   if (!id) return json({ error: "missing_id" }, 400);
   if (!/^\d{1,32}$/.test(id)) return json({ error: "invalid_id" }, 400);
+  const token = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
+  if (!token) return json({ error: "payment_unavailable" }, 500);
 
   try {
     const res = await fetch(`https://api.mercadopago.com/v1/payments/${id}`, {

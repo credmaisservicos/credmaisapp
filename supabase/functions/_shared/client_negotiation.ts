@@ -16,7 +16,7 @@ export function parseNegotiationRequest(input: unknown): NegotiationRequest | nu
   const value = input as Record<string, unknown>;
   const clientId = typeof value.clientId === "string" ? value.clientId.trim() : "";
   const sessionToken = typeof value.session_token === "string" ? value.session_token.trim() : "";
-  if (!UUID.test(clientId) || !UUID.test(sessionToken) || !Array.isArray(value.messages)) return null;
+  if (!UUID.test(clientId) || !sessionToken || sessionToken.length > 256 || !Array.isArray(value.messages)) return null;
   if (value.messages.length < 1 || value.messages.length > MAX_MESSAGES) return null;
 
   let totalChars = 0;
