@@ -2,6 +2,7 @@
 -- Esses wrappers preservam o isolamento por user_id e delegam a regra de
 -- distribuição/baixa para as RPCs transacionais do app.
 
+DROP FUNCTION IF EXISTS public.system_register_payment(uuid, numeric, text, text, text);
 DROP FUNCTION IF EXISTS public.system_register_payment(uuid, numeric, text, text, text, text);
 CREATE OR REPLACE FUNCTION public.system_register_payment(
   _installment_id uuid,
@@ -17,6 +18,7 @@ SET search_path = public
 AS $$
 DECLARE
   owner_id uuid;
+  total_due numeric;
 BEGIN
   IF COALESCE(auth.role(), '') <> 'service_role' THEN
     RAISE EXCEPTION 'service_role_required';
@@ -26,17 +28,22 @@ BEGIN
   FROM public.contract_installments
   WHERE id = _installment_id;
   IF owner_id IS NULL THEN RAISE EXCEPTION 'installment_not_found'; END IF;
+  SELECT round(greatest(0, coalesce(amount, 0)) + greatest(0, coalesce(late_fee, 0)), 2)
+    INTO total_due
+  FROM public.contract_installments WHERE id = _installment_id;
 
   -- pay_installment valida auth.uid(); o webhook usa service_role, então
   -- definimos o proprietário derivado da própria parcela dentro da transação.
   PERFORM set_config('request.jwt.claim.sub', owner_id::text, true);
   RETURN public.pay_installment(
-    _installment_id, _paid_total, true, _method, _receipt_url,
+    _installment_id, _paid_total, coalesce(_paid_total, 0) + 0.005 >= total_due,
+    _method, _receipt_url,
     _source_key
   );
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.system_pay_client_balance(uuid, numeric, text, text, text);
 DROP FUNCTION IF EXISTS public.system_pay_client_balance(uuid, numeric, text, text, text, text);
 CREATE OR REPLACE FUNCTION public.system_pay_client_balance(
   _client_id uuid,
@@ -123,6 +130,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.system_renew_installment_interest(uuid, numeric, timestamptz, text, text);
 DROP FUNCTION IF EXISTS public.system_renew_installment_interest(uuid, numeric, timestamptz, text, text, text);
 CREATE OR REPLACE FUNCTION public.system_renew_installment_interest(
   _installment_id uuid,

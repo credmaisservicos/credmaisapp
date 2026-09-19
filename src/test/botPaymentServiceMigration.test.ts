@@ -15,6 +15,8 @@ describe("wrappers financeiros do bot", () => {
 
   it("usa as mesmas RPCs transacionais do app e distribui por parcelas", () => {
     expect(migration).toMatch(/RETURN public\.pay_installment\(/i);
+    expect(migration).toMatch(/coalesce\(_paid_total, 0\) \+ 0\.005 >= total_due/i);
+    expect(migration).toMatch(/_installment_id, _paid_total, coalesce\(_paid_total/i);
     expect(migration).toMatch(/CREATE OR REPLACE FUNCTION public\.system_pay_client_balance/i);
     expect(migration).toMatch(/ORDER BY ci\.due_date/i);
     expect(migration).toMatch(/NULLIF\(trim\(_source_key\), ''\) IS NULL/i);
