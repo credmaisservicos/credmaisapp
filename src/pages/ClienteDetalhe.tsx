@@ -208,7 +208,7 @@ const ClienteDetalhe = () => {
     queryKey: ["client-installments", id],
     queryFn: async () => {
       const data = await fetchAll((from, to) => supabase.from("contract_installments")
-        .select("*, contracts(capital, frequency, daily_interest_percent, max_interest_cap_percent)")
+        .select("*, contracts(capital, frequency, daily_interest_percent, max_interest_cap_percent, daily_penalty_type, daily_penalty_value)")
         .eq("client_id", id!).order("due_date").range(from, to));
       const now = new Date();
       return (data || []).map((i: any) => {
