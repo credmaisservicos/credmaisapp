@@ -208,7 +208,7 @@ const ClienteDetalhe = () => {
     queryKey: ["client-installments", id],
     queryFn: async () => {
       const data = await fetchAll((from, to) => supabase.from("contract_installments")
-        .select("*, contracts(capital, frequency, daily_interest_percent, max_interest_cap_percent)")
+        .select("*, contracts(capital, frequency, daily_interest_percent, max_interest_cap_percent, daily_penalty_type, daily_penalty_value)")
         .eq("client_id", id!).order("due_date").range(from, to));
       const now = new Date();
       return (data || []).map((i: any) => {
@@ -1012,11 +1012,24 @@ const ClienteDetalhe = () => {
   };
 
   const reversePayment = async (instId: string) => {
-    if (!(await confirm("Estornar pagamento?"))) return;
+    const inst = installments.find((i: any) => i.id === instId);
+    const paidAmount = Number(inst?.paid_amount || 0);
+    const isPartial = inst?.status !== "paid" && paidAmount > 0;
+    const ok = await confirm({
+      title: isPartial ? "Estornar pagamento parcial?" : "Estornar pagamento?",
+      description: isPartial
+        ? `Isso remove os R$ ${fmt(paidAmount)} já pagos desta parcela (e o lucro/caixa lançados por eles) e volta o saldo devedor ao valor cheio.`
+        : "Isso remove o valor pago, o lucro e o caixa lançados por esta parcela, reabrindo-a como pendente.",
+      confirmLabel: "Estornar",
+      variant: "warning",
+    });
+    if (!ok) return;
     const snapshot = patchInstallment(instId, { status: "pending", paid_at: null, paid_amount: null });
     toast({ title: "Estornado!" });
     // RPC atômico: reverte a parcela E remove o lucro/caixa lançados por ela
     // (vinculados por installment_id), reabrindo o contrato se estava concluído.
+    // Funciona tanto para quitação total quanto para pagamento parcial: zera
+    // paid_amount/paid_fees/paid_interest/paid_principal e recalcula o status.
     const { error } = await supabase.rpc("reverse_installment_payment", { _installment_id: instId });
     if (error) {
       qc.setQueryData(["client-installments", id], snapshot);
@@ -2042,6 +2055,9 @@ const ClienteDetalhe = () => {
                             <button onClick={() => reversePayment(inst.id)} className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground" title="Estornar"><RotateCcw size={14} /></button>
                           ) : (
                             <>
+                              {partial && (
+                                <button onClick={() => reversePayment(inst.id)} className="p-1.5 rounded-lg hover:bg-warning/10 text-warning" title={`Estornar pagamento parcial de R$ ${fmt(paidAmount)}`}><RotateCcw size={14} /></button>
+                              )}
                               <button onClick={() => sendBilling(inst)} className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground" title="Cobrar"><Send size={14} /></button>
                               <button onClick={() => { setPartialPayModal(inst); setPartialAmount(""); setPayMethod("pix"); setPayReceiptFile(null); setPayFeeDiscount(0); }} className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground" title="Parcial"><Percent size={14} /></button>
                               <button onClick={() => {

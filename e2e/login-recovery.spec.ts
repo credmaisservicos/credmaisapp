@@ -9,10 +9,16 @@ const profile = { ...user, name: "Conta de teste", subscription_type: "lifetime"
   plan_tier: "essencial", onboarding_completed_at: "2026-01-01T00:00:00Z" };
 const b64 = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
 
+// playwright.config.ts carrega VITE_SUPABASE_URL de .env.production. Mockar
+// um domínio fixo (ex: "*.supabase.co") fica obsoleto assim que o projeto
+// migra de host — como já aconteceu ao sair do Supabase Cloud para o
+// self-hosted — e os testes passam a bater no backend real sem perceber.
+const supabaseOrigin = new URL(process.env.VITE_SUPABASE_URL || "https://supabase-not-configured.invalid").origin;
+
 async function mockBackend(page: Page, failFirstProfile = false) {
   let profileReads = 0;
   await page.routeWebSocket("**", socket => socket.close());
-  await page.route("https://*.supabase.co/**", async route => {
+  await page.route(`${supabaseOrigin}/**`, async route => {
     const url = new URL(route.request().url());
     const path = url.pathname;
     let body: unknown = [];
