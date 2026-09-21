@@ -10,6 +10,10 @@ const partialPaymentFix = readFileSync(
   resolve(process.cwd(), "supabase/migrations/20260920090000_fix_partial_payment_remaining_fees.sql"),
   "utf8",
 );
+const percentageSettlementFix = readFileSync(
+  resolve(process.cwd(), "supabase/migrations/20260921090000_fix_percentage_settlement_late_fee.sql"),
+  "utf8",
+);
 
 describe("migração de baixa de parcelas", () => {
   it("cria a RPC transacional que o frontend chama", () => {
@@ -33,5 +37,16 @@ describe("migração de baixa de parcelas", () => {
     expect(partialPaymentFix).toMatch(/total_due := round\(base_amount \+ effective_late_fee/i);
     expect(partialPaymentFix).toMatch(/late_fee = effective_late_fee/i);
     expect(partialPaymentFix).toMatch(/remaining.*greatest\(0, round\(total_due - new_paid/i);
+  });
+
+  it("não recalcula juros de atraso sobre o amount inflado da quitação por porcentagem", () => {
+    // settle_percentage_installment grava amount = capital + juros antes de
+    // chamar pay_installment. Sem esta guarda, o juros composto diário passa
+    // a incidir sobre o capital inteiro em contratos 'percentage'/'interest_only'
+    // atrasados, e a quitação falha com payment_below_installment_balance.
+    expect(percentageSettlementFix).toMatch(
+      /base_amount > 0 AND days_late > 0\s*\n\s*AND coalesce\(contract_row\.loan_mode, ''\) NOT IN \('percentage', 'interest_only'\)/i,
+    );
+    expect(percentageSettlementFix).toMatch(/CREATE OR REPLACE FUNCTION public\.pay_installment\(/i);
   });
 });

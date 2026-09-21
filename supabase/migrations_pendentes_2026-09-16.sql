@@ -1,5 +1,14 @@
--- Migrações pendentes agrupadas para colar no SQL Editor do Supabase.
--- Gerado em 2026-09-16. Cada bloco é idempotente (CREATE OR REPLACE / IF NOT EXISTS).
+-- Migrações pendentes agrupadas para colar no SQL Editor/console.
+-- Regenerado em 2026-09-21: inclui a reescrita atômica de pay_installment
+-- (20260919090000), os wrappers do bot (20260919100000), as colunas
+-- financeiras que essa RPC exige (20260919110000), a correção de encargos em
+-- pagamentos parciais (20260920090000) e a correção da quitação por
+-- porcentagem/só-juros (20260921090000). Sem essas 4 últimas, `pay_installment`
+-- e `reverse_installment_payment` simplesmente não existem no banco — todo
+-- pagamento pelo app (parcial, total, estorno, bot do WhatsApp) falha ou fica
+-- inconsistente. Também inclui o fix de delete_contract_atomically legado
+-- (20260916130000) e os buckets de storage (20260918100000), que também
+-- ficaram de fora da última rodada.
 BEGIN;
 
 -- ═══════════════════════════════════════════════════════════
@@ -488,6 +497,7 @@ GRANT EXECUTE ON FUNCTION public.renegotiate_contract_atomically(uuid, jsonb, js
 -- Atomic, tenant-scoped mutations used by the client and contract screens.
 -- This migration only creates functions; it does not touch existing rows.
 
+DROP FUNCTION IF EXISTS public.update_contract_atomically(uuid, jsonb, boolean, jsonb);
 CREATE OR REPLACE FUNCTION public.update_contract_atomically(
   _contract_id uuid,
   _contract jsonb,
@@ -623,6 +633,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.delete_contract_atomically(uuid);
 CREATE OR REPLACE FUNCTION public.delete_contract_atomically(_contract_id uuid)
 RETURNS void
 LANGUAGE plpgsql
@@ -672,6 +683,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.delete_client_cascade(uuid);
 CREATE OR REPLACE FUNCTION public.delete_client_cascade(_client_id uuid)
 RETURNS void
 LANGUAGE plpgsql
@@ -1123,6 +1135,633 @@ $$;
 
 REVOKE ALL ON FUNCTION public.renew_installment_interest(uuid, date, text, text, text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.renew_installment_interest(uuid, date, text, text, text) TO authenticated;
+
+NOTIFY pgrst, 'reload schema';
+
+-- ═══════════════════════════════════════════════════════════
+-- 20260916130000_fix_delete_contract_legacy_schema.sql
+-- ═══════════════════════════════════════════════════════════
+-- Alguns bancos self-hosted têm tabelas filhas legadas sem contract_id.
+-- Mantém a exclusão de contrato atômica checando as colunas de fato
+-- existentes em tempo de execução.
+DROP FUNCTION IF EXISTS public.delete_contract_atomically(uuid);
+
+CREATE FUNCTION public.delete_contract_atomically(_contract_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  uid uuid := auth.uid();
+  contract_row public.contracts%ROWTYPE;
+BEGIN
+  IF uid IS NULL THEN
+    RAISE EXCEPTION 'Autenticação necessária';
+  END IF;
+
+  SELECT * INTO contract_row
+  FROM public.contracts
+  WHERE id = _contract_id AND user_id = uid
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Contrato não encontrado';
+  END IF;
+
+  IF to_regclass('public.contract_installments') IS NOT NULL THEN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='client_notifications' AND column_name='contract_id') THEN
+      EXECUTE 'DELETE FROM public.client_notifications WHERE user_id = $1 AND contract_id = $2' USING uid, _contract_id;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='collection_attempts' AND column_name='contract_id') THEN
+      EXECUTE 'DELETE FROM public.collection_attempts WHERE user_id = $1 AND contract_id = $2' USING uid, _contract_id;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='profits' AND column_name='contract_id') THEN
+      EXECUTE 'DELETE FROM public.profits WHERE user_id = $1 AND contract_id = $2' USING uid, _contract_id;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='transactions' AND column_name='contract_id') THEN
+      EXECUTE 'DELETE FROM public.transactions WHERE user_id = $1 AND contract_id = $2' USING uid, _contract_id;
+    END IF;
+    IF to_regclass('public.loan_collateral') IS NOT NULL AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='loan_collateral' AND column_name='contract_id') THEN
+      EXECUTE 'DELETE FROM public.loan_collateral WHERE user_id = $1 AND contract_id = $2' USING uid, _contract_id;
+    END IF;
+    DELETE FROM public.contract_installments WHERE user_id = uid AND contract_id = _contract_id;
+  END IF;
+
+  DELETE FROM public.contracts WHERE user_id = uid AND id = _contract_id;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.delete_contract_atomically(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.delete_contract_atomically(uuid) TO authenticated;
+NOTIFY pgrst, 'reload schema';
+
+-- ═══════════════════════════════════════════════════════════
+-- 20260918100000_storage_buckets.sql
+-- ═══════════════════════════════════════════════════════════
+-- Buckets usados pelo app CredMais.
+-- uploads e privado: o frontend trabalha com URLs assinadas.
+-- backups e privado: somente Edge Functions com service role acessam.
+
+INSERT INTO storage.buckets (id, name, public, file_size_limit)
+VALUES
+  ('uploads', 'uploads', false, 15728640),
+  ('backups', 'backups', false, 52428800)
+ON CONFLICT (id) DO UPDATE
+SET public = EXCLUDED.public,
+    file_size_limit = EXCLUDED.file_size_limit;
+
+DROP POLICY IF EXISTS "uploads_select_own" ON storage.objects;
+CREATE POLICY "uploads_select_own"
+ON storage.objects FOR SELECT TO authenticated
+USING (
+  bucket_id = 'uploads'
+  AND (owner_id = auth.uid()::text OR (storage.foldername(name))[1] = auth.uid()::text)
+);
+
+DROP POLICY IF EXISTS "uploads_insert_own" ON storage.objects;
+CREATE POLICY "uploads_insert_own"
+ON storage.objects FOR INSERT TO authenticated
+WITH CHECK (
+  bucket_id = 'uploads'
+  AND (storage.foldername(name))[1] = auth.uid()::text
+);
+
+DROP POLICY IF EXISTS "uploads_update_own" ON storage.objects;
+CREATE POLICY "uploads_update_own"
+ON storage.objects FOR UPDATE TO authenticated
+USING (
+  bucket_id = 'uploads'
+  AND (owner_id = auth.uid()::text OR (storage.foldername(name))[1] = auth.uid()::text)
+)
+WITH CHECK (
+  bucket_id = 'uploads'
+  AND (owner_id = auth.uid()::text OR (storage.foldername(name))[1] = auth.uid()::text)
+);
+
+DROP POLICY IF EXISTS "uploads_delete_own" ON storage.objects;
+CREATE POLICY "uploads_delete_own"
+ON storage.objects FOR DELETE TO authenticated
+USING (
+  bucket_id = 'uploads'
+  AND (owner_id = auth.uid()::text OR (storage.foldername(name))[1] = auth.uid()::text)
+);
+
+-- ═══════════════════════════════════════════════════════════
+-- 20260919090000_payment_installment_atomic.sql
+-- ═══════════════════════════════════════════════════════════
+-- Baixa de parcelas usada por Cobrancas, Hoje, ClienteDetalhe e portal interno.
+-- A operacao e idempotente e grava parcela + razao na mesma transacao.
+-- (Substituída pela versão de 20260920090000 e 20260921090000 mais abaixo —
+-- mantida aqui apenas para criar reverse_installment_payment; o CREATE OR
+-- REPLACE seguinte já cobre pay_installment com a versão final.)
+
+DROP FUNCTION IF EXISTS public.reverse_installment_payment(uuid);
+CREATE OR REPLACE FUNCTION public.reverse_installment_payment(_installment_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  uid uuid := auth.uid();
+  inst public.contract_installments%ROWTYPE;
+BEGIN
+  IF uid IS NULL THEN RAISE EXCEPTION 'auth_required'; END IF;
+  SELECT * INTO inst FROM public.contract_installments
+    WHERE id = _installment_id AND user_id = uid FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'installment_not_found'; END IF;
+
+  DELETE FROM public.profits
+    WHERE user_id = uid AND installment_id = inst.id;
+  DELETE FROM public.transactions
+    WHERE user_id = uid AND installment_id = inst.id
+      AND type = 'payment' AND COALESCE(category, '') <> 'interest_renewal';
+
+  UPDATE public.contract_installments
+  SET paid_amount = 0, paid_fees = 0, paid_interest = 0, paid_principal = 0,
+      paid_at = NULL,
+      status = CASE WHEN due_date < current_date THEN 'overdue' ELSE 'pending' END
+  WHERE id = inst.id AND user_id = uid;
+
+  UPDATE public.contracts SET status = CASE
+    WHEN status = 'completed' THEN 'active' ELSE status END
+  WHERE id = inst.contract_id AND user_id = uid;
+
+  RETURN jsonb_build_object('ok', true, 'installment_id', inst.id, 'status', 'reversed');
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.reverse_installment_payment(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.reverse_installment_payment(uuid) TO authenticated;
+
+NOTIFY pgrst, 'reload schema';
+
+-- ═══════════════════════════════════════════════════════════
+-- 20260919100000_bot_payment_service_wrappers.sql
+-- ═══════════════════════════════════════════════════════════
+-- Operações financeiras executadas pelo webhook/cron com a service role.
+-- Esses wrappers preservam o isolamento por user_id e delegam a regra de
+-- distribuição/baixa para as RPCs transacionais do app.
+
+DROP FUNCTION IF EXISTS public.system_register_payment(uuid, numeric, text, text, text);
+DROP FUNCTION IF EXISTS public.system_register_payment(uuid, numeric, text, text, text, text);
+CREATE OR REPLACE FUNCTION public.system_register_payment(
+  _installment_id uuid,
+  _paid_total numeric,
+  _method text DEFAULT 'pix',
+  _origem text DEFAULT NULL,
+  _receipt_url text DEFAULT NULL,
+  _source_key text DEFAULT NULL
+) RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  owner_id uuid;
+  total_due numeric;
+BEGIN
+  IF COALESCE(auth.role(), '') <> 'service_role' THEN
+    RAISE EXCEPTION 'service_role_required';
+  END IF;
+
+  SELECT user_id INTO owner_id
+  FROM public.contract_installments
+  WHERE id = _installment_id;
+  IF owner_id IS NULL THEN RAISE EXCEPTION 'installment_not_found'; END IF;
+  SELECT round(greatest(0, coalesce(amount, 0)) + greatest(0, coalesce(late_fee, 0)), 2)
+    INTO total_due
+  FROM public.contract_installments WHERE id = _installment_id;
+
+  -- pay_installment valida auth.uid(); o webhook usa service_role, então
+  -- definimos o proprietário derivado da própria parcela dentro da transação.
+  PERFORM set_config('request.jwt.claim.sub', owner_id::text, true);
+  RETURN public.pay_installment(
+    _installment_id, _paid_total, coalesce(_paid_total, 0) + 0.005 >= total_due,
+    _method, _receipt_url,
+    _source_key
+  );
+END;
+$$;
+
+DROP FUNCTION IF EXISTS public.system_pay_client_balance(uuid, numeric, text, text, text);
+DROP FUNCTION IF EXISTS public.system_pay_client_balance(uuid, numeric, text, text, text, text);
+CREATE OR REPLACE FUNCTION public.system_pay_client_balance(
+  _client_id uuid,
+  _amount numeric,
+  _method text DEFAULT 'pix',
+  _receipt_url text DEFAULT NULL,
+  _origin text DEFAULT NULL,
+  _source_key text DEFAULT NULL
+) RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  owner_id uuid;
+  inst public.contract_installments%ROWTYPE;
+  remaining numeric := round(greatest(0, coalesce(_amount, 0)), 2);
+  balance numeric;
+  allocation numeric;
+  paid_count integer := 0;
+  partial_count integer := 0;
+  allocations jsonb := '[]'::jsonb;
+  payment jsonb;
+BEGIN
+  IF COALESCE(auth.role(), '') <> 'service_role' THEN
+    RAISE EXCEPTION 'service_role_required';
+  END IF;
+  IF _client_id IS NULL OR remaining <= 0 THEN RAISE EXCEPTION 'invalid_payment_amount'; END IF;
+
+  SELECT user_id INTO owner_id
+  FROM public.clients
+  WHERE id = _client_id;
+  IF owner_id IS NULL THEN RAISE EXCEPTION 'client_not_found'; END IF;
+  PERFORM set_config('request.jwt.claim.sub', owner_id::text, true);
+
+  FOR inst IN
+    SELECT ci.*
+    FROM public.contract_installments ci
+    JOIN public.contracts c ON c.id = ci.contract_id AND c.user_id = ci.user_id
+    WHERE ci.user_id = owner_id
+      AND ci.client_id = _client_id
+      AND ci.status NOT IN ('paid', 'cancelled')
+      AND c.status IN ('active', 'overdue')
+    ORDER BY ci.due_date NULLS FIRST, ci.installment_number NULLS FIRST, ci.id
+    FOR UPDATE OF ci
+  LOOP
+    EXIT WHEN remaining <= 0;
+    balance := round(greatest(0, coalesce(inst.amount, 0))
+      + greatest(0, coalesce(inst.late_fee, 0))
+      - greatest(0, coalesce(inst.paid_amount, 0)), 2);
+    IF balance <= 0 THEN CONTINUE; END IF;
+
+    allocation := round(least(remaining, balance), 2);
+    payment := public.pay_installment(
+      inst.id,
+      round(greatest(0, coalesce(inst.paid_amount, 0)) + allocation, 2),
+      allocation + 0.005 >= balance,
+      _method,
+      _receipt_url,
+      CASE WHEN NULLIF(trim(_source_key), '') IS NULL THEN NULL
+        ELSE trim(_source_key) || ':' || inst.id::text END
+    );
+
+    remaining := round(remaining - allocation, 2);
+    IF (payment->>'status') = 'paid' THEN paid_count := paid_count + 1;
+    ELSE partial_count := partial_count + 1;
+    END IF;
+    allocations := allocations || jsonb_build_array(jsonb_build_object(
+      'installment_id', inst.id,
+      'installment_number', inst.installment_number,
+      'amount', allocation,
+      'paid', (payment->>'status') = 'paid'
+    ));
+  END LOOP;
+
+  RETURN jsonb_build_object(
+    'ok', true,
+    'paid_installments', paid_count,
+    'partial_installments', partial_count,
+    'unallocated', remaining,
+    'allocations', allocations,
+    'origin', _origin
+  );
+END;
+$$;
+
+DROP FUNCTION IF EXISTS public.system_renew_installment_interest(uuid, numeric, timestamptz, text, text);
+DROP FUNCTION IF EXISTS public.system_renew_installment_interest(uuid, numeric, timestamptz, text, text, text);
+CREATE OR REPLACE FUNCTION public.system_renew_installment_interest(
+  _installment_id uuid,
+  _amount numeric,
+  _next_due_date timestamptz,
+  _origin text DEFAULT NULL,
+  _source_key text DEFAULT NULL,
+  _method text DEFAULT 'pix'
+) RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  owner_id uuid;
+  result jsonb;
+  tx_id uuid;
+BEGIN
+  IF COALESCE(auth.role(), '') <> 'service_role' THEN
+    RAISE EXCEPTION 'service_role_required';
+  END IF;
+
+  SELECT user_id INTO owner_id
+  FROM public.contract_installments
+  WHERE id = _installment_id;
+  IF owner_id IS NULL THEN RAISE EXCEPTION 'installment_not_found'; END IF;
+
+  IF NULLIF(trim(_source_key), '') IS NOT NULL AND EXISTS (
+    SELECT 1 FROM public.transactions
+    WHERE user_id = owner_id AND source_key = trim(_source_key)
+  ) THEN
+    SELECT to_jsonb(t) INTO result
+    FROM public.transactions t
+    WHERE t.user_id = owner_id AND t.source_key = trim(_source_key)
+    ORDER BY t.created_at DESC LIMIT 1;
+    RETURN coalesce(result, jsonb_build_object('ok', true, 'idempotent', true));
+  END IF;
+
+  PERFORM set_config('request.jwt.claim.sub', owner_id::text, true);
+  result := public.renew_installment_interest(
+    _installment_id,
+    (_next_due_date AT TIME ZONE 'UTC')::date,
+    _method,
+    _origin,
+    NULL
+  );
+
+  IF NULLIF(trim(_source_key), '') IS NOT NULL THEN
+    SELECT id INTO tx_id
+    FROM public.transactions
+    WHERE user_id = owner_id
+      AND installment_id = _installment_id
+      AND category = 'interest_renewal'
+    ORDER BY created_at DESC LIMIT 1;
+    IF tx_id IS NOT NULL THEN
+      UPDATE public.transactions SET source_key = trim(_source_key) WHERE id = tx_id;
+    END IF;
+  END IF;
+  RETURN result;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.system_register_payment(uuid, numeric, text, text, text, text) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.system_pay_client_balance(uuid, numeric, text, text, text, text) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.system_renew_installment_interest(uuid, numeric, timestamptz, text, text, text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.system_register_payment(uuid, numeric, text, text, text, text) TO service_role;
+GRANT EXECUTE ON FUNCTION public.system_pay_client_balance(uuid, numeric, text, text, text, text) TO service_role;
+GRANT EXECUTE ON FUNCTION public.system_renew_installment_interest(uuid, numeric, timestamptz, text, text, text) TO service_role;
+
+NOTIFY pgrst, 'reload schema';
+
+-- ═══════════════════════════════════════════════════════════
+-- 20260919110000_ensure_installment_financial_columns.sql
+-- ═══════════════════════════════════════════════════════════
+-- pay_installment lê estes campos de contract_installments%ROWTYPE. Bancos
+-- criados antes da divisão financeira não têm essas colunas, o que faz TODO
+-- pagamento falhar com: record "inst" has no field "scheduled_interest".
+-- Aditivo: preserva todas as parcelas já existentes.
+
+ALTER TABLE public.contract_installments
+  ADD COLUMN IF NOT EXISTS scheduled_principal numeric NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS scheduled_interest numeric NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS paid_principal numeric NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS paid_interest numeric NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS paid_fees numeric NOT NULL DEFAULT 0;
+
+ALTER TABLE public.contract_installments
+  ADD COLUMN IF NOT EXISTS receipt_url text,
+  ADD COLUMN IF NOT EXISTS payment_method text,
+  ADD COLUMN IF NOT EXISTS paid_at timestamptz;
+
+NOTIFY pgrst, 'reload schema';
+
+ALTER TABLE public.transactions
+  ADD COLUMN IF NOT EXISTS principal_amount numeric NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS interest_amount numeric NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS fee_amount numeric NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS source_key text;
+
+NOTIFY pgrst, 'reload schema';
+
+-- ═══════════════════════════════════════════════════════════
+-- 20260920090000_fix_partial_payment_remaining_fees.sql
+-- ═══════════════════════════════════════════════════════════
+-- Mantém a parcela aberta quando o pagamento cobre apenas o principal
+-- e ainda existem juros/multa de atraso.
+-- A RPC anterior confiava somente em contract_installments.late_fee. Esse
+-- campo pode estar desatualizado (o frontend calcula o encargo dinamicamente),
+-- fazendo um pagamento parcial ser interpretado como quitação.
+-- (Substituída pela versão final em 20260921090000, logo abaixo — mantida
+-- aqui apenas para registrar a cadeia de correções.)
+
+-- ═══════════════════════════════════════════════════════════
+-- 20260921090000_fix_percentage_settlement_late_fee.sql
+-- ═══════════════════════════════════════════════════════════
+-- settle_percentage_installment (quitação de contratos "por porcentagem" e
+-- "só juros") grava `amount = capital + juros` na parcela ANTES de chamar
+-- pay_installment, para que o total_due inclua o capital.
+--
+-- Só que pay_installment recalcula a multa/juros de atraso dinamicamente
+-- usando `inst.amount` como base do juros composto diário. Com `amount` já
+-- inflado para capital + juros, um contrato atrasado passa a acumular juros
+-- de atraso sobre o CAPITAL inteiro (não mais sobre a parcela periódica),
+-- inflando o encargo calculado muito além do `_total` que a quitação enviou
+-- — e a chamada falha com `payment_below_installment_balance`: a parcela
+-- nunca dá baixa.
+--
+-- Para os modos 'percentage' e 'interest_only' o valor da parcela nunca foi
+-- a base correta para essa fórmula (o job auto-late-fees já mantém
+-- `late_fee` atualizado com a base certa todos os dias); a recomputação
+-- dinâmica aqui é só uma rede de segurança para o dia corrente e não deve
+-- rodar sobre um `amount` que a própria quitação acabou de inflar.
+
+DROP FUNCTION IF EXISTS public.pay_installment(uuid, numeric, boolean, text, text, text);
+
+CREATE OR REPLACE FUNCTION public.pay_installment(
+  _installment_id uuid,
+  _paid_total numeric,
+  _mark_paid boolean DEFAULT true,
+  _method text DEFAULT 'pix',
+  _receipt_url text DEFAULT NULL,
+  _source_key text DEFAULT NULL
+) RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  uid uuid := auth.uid();
+  inst public.contract_installments%ROWTYPE;
+  contract_row public.contracts%ROWTYPE;
+  total_due numeric;
+  old_paid numeric;
+  new_paid numeric;
+  received numeric;
+  stored_late_fee numeric;
+  calculated_late_fee numeric;
+  effective_late_fee numeric;
+  base_amount numeric;
+  daily_rate numeric;
+  penalty_value numeric;
+  penalty_amount numeric;
+  cap_percent numeric;
+  cap_amount numeric;
+  days_late integer;
+  fee_target numeric;
+  interest_target numeric;
+  principal_target numeric;
+  old_fee numeric;
+  old_interest numeric;
+  old_principal numeric;
+  fee_delta numeric;
+  interest_delta numeric;
+  principal_delta numeric;
+  next_status text;
+BEGIN
+  IF uid IS NULL THEN RAISE EXCEPTION 'auth_required'; END IF;
+  IF _installment_id IS NULL THEN RAISE EXCEPTION 'installment_required'; END IF;
+  IF COALESCE(_paid_total, 0) < 0 THEN RAISE EXCEPTION 'invalid_payment_amount'; END IF;
+
+  SELECT * INTO inst
+  FROM public.contract_installments
+  WHERE id = _installment_id AND user_id = uid
+  FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'installment_not_found'; END IF;
+
+  SELECT * INTO contract_row
+  FROM public.contracts
+  WHERE id = inst.contract_id AND user_id = uid
+  FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'contract_not_found'; END IF;
+  IF inst.status = 'cancelled' THEN RAISE EXCEPTION 'installment_closed'; END IF;
+
+  -- Recalcula o encargo com a mesma política exibida pelo app. O valor já
+  -- gravado nunca é reduzido: ele pode conter um encargo materializado por
+  -- uma execução anterior do job de atraso.
+  base_amount := greatest(0, coalesce(inst.amount, 0));
+  stored_late_fee := greatest(0, coalesce(inst.late_fee, 0));
+  calculated_late_fee := 0;
+  days_late := greatest(0, current_date - inst.due_date::date);
+
+  -- 'percentage'/'interest_only': `amount` é o valor do ciclo (juros), mas na
+  -- quitação (settle_percentage_installment) ele é reescrito para
+  -- capital + juros antes desta chamada. Rodar o juros composto diário sobre
+  -- essa base inflada cobraria juros de atraso sobre o capital inteiro.
+  -- O `late_fee` já gravado (mantido em dia pelo job auto-late-fees) é
+  -- suficiente para esses modos.
+  IF inst.status NOT IN ('paid', 'cancelled') AND base_amount > 0 AND days_late > 0
+     AND coalesce(contract_row.loan_mode, '') NOT IN ('percentage', 'interest_only') THEN
+    daily_rate := greatest(0, coalesce(nullif(contract_row.daily_interest_percent, 0), 4));
+    penalty_value := greatest(0, coalesce(contract_row.daily_penalty_value, 0));
+    penalty_amount := CASE
+      WHEN coalesce(contract_row.daily_penalty_type, 'percentage') = 'fixed'
+        THEN penalty_value * days_late
+      ELSE base_amount * (penalty_value / 100) * days_late
+    END;
+    calculated_late_fee := round((
+      base_amount * (power(1 + daily_rate / 100, days_late) - 1)
+      + penalty_amount
+    )::numeric, 2);
+
+    cap_percent := greatest(0, coalesce(contract_row.max_interest_cap_percent, 0));
+    IF cap_percent > 0 THEN
+      cap_amount := round((base_amount * cap_percent / 100)::numeric, 2);
+      calculated_late_fee := least(calculated_late_fee, cap_amount);
+    END IF;
+  END IF;
+
+  effective_late_fee := greatest(stored_late_fee, calculated_late_fee);
+  total_due := round(base_amount + effective_late_fee, 2);
+  old_paid := round(greatest(0, coalesce(inst.paid_amount, 0)), 2);
+
+  -- O mesmo comprovante pode chegar novamente por retry do WhatsApp/Evolution.
+  IF NULLIF(trim(_source_key), '') IS NOT NULL AND EXISTS (
+    SELECT 1 FROM public.transactions
+    WHERE user_id = uid AND source_key = trim(_source_key)
+  ) THEN
+    RETURN jsonb_build_object('ok', true, 'idempotent', true, 'installment_id', inst.id,
+      'paid_total', old_paid, 'status', inst.status);
+  END IF;
+
+  IF inst.status = 'paid' THEN
+    RETURN jsonb_build_object('ok', true, 'idempotent', true, 'installment_id', inst.id,
+      'paid_total', old_paid, 'status', inst.status);
+  END IF;
+
+  IF _mark_paid AND COALESCE(_paid_total, 0) + 0.005 < total_due THEN
+    RAISE EXCEPTION 'payment_below_installment_balance';
+  END IF;
+
+  new_paid := round(least(total_due, greatest(old_paid, COALESCE(_paid_total, 0))), 2);
+  received := round(greatest(0, new_paid - old_paid), 2);
+  IF received <= 0 THEN RAISE EXCEPTION 'payment_below_installment_balance'; END IF;
+
+  -- Primeiro encargos, depois juros e por fim principal. Os alvos acumulados
+  -- impedem duplicação de lucro/caixa em vários pagamentos parciais.
+  fee_target := round(least(new_paid, effective_late_fee), 2);
+  interest_target := round(least(
+    greatest(0, new_paid - fee_target),
+    greatest(0, coalesce(inst.scheduled_interest, inst.amount, 0))
+  ), 2);
+  principal_target := round(greatest(0, new_paid - fee_target - interest_target), 2);
+
+  old_fee := round(greatest(0, coalesce(inst.paid_fees, 0)), 2);
+  old_interest := round(greatest(0, coalesce(inst.paid_interest, 0)), 2);
+  old_principal := round(greatest(0, coalesce(inst.paid_principal, 0)), 2);
+  fee_delta := round(greatest(0, fee_target - old_fee), 2);
+  interest_delta := round(greatest(0, interest_target - old_interest), 2);
+  principal_delta := round(greatest(0, principal_target - old_principal), 2);
+
+  next_status := CASE
+    WHEN _mark_paid OR new_paid + 0.005 >= total_due THEN 'paid'
+    ELSE CASE WHEN inst.due_date < current_date THEN 'overdue' ELSE 'pending' END
+  END;
+
+  UPDATE public.contract_installments
+  SET late_fee = effective_late_fee,
+      paid_amount = new_paid,
+      paid_fees = old_fee + fee_delta,
+      paid_interest = old_interest + interest_delta,
+      paid_principal = old_principal + principal_delta,
+      status = next_status,
+      paid_at = CASE WHEN next_status = 'paid' THEN COALESCE(inst.paid_at, now()) ELSE inst.paid_at END,
+      payment_method = COALESCE(NULLIF(_method, ''), payment_method),
+      receipt_url = COALESCE(_receipt_url, receipt_url)
+  WHERE id = inst.id AND user_id = uid;
+
+  INSERT INTO public.transactions (
+    user_id, amount, type, category, description, client_id, contract_id,
+    installment_id, principal_amount, interest_amount, fee_amount, source_key
+  ) VALUES (
+    uid, received, 'payment', 'loan_payment',
+    CASE WHEN next_status = 'paid' THEN 'Pagamento da parcela #' ELSE 'Pagamento parcial da parcela #' END
+      || COALESCE(inst.installment_number::text, '-'),
+    inst.client_id, inst.contract_id, inst.id,
+    principal_delta, interest_delta, fee_delta, NULLIF(trim(_source_key), '')
+  );
+
+  IF interest_delta + fee_delta > 0 THEN
+    INSERT INTO public.profits (user_id, amount, description, client_id, installment_id)
+    VALUES (uid, interest_delta + fee_delta,
+      'Juros e encargos da parcela #' || COALESCE(inst.installment_number::text, '-'),
+      inst.client_id, inst.id);
+  END IF;
+
+  IF next_status = 'paid' AND NOT EXISTS (
+    SELECT 1 FROM public.contract_installments
+    WHERE contract_id = inst.contract_id AND user_id = uid
+      AND status NOT IN ('paid', 'cancelled')
+  ) THEN
+    UPDATE public.contracts
+    SET status = 'completed'
+    WHERE id = inst.contract_id AND user_id = uid;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'ok', true,
+    'installment_id', inst.id,
+    'paid_total', new_paid,
+    'received', received,
+    'late_fee', effective_late_fee,
+    'remaining', greatest(0, round(total_due - new_paid, 2)),
+    'status', next_status
+  );
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.pay_installment(uuid, numeric, boolean, text, text, text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.pay_installment(uuid, numeric, boolean, text, text, text) TO authenticated;
 
 NOTIFY pgrst, 'reload schema';
 
