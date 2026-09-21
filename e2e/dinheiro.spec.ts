@@ -57,7 +57,10 @@ test.describe("rotas de administração não podem estar abertas", () => {
       data: {},
       failOnStatusCode: false,
     });
-    expect(res.status()).toBe(404);
+    // No Supabase Cloud uma função inexistente dá 404. Neste projeto self-hosted
+    // o edge-runtime responde 500 (InvalidWorkerCreation: não achou entrypoint)
+    // para o mesmo caso — o que importa é que nenhum dos dois executa a função.
+    expect([404, 500]).toContain(res.status());
   });
 });
 

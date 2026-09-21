@@ -20,7 +20,8 @@ for (const key of ["VITE_SUPABASE_URL", "VITE_SUPABASE_PUBLISHABLE_KEY"]) {
   if (!process.env[key] && viteEnv[key]) process.env[key] = viteEnv[key];
 }
 
-const baseURL = process.env.E2E_BASE_URL || "https://www.credmaisapp.com.br";
+// `www.credmaisapp.com.br` has no DNS record — only the bare domain resolves.
+const baseURL = process.env.E2E_BASE_URL || "https://credmaisapp.com.br";
 
 export default defineConfig({
   testDir: "./e2e",
