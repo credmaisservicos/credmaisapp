@@ -1995,6 +1995,13 @@ const ClienteDetalhe = () => {
                     const daysOverdue = fee.daysLate;
                     const baseOutstanding = Math.max(0, base - paidAmount);
                     const totalDue = outstandingDue(feeInput);
+                    // Uma parcela "paga" deveria ter recebido base + a multa/juros
+                    // gravada no momento da baixa (inst.late_fee, já congelada).
+                    // Se paid_amount ficou abaixo disso, algo fechou a parcela
+                    // sem cobrir o total devido — mostra isso em vez de "Pago"
+                    // silencioso, que escondia exatamente esse tipo de saldo.
+                    const owedAtSettlement = Math.round((base + Number(inst.late_fee || 0)) * 100) / 100;
+                    const paidShortfall = isPaid ? Math.max(0, Math.round((owedAtSettlement - paidAmount) * 100) / 100) : 0;
                     return (
                       <div key={inst.id} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-colors ${isOverdue ? "bg-destructive/[0.04] border-destructive/20" : isPaid ? "bg-success/[0.04] border-success/15" : "bg-card border-border/60"}`}>
                         <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${isOverdue ? "bg-destructive/10 text-destructive ring-1 ring-destructive/20" : isPaid ? "bg-success/10 text-success ring-1 ring-success/20" : "bg-muted text-muted-foreground"}`}>
@@ -2002,7 +2009,9 @@ const ClienteDetalhe = () => {
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-baseline gap-2 flex-wrap">
-                            <p className="text-sm font-bold text-foreground tabular-nums">R$ {fmt(partial ? baseOutstanding : base)}</p>
+                            <p className="text-sm font-bold text-foreground tabular-nums">
+                              R$ {fmt(partial ? baseOutstanding : paidShortfall > 0.01 ? paidAmount : base)}
+                            </p>
                             {isOverdue && feeLive > 0 && (
                               <>
                                 <span className="text-[10px] font-medium text-destructive/80 tabular-nums">+ R$ {fmt(feeLive)}</span>
@@ -2011,12 +2020,18 @@ const ClienteDetalhe = () => {
                                 </span>
                               </>
                             )}
+                            {paidShortfall > 0.01 && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-warning tabular-nums">
+                                <AlertTriangle size={10} /> faltam R$ {fmt(paidShortfall)}
+                              </span>
+                            )}
                           </div>
                           <p className="text-[10px] text-muted-foreground mt-0.5">
                             {formatBR(inst.due_date)}
                             {isOverdue && <span className="text-destructive/70 font-medium"> · {daysOverdue}d atraso</span>}
                             {inst.paid_at && ` · Pago ${formatBR(inst.paid_at)}`}
                             {partial && ` · Parcial R$ ${fmt(Number(inst.paid_amount))}`}
+                            {paidShortfall > 0.01 && <span className="text-warning font-semibold"> · recebido R$ {fmt(paidAmount)} de R$ {fmt(owedAtSettlement)}</span>}
                           </p>
                           {(inst.scheduled_principal != null || inst.paid_principal != null) && (
                             <p className="mt-1 text-[10px] text-muted-foreground tabular-nums">
