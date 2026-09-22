@@ -9,6 +9,7 @@ lerna-debug.log*
 
 node_modules
 .playwright-cli/
+.playwright-mcp/
 dist
 dist-ssr
 dist-mobile
