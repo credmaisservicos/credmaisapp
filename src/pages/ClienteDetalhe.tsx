@@ -818,7 +818,7 @@ const ClienteDetalhe = () => {
     return await getSignedUploadUrl(path);
   };
 
-  const payFull = async (instId: string, amount: number, method: string = "pix", receiptUrl: string | null = null, announce = true): Promise<boolean> => {
+  const payFull = async (instId: string, amount: number, method: string = "pix", receiptUrl: string | null = null, announce = true, feeDiscount = 0): Promise<boolean> => {
     if (!user) return false;
     const patch: any = { status: "paid", paid_at: new Date().toISOString(), paid_amount: amount, payment_method: method };
     if (receiptUrl) patch.receipt_url = receiptUrl;
@@ -833,6 +833,7 @@ const ClienteDetalhe = () => {
       _method: method,
       _receipt_url: receiptUrl,
       _source_key: null,
+      _fee_discount: Math.max(0, safeNumber(feeDiscount)),
     });
     if (error) {
       qc.setQueryData(["client-installments", id], snapshot);
@@ -872,7 +873,7 @@ const ClienteDetalhe = () => {
       if (!receiptUrl) { setPayUploading(false); return; }
     }
     if (val + 0.005 >= adjustedDue) {
-      await payFull(partialPayModal.id, accumulatedPaymentTotal(paymentInput, adjustedDue), payMethod, receiptUrl);
+      await payFull(partialPayModal.id, accumulatedPaymentTotal(paymentInput, adjustedDue), payMethod, receiptUrl, true, payFeeDiscount);
     } else {
       const patch: any = { paid_amount: alreadyPaid + val, payment_method: payMethod };
       if (receiptUrl) patch.receipt_url = receiptUrl;
@@ -886,6 +887,7 @@ const ClienteDetalhe = () => {
         _method: payMethod,
         _receipt_url: receiptUrl,
         _source_key: null,
+        _fee_discount: Math.max(0, safeNumber(payFeeDiscount)),
       });
       if (error) {
         qc.setQueryData(["client-installments", id], snapshot);

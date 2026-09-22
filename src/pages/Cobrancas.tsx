@@ -234,7 +234,7 @@ const Cobrancas = () => {
   // Pagamento atômico via RPC no servidor: atualiza a parcela, lança lucro (juros
   // reais do contrato) e caixa (só o dinheiro novo) e conclui o contrato — tudo
   // numa transação. Elimina os estados inconsistentes das escritas separadas.
-  const markPaidOne = async (inst: any, paidValue?: number) => {
+  const markPaidOne = async (inst: any, paidValue?: number, feeDiscount = 0) => {
     if (!user) return;
     const paid = Math.max(0, safeNumber(paidValue ?? computeLateFeeBreakdown(inst).withFees));
     const { error } = await supabase.rpc("pay_installment", {
@@ -244,11 +244,12 @@ const Cobrancas = () => {
       _method: "pix",
       _receipt_url: null,
       _source_key: null,
+      _fee_discount: Math.max(0, safeNumber(feeDiscount)),
     });
     if (error) throw error;
   };
 
-  const markPaidPartial = async (inst: any, amount: number) => {
+  const markPaidPartial = async (inst: any, amount: number, feeDiscount = 0) => {
     if (!user) return;
     const prev = Math.max(0, safeNumber(inst.paid_amount));
     const next = Math.round((prev + Math.max(0, safeNumber(amount))) * 100) / 100;
@@ -259,6 +260,7 @@ const Cobrancas = () => {
       _method: "pix",
       _receipt_url: null,
       _source_key: null,
+      _fee_discount: Math.max(0, safeNumber(feeDiscount)),
     });
     if (error) throw error;
   };
@@ -354,7 +356,7 @@ const Cobrancas = () => {
     if (isFull) {
       const snapshot = optimisticMarkPaid([id]);
       try {
-        await markPaidOne(inst, alreadyPaid + value);
+        await markPaidOne(inst, alreadyPaid + value, appliedDiscount);
         setConfirmPayId(null);
         qc.invalidateQueries({ queryKey: ["cobrancas-installments"] });
         qc.invalidateQueries({ queryKey: ["dashboard-data"] });
@@ -369,7 +371,7 @@ const Cobrancas = () => {
       }
     } else {
       try {
-        await markPaidPartial(inst, value);
+        await markPaidPartial(inst, value, appliedDiscount);
         setConfirmPayId(null);
         qc.invalidateQueries({ queryKey: ["cobrancas-installments"] });
         qc.invalidateQueries({ queryKey: ["dashboard-data"] });
