@@ -648,15 +648,23 @@ const Cobrancas = () => {
     return arr;
   }, [installments, filter, period, sort, dSearch, focoDia, bucket]);
 
-  // Aggregate per-client contract facts using ALL installments (unfiltered) so numbers are stable
-  const clientAggregates = useMemo(() => {
-    // Which contracts still have any non-paid installment (active contracts only)
-    const contractHasOpen = new Map<string, boolean>();
+  // Contratos que ainda têm alguma parcela em aberto (ativos). Compartilhado
+  // entre clientAggregates e grouped para que uma parcela paga de um contrato
+  // JÁ ENCERRADO não volte a aparecer misturada na lista de cobrança de um
+  // cliente que só tem outro contrato em aberto — Cobranças é sobre o que
+  // falta cobrar agora, não o histórico completo (isso já existe na Ficha).
+  const contractHasOpen = useMemo(() => {
+    const map = new Map<string, boolean>();
     for (const inst of installments as any[]) {
       if (!inst.contract_id) continue;
-      if (isEmAberto(inst)) contractHasOpen.set(inst.contract_id, true);
-      else if (!contractHasOpen.has(inst.contract_id)) contractHasOpen.set(inst.contract_id, false);
+      if (isEmAberto(inst)) map.set(inst.contract_id, true);
+      else if (!map.has(inst.contract_id)) map.set(inst.contract_id, false);
     }
+    return map;
+  }, [installments]);
+
+  // Aggregate per-client contract facts using ALL installments (unfiltered) so numbers are stable
+  const clientAggregates = useMemo(() => {
     const m = new Map<string, { loaned: number; totalInstallments: number; grossExpected: number; paidAmount: number; paidCount: number; overdueCount: number; overdueFees: number; overdueAmount: number }>();
     const seenContracts = new Map<string, Set<string>>();
     for (const inst of installments as any[]) {
@@ -687,11 +695,16 @@ const Cobrancas = () => {
     }
 
     return m;
-  }, [installments]);
+  }, [installments, contractHasOpen]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, { client_id: string; client_name: string; items: any[]; total: number; totalWithFees: number; totalFees: number; minDue: string }>();
     filtered.forEach((inst: any) => {
+      // Parcela paga de um contrato já totalmente encerrado: não é ação de
+      // cobrança nem contexto útil misturada com o contrato aberto de outro
+      // cliente — deixa fora da lista (fica na Ficha). Não se aplica quando o
+      // operador está explicitamente revisando o filtro "Pagas".
+      if (filter !== "paid" && inst.contract_id && !isEmAberto(inst) && contractHasOpen.get(inst.contract_id) === false) return;
       if (!map.has(inst.client_id)) {
         map.set(inst.client_id, { client_id: inst.client_id, client_name: inst.client_name, items: [], total: 0, totalWithFees: 0, totalFees: 0, minDue: inst.due_date });
       }
@@ -739,7 +752,7 @@ const Cobrancas = () => {
       });
     });
     return groups;
-  }, [filtered, sort]);
+  }, [filtered, sort, contractHasOpen, filter]);
 
   const stats = useMemo(() => {
     const pending = installments.filter((i: any) => isEmAberto(i) && !isEmAtraso(i));
