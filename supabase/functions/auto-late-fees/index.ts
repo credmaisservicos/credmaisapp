@@ -123,14 +123,16 @@ serve(async (req) => {
       // Não existe mais multa fixa/mensal. O percentual incide sobre o valor
       // acumulado: 100 -> 104 -> 108,16 -> 112,49 ...
       const defaults = settingsMap.get(config.user_id) || { late_fee: 0, daily_interest: 0 };
-      // Para contratos configurados com multa diária, ela é a única cobrança
-      // de atraso: percentual ou valor fixo, sem somar juros diários ocultos.
-      const hasDailyPenalty = config.daily_penalty_type === "fixed" || config.daily_penalty_value > 0;
-      const dailyPct = hasDailyPenalty
-        ? 0
-        : config.daily_interest_percent > 0
-          ? config.daily_interest_percent
-          : (defaults.daily_interest > 0 ? defaults.daily_interest : DEFAULT_DAILY_LATE_RATE);
+      // Juros diário composto SEMPRE soma com a multa diária configurada — a
+      // mesma política de src/lib/lateFee.ts (computeLateFee) e da RPC
+      // pay_installment. Uma versão anterior zerava o juros quando havia
+      // multa configurada, tratando-os como mutuamente exclusivos; isso
+      // deixava esse job (usado pelo bot/lembretes) subestimar o encargo
+      // real que pay_installment exige no pagamento, e o cliente pagava
+      // exatamente o que foi cobrado por aqui só para a baixa falhar de novo.
+      const dailyPct = config.daily_interest_percent > 0
+        ? config.daily_interest_percent
+        : (defaults.daily_interest > 0 ? defaults.daily_interest : DEFAULT_DAILY_LATE_RATE);
       const lateFeePct = 0;
 
       let totalLateFee = Math.round(

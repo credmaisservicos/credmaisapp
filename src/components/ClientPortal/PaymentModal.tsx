@@ -42,6 +42,7 @@ export const PaymentModal = ({ isOpen, onOpenChange, installment, ownerProfile, 
   const isOverdue = installment?.status === "overdue" ||
     (installment && installment.status !== "paid" && isDateOverdue(installment.due_date));
   const isPaid = installment?.status === "paid";
+  const alreadyPaid = Math.max(0, Number(installment?.paid_amount) || 0);
 
   const liveFee = useMemo(() => {
     if (!installment) return 0;
@@ -91,8 +92,10 @@ export const PaymentModal = ({ isOpen, onOpenChange, installment, ownerProfile, 
       toast({ title: "Sem WhatsApp do credor", description: "Entre em contato pelos canais informados.", variant: "destructive" });
       return;
     }
-    const amount = Number(installment.amount);
-    const valor = (Number.isFinite(amount) ? amount : 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    // totalDue já reflete multa/juros vigentes e desconta qualquer pagamento
+    // parcial já registrado — installment.amount sozinho é só o valor bruto
+    // original e mandaria o credor um número desatualizado.
+    const valor = (Number.isFinite(totalDue) ? totalDue : 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
     const venc = formatBR(installment.due_date) || "data indisponível";
     const nome = clientData?.name || "Cliente";
     const msg = `Olá! Sou *${nome}* e acabei de efetuar o pagamento da parcela #${installment.installment_number} no valor de *${valor}* (venc. ${venc}). Segue o comprovante a seguir 👇`;
@@ -190,11 +193,15 @@ export const PaymentModal = ({ isOpen, onOpenChange, installment, ownerProfile, 
             </div>
           </div>
           <h2 className="text-2xl font-bold mt-2">R$ {fmt(totalDue)}</h2>
-          {!isPaid && liveFee > 0 && (
+          {!isPaid && alreadyPaid > 0 ? (
+            <p className="text-white/90 text-xs">
+              Você já pagou R$ {fmt(alreadyPaid)} desta parcela — falta R$ {fmt(totalDue)}
+            </p>
+          ) : !isPaid && liveFee > 0 ? (
             <p className="text-white/90 text-xs">
               Parcela R$ {fmt(installment.amount)} + multa/juros R$ {fmt(liveFee)}
             </p>
-          )}
+          ) : null}
           <p className="text-white/80 text-sm">
             {isPaid
               ? `Pago em ${formatBR(installment.paid_at) || "data indisponível"}`

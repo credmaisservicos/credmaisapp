@@ -1991,4 +1991,464 @@ GRANT EXECUTE ON FUNCTION public.pay_installment(uuid, numeric, boolean, text, t
 
 NOTIFY pgrst, 'reload schema';
 
+-- ═══════════════════════════════════════════════════════════
+-- 20260922100000_reverse_percentage_settlement.sql
+-- ═══════════════════════════════════════════════════════════
+-- Bug: settle_percentage_installment ("Quitar capital + juros", usado em
+-- contratos loan_mode='percentage'/'interest_only") reescreve
+-- contract_installments.amount de "juros do ciclo" para "capital + juros",
+-- e também sobrescreve scheduled_principal/scheduled_interest — mas
+-- reverse_installment_payment (o estorno) nunca desfazia isso: só zerava
+-- paid_amount/paid_fees/paid_interest/paid_principal/paid_at/status.
+--
+-- Consequência: depois de quitar e estornar um contrato por porcentagem/só
+-- juros, a parcela reaberta fica com `amount` permanentemente inflado em
+-- capital+juros. Daí em diante:
+--   1. auto-late-fees calcula juros composto diário sobre essa base inflada
+--      (capital inteiro, não mais o ciclo periódico) todo santo dia — a
+--      multa dispara.
+--   2. Se a parcela for quitada de novo, settle_percentage_installment lê
+--      `_interest := inst.amount` (já capital+juros) e soma `contract.capital`
+--      de novo por cima — dobra o principal cobrado.
+--
+-- Fix: settle_percentage_installment agora guarda o estado anterior em
+-- `pre_settlement_snapshot` antes de reescrever a parcela. reverse_installment_payment
+-- restaura amount/scheduled_principal/scheduled_interest desse snapshot
+-- quando ele existir, e limpa a coluna depois — tornando o estorno seguro
+-- para reaplicar quitação/estorno quantas vezes for preciso.
+
+ALTER TABLE public.contract_installments
+  ADD COLUMN IF NOT EXISTS pre_settlement_snapshot jsonb;
+
+-- ── settle_percentage_installment ───────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.settle_percentage_installment(
+  _installment_id uuid,
+  _method text DEFAULT 'pix',
+  _receipt_url text DEFAULT NULL
+) RETURNS jsonb
+LANGUAGE plpgsql SECURITY INVOKER SET search_path TO 'public'
+AS $$
+DECLARE
+  _inst public.contract_installments%rowtype;
+  _contract public.contracts%rowtype;
+  _principal numeric;
+  _interest numeric;
+  _total numeric;
+BEGIN
+  SELECT * INTO _inst FROM public.contract_installments WHERE id = _installment_id FOR UPDATE;
+  IF _inst.id IS NULL OR _inst.user_id <> auth.uid() THEN RAISE EXCEPTION 'installment_not_found'; END IF;
+  IF _inst.status IN ('paid', 'cancelled') THEN RAISE EXCEPTION 'installment_closed'; END IF;
+  SELECT * INTO _contract FROM public.contracts WHERE id = _inst.contract_id AND user_id = auth.uid();
+  IF _contract.id IS NULL THEN RAISE EXCEPTION 'contract_not_found'; END IF;
+  IF _contract.loan_mode NOT IN ('percentage', 'interest_only') THEN RAISE EXCEPTION 'not_renewable_contract'; END IF;
+
+  _principal := greatest(0, coalesce(_contract.capital, 0));
+  _interest := greatest(0, coalesce(_inst.amount, 0));
+  _total := round((_principal + _interest + greatest(0, coalesce(_inst.late_fee, 0)))::numeric, 2);
+  IF _total <= 0 THEN RAISE EXCEPTION 'invalid_settlement_amount'; END IF;
+
+  UPDATE public.contract_installments
+  SET amount = round((_principal + _interest)::numeric, 2),
+      scheduled_principal = _principal,
+      scheduled_interest = _interest,
+      -- Só grava um snapshot novo se não houver um pendente: evita perder o
+      -- estado ORIGINAL caso, por algum motivo, esta parcela seja "quitada"
+      -- mais de uma vez sem um estorno completo entre as chamadas.
+      pre_settlement_snapshot = COALESCE(_inst.pre_settlement_snapshot, jsonb_build_object(
+        'amount', _inst.amount,
+        'scheduled_principal', _inst.scheduled_principal,
+        'scheduled_interest', _inst.scheduled_interest
+      ))
+  WHERE id = _inst.id;
+
+  RETURN public.pay_installment(_installment_id, _total, true, _method, _receipt_url);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.settle_percentage_installment(uuid, text, text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.settle_percentage_installment(uuid, text, text) TO authenticated;
+
+-- ── reverse_installment_payment ─────────────────────────────────────────
+DROP FUNCTION IF EXISTS public.reverse_installment_payment(uuid);
+CREATE OR REPLACE FUNCTION public.reverse_installment_payment(_installment_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  uid uuid := auth.uid();
+  inst public.contract_installments%ROWTYPE;
+  snap jsonb;
+BEGIN
+  IF uid IS NULL THEN RAISE EXCEPTION 'auth_required'; END IF;
+  SELECT * INTO inst FROM public.contract_installments
+    WHERE id = _installment_id AND user_id = uid FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'installment_not_found'; END IF;
+
+  DELETE FROM public.profits
+    WHERE user_id = uid AND installment_id = inst.id;
+  DELETE FROM public.transactions
+    WHERE user_id = uid AND installment_id = inst.id
+      AND type = 'payment' AND COALESCE(category, '') <> 'interest_renewal';
+
+  snap := inst.pre_settlement_snapshot;
+
+  UPDATE public.contract_installments
+  SET paid_amount = 0, paid_fees = 0, paid_interest = 0, paid_principal = 0,
+      paid_at = NULL,
+      status = CASE WHEN due_date < current_date THEN 'overdue' ELSE 'pending' END,
+      -- Desfaz a inflação de amount/scheduled_* que settle_percentage_installment
+      -- aplicou antes de quitar (ver 20260922100000). Sem isso a parcela
+      -- reaberta ficava com capital+juros permanentemente na base de cálculo
+      -- do juros de atraso e do próximo "quitar capital + juros".
+      amount = CASE WHEN snap IS NOT NULL THEN (snap->>'amount')::numeric ELSE amount END,
+      scheduled_principal = CASE WHEN snap IS NOT NULL THEN (snap->>'scheduled_principal')::numeric ELSE scheduled_principal END,
+      scheduled_interest = CASE WHEN snap IS NOT NULL THEN (snap->>'scheduled_interest')::numeric ELSE scheduled_interest END,
+      pre_settlement_snapshot = NULL
+  WHERE id = inst.id AND user_id = uid;
+
+  UPDATE public.contracts SET status = CASE
+    WHEN status = 'completed' THEN 'active' ELSE status END
+  WHERE id = inst.contract_id AND user_id = uid;
+
+  RETURN jsonb_build_object('ok', true, 'installment_id', inst.id, 'status', 'reversed');
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.pay_installment(uuid, numeric, boolean, text, text, text, numeric),
+  public.reverse_installment_payment(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.pay_installment(uuid, numeric, boolean, text, text, text, numeric),
+  public.reverse_installment_payment(uuid) TO authenticated;
+
+NOTIFY pgrst, 'reload schema';
+
+-- ═══════════════════════════════════════════════════════════
+-- 20260922110000_fee_discount_full_settlement_only.sql
+-- ═══════════════════════════════════════════════════════════
+-- Bug: _fee_discount (20260922090000) era honrado mesmo com _mark_paid=false
+-- (pagamento parcial). Isso é alcançável em PagamentoModal.tsx: o operador
+-- arrasta o slider de desconto (fixa `payFeeDiscount`) e depois edita o campo
+-- de valor manualmente para algo MENOR que o total já descontado — vira um
+-- pagamento parcial com desconto.
+--
+-- O problema é que o desconto não é durável: ele só reduz o `total_due`
+-- DESSA chamada. Na próxima leitura/pagamento (ou no próximo run do cron
+-- auto-late-fees), `effective_late_fee := greatest(stored_late_fee,
+-- calculated_late_fee)` recalcula a multa do zero — sem saber que um
+-- desconto foi concedido — e o valor recalculado quase sempre volta a ser
+-- maior que o stored (descontado), "desfazendo" o desconto silenciosamente.
+-- Resultado: o operador registra um desconto que nunca chega a valer, e o
+-- saldo do cliente volta a subir sozinho pouco depois.
+--
+-- Fix: desconto de encargo só é aceito quando a chamada efetivamente quita
+-- a parcela (_mark_paid=true) — mesma regra que a UI de Cobrancas.tsx já
+-- segue (lá o modo de desconto sempre mira o valor final, nunca parcial).
+-- Isso elimina a ambiguidade em vez de tentar tornar o desconto parcial
+-- "durável", que exigiria um novo mecanismo de rastreamento permanente sem
+-- necessidade de produto clara para isso hoje.
+
+DROP FUNCTION IF EXISTS public.pay_installment(uuid, numeric, boolean, text, text, text, numeric);
+
+CREATE OR REPLACE FUNCTION public.pay_installment(
+  _installment_id uuid,
+  _paid_total numeric,
+  _mark_paid boolean DEFAULT true,
+  _method text DEFAULT 'pix',
+  _receipt_url text DEFAULT NULL,
+  _source_key text DEFAULT NULL,
+  _fee_discount numeric DEFAULT 0
+) RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  uid uuid := auth.uid();
+  inst public.contract_installments%ROWTYPE;
+  contract_row public.contracts%ROWTYPE;
+  total_due numeric;
+  old_paid numeric;
+  new_paid numeric;
+  received numeric;
+  stored_late_fee numeric;
+  calculated_late_fee numeric;
+  effective_late_fee numeric;
+  applied_fee_discount numeric;
+  base_amount numeric;
+  daily_rate numeric;
+  penalty_value numeric;
+  penalty_amount numeric;
+  cap_percent numeric;
+  cap_amount numeric;
+  days_late integer;
+  fee_target numeric;
+  interest_target numeric;
+  principal_target numeric;
+  old_fee numeric;
+  old_interest numeric;
+  old_principal numeric;
+  fee_delta numeric;
+  interest_delta numeric;
+  principal_delta numeric;
+  next_status text;
+BEGIN
+  IF uid IS NULL THEN RAISE EXCEPTION 'auth_required'; END IF;
+  IF _installment_id IS NULL THEN RAISE EXCEPTION 'installment_required'; END IF;
+  IF COALESCE(_paid_total, 0) < 0 THEN RAISE EXCEPTION 'invalid_payment_amount'; END IF;
+
+  SELECT * INTO inst
+  FROM public.contract_installments
+  WHERE id = _installment_id AND user_id = uid
+  FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'installment_not_found'; END IF;
+
+  SELECT * INTO contract_row
+  FROM public.contracts
+  WHERE id = inst.contract_id AND user_id = uid
+  FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'contract_not_found'; END IF;
+  IF inst.status = 'cancelled' THEN RAISE EXCEPTION 'installment_closed'; END IF;
+
+  base_amount := greatest(0, coalesce(inst.amount, 0));
+  stored_late_fee := greatest(0, coalesce(inst.late_fee, 0));
+  calculated_late_fee := 0;
+  days_late := greatest(0, current_date - inst.due_date::date);
+
+  IF inst.status NOT IN ('paid', 'cancelled') AND base_amount > 0 AND days_late > 0
+     AND coalesce(contract_row.loan_mode, '') NOT IN ('percentage', 'interest_only') THEN
+    daily_rate := greatest(0, coalesce(nullif(contract_row.daily_interest_percent, 0), 4));
+    penalty_value := greatest(0, coalesce(contract_row.daily_penalty_value, 0));
+    penalty_amount := CASE
+      WHEN coalesce(contract_row.daily_penalty_type, 'percentage') = 'fixed'
+        THEN penalty_value * days_late
+      ELSE base_amount * (penalty_value / 100) * days_late
+    END;
+    calculated_late_fee := round((
+      base_amount * (power(1 + daily_rate / 100, days_late) - 1)
+      + penalty_amount
+    )::numeric, 2);
+
+    cap_percent := greatest(0, coalesce(contract_row.max_interest_cap_percent, 0));
+    IF cap_percent > 0 THEN
+      cap_amount := round((base_amount * cap_percent / 100)::numeric, 2);
+      calculated_late_fee := least(calculated_late_fee, cap_amount);
+    END IF;
+  END IF;
+
+  effective_late_fee := greatest(stored_late_fee, calculated_late_fee);
+
+  -- Desconto só é aplicado quando a chamada quita a parcela: um desconto
+  -- "parcial" não sobrevive à próxima recomputação (ver comentário acima),
+  -- então nem chega a ser concedido — evita a ilusão de um desconto que some
+  -- sozinho depois.
+  applied_fee_discount := CASE WHEN _mark_paid
+    THEN least(greatest(0, coalesce(_fee_discount, 0)), effective_late_fee)
+    ELSE 0
+  END;
+  effective_late_fee := round(effective_late_fee - applied_fee_discount, 2);
+
+  total_due := round(base_amount + effective_late_fee, 2);
+  old_paid := round(greatest(0, coalesce(inst.paid_amount, 0)), 2);
+
+  IF NULLIF(trim(_source_key), '') IS NOT NULL AND EXISTS (
+    SELECT 1 FROM public.transactions
+    WHERE user_id = uid AND source_key = trim(_source_key)
+  ) THEN
+    RETURN jsonb_build_object('ok', true, 'idempotent', true, 'installment_id', inst.id,
+      'paid_total', old_paid, 'status', inst.status);
+  END IF;
+
+  IF inst.status = 'paid' THEN
+    RETURN jsonb_build_object('ok', true, 'idempotent', true, 'installment_id', inst.id,
+      'paid_total', old_paid, 'status', inst.status);
+  END IF;
+
+  IF _mark_paid AND COALESCE(_paid_total, 0) + 0.005 < total_due THEN
+    RAISE EXCEPTION 'payment_below_installment_balance';
+  END IF;
+
+  new_paid := round(least(total_due, greatest(old_paid, COALESCE(_paid_total, 0))), 2);
+  received := round(greatest(0, new_paid - old_paid), 2);
+  IF received <= 0 THEN RAISE EXCEPTION 'payment_below_installment_balance'; END IF;
+
+  fee_target := round(least(new_paid, effective_late_fee), 2);
+  interest_target := round(least(
+    greatest(0, new_paid - fee_target),
+    greatest(0, coalesce(inst.scheduled_interest, inst.amount, 0))
+  ), 2);
+  principal_target := round(greatest(0, new_paid - fee_target - interest_target), 2);
+
+  old_fee := round(greatest(0, coalesce(inst.paid_fees, 0)), 2);
+  old_interest := round(greatest(0, coalesce(inst.paid_interest, 0)), 2);
+  old_principal := round(greatest(0, coalesce(inst.paid_principal, 0)), 2);
+  fee_delta := round(greatest(0, fee_target - old_fee), 2);
+  interest_delta := round(greatest(0, interest_target - old_interest), 2);
+  principal_delta := round(greatest(0, principal_target - old_principal), 2);
+
+  next_status := CASE
+    WHEN _mark_paid OR new_paid + 0.005 >= total_due THEN 'paid'
+    ELSE CASE WHEN inst.due_date < current_date THEN 'overdue' ELSE 'pending' END
+  END;
+
+  UPDATE public.contract_installments
+  SET late_fee = effective_late_fee,
+      paid_amount = new_paid,
+      paid_fees = old_fee + fee_delta,
+      paid_interest = old_interest + interest_delta,
+      paid_principal = old_principal + principal_delta,
+      status = next_status,
+      paid_at = CASE WHEN next_status = 'paid' THEN COALESCE(inst.paid_at, now()) ELSE inst.paid_at END,
+      payment_method = COALESCE(NULLIF(_method, ''), payment_method),
+      receipt_url = COALESCE(_receipt_url, receipt_url)
+  WHERE id = inst.id AND user_id = uid;
+
+  INSERT INTO public.transactions (
+    user_id, amount, type, category, description, client_id, contract_id,
+    installment_id, principal_amount, interest_amount, fee_amount, source_key
+  ) VALUES (
+    uid, received, 'payment', 'loan_payment',
+    CASE WHEN next_status = 'paid' THEN 'Pagamento da parcela #' ELSE 'Pagamento parcial da parcela #' END
+      || COALESCE(inst.installment_number::text, '-'),
+    inst.client_id, inst.contract_id, inst.id,
+    principal_delta, interest_delta, fee_delta, NULLIF(trim(_source_key), '')
+  );
+
+  IF interest_delta + fee_delta > 0 THEN
+    INSERT INTO public.profits (user_id, amount, description, client_id, installment_id)
+    VALUES (uid, interest_delta + fee_delta,
+      'Juros e encargos da parcela #' || COALESCE(inst.installment_number::text, '-'),
+      inst.client_id, inst.id);
+  END IF;
+
+  IF next_status = 'paid' AND NOT EXISTS (
+    SELECT 1 FROM public.contract_installments
+    WHERE contract_id = inst.contract_id AND user_id = uid
+      AND status NOT IN ('paid', 'cancelled')
+  ) THEN
+    UPDATE public.contracts
+    SET status = 'completed'
+    WHERE id = inst.contract_id AND user_id = uid;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'ok', true,
+    'installment_id', inst.id,
+    'paid_total', new_paid,
+    'received', received,
+    'late_fee', effective_late_fee,
+    'fee_discount', applied_fee_discount,
+    'remaining', greatest(0, round(total_due - new_paid, 2)),
+    'status', next_status
+  );
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.pay_installment(uuid, numeric, boolean, text, text, text, numeric) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.pay_installment(uuid, numeric, boolean, text, text, text, numeric) TO authenticated;
+
+NOTIFY pgrst, 'reload schema';
+
+-- ═══════════════════════════════════════════════════════════
+-- 20260922120000_renew_interest_amount_mismatch_guard.sql
+-- ═══════════════════════════════════════════════════════════
+-- Bug: system_renew_installment_interest declara `_amount numeric` (o valor
+-- verificado no comprovante PIX que o bot recebeu) mas NUNCA usa esse
+-- parâmetro — ele só repassa a chamada para renew_installment_interest, que
+-- recalcula o juros sozinho a partir do contrato e grava ESSE valor em
+-- transactions/profits, ignorando silenciosamente o que foi de fato
+-- recebido. Numa mudança de taxa no meio do ciclo, arredondamento, ou
+-- qualquer divergência entre o comprovante e o cálculo do contrato, o caixa
+-- registrado nunca bate com o dinheiro que realmente entrou — sem nenhum
+-- alerta, porque a chamada "tem sucesso" normalmente.
+--
+-- Fix: não é seguro deixar o valor do comprovante (informado pelo cliente
+-- via bot) sobrescrever o cálculo do servidor — isso reabriria a mesma
+-- classe de problema que o checkout do Mercado Pago já evita de propósito
+-- (nunca cobrar o valor que o cliente manda). Em vez disso, se o valor
+-- verificado divergir do juros calculado pelo contrato além de uma
+-- tolerância de arredondamento, a renovação falha alto (RAISE EXCEPTION,
+-- desfazendo a transação inteira) em vez de silenciosamente gravar um
+-- número que não bate com o caixa real — o bot então cai no fallback de
+-- erro já existente (loga a falha e avisa o operador) em vez de fingir que
+-- deu tudo certo.
+
+CREATE OR REPLACE FUNCTION public.system_renew_installment_interest(
+  _installment_id uuid,
+  _amount numeric,
+  _next_due_date timestamptz,
+  _origin text DEFAULT NULL,
+  _source_key text DEFAULT NULL,
+  _method text DEFAULT 'pix'
+) RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  owner_id uuid;
+  result jsonb;
+  tx_id uuid;
+  computed_amount numeric;
+BEGIN
+  IF COALESCE(auth.role(), '') <> 'service_role' THEN
+    RAISE EXCEPTION 'service_role_required';
+  END IF;
+
+  SELECT user_id INTO owner_id
+  FROM public.contract_installments
+  WHERE id = _installment_id;
+  IF owner_id IS NULL THEN RAISE EXCEPTION 'installment_not_found'; END IF;
+
+  IF NULLIF(trim(_source_key), '') IS NOT NULL AND EXISTS (
+    SELECT 1 FROM public.transactions
+    WHERE user_id = owner_id AND source_key = trim(_source_key)
+  ) THEN
+    SELECT to_jsonb(t) INTO result
+    FROM public.transactions t
+    WHERE t.user_id = owner_id AND t.source_key = trim(_source_key)
+    ORDER BY t.created_at DESC LIMIT 1;
+    RETURN coalesce(result, jsonb_build_object('ok', true, 'idempotent', true));
+  END IF;
+
+  PERFORM set_config('request.jwt.claim.sub', owner_id::text, true);
+  result := public.renew_installment_interest(
+    _installment_id,
+    (_next_due_date AT TIME ZONE 'UTC')::date,
+    _method,
+    _origin,
+    NULL
+  );
+
+  -- O comprovante que o bot verificou precisa bater com o juros que o
+  -- contrato realmente cobra nesta renovação. Diverge além de um centavo de
+  -- arredondamento? Falha a transação inteira em vez de gravar um número
+  -- que não corresponde ao dinheiro recebido.
+  computed_amount := (result->>'amount')::numeric;
+  IF _amount IS NOT NULL AND _amount > 0
+     AND abs(computed_amount - _amount) > 0.01 THEN
+    RAISE EXCEPTION 'renewal_amount_mismatch: contrato calcula %, comprovante informa %',
+      computed_amount, _amount;
+  END IF;
+
+  IF NULLIF(trim(_source_key), '') IS NOT NULL THEN
+    SELECT id INTO tx_id
+    FROM public.transactions
+    WHERE user_id = owner_id
+      AND installment_id = _installment_id
+      AND category = 'interest_renewal'
+    ORDER BY created_at DESC LIMIT 1;
+    IF tx_id IS NOT NULL THEN
+      UPDATE public.transactions SET source_key = trim(_source_key) WHERE id = tx_id;
+    END IF;
+  END IF;
+  RETURN result;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.system_renew_installment_interest(uuid, numeric, timestamptz, text, text, text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.system_renew_installment_interest(uuid, numeric, timestamptz, text, text, text) TO service_role;
+
+NOTIFY pgrst, 'reload schema';
+
 COMMIT;
