@@ -11,6 +11,7 @@ node_modules
 .playwright-cli/
 dist
 dist-ssr
+dist-mobile
 *.local
 
 # Env (não commitar segredos). Já há um .env versionado com a anon key pública;
