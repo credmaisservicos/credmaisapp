@@ -4,6 +4,67 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { parseLocalDate } from "@/lib/dateUtils";
 
+// VAPID public key: seguro expor no bundle (é a metade pública do par usado
+// pra assinar push — a chave privada fica só no servidor, nunca aqui).
+const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
+
+/** PushManager exige a chave em Uint8Array, não na string base64url que o VAPID usa. */
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+}
+
+/**
+ * Web Push de verdade: registra uma inscrição no push service do navegador
+ * (chega mesmo com o app fechado) além do aviso "ao vivo" via Realtime abaixo
+ * (mais rápido quando a aba já está aberta, mas não sobrevive sozinho ao app
+ * fechado nem a uma queda do Realtime — daí a inscrição real como base).
+ */
+async function sincronizarInscricaoPush(userId: string, habilitado: boolean) {
+  if (typeof navigator === "undefined" || !("serviceWorker" in navigator) || !("PushManager" in window)) return;
+  if (!VAPID_PUBLIC_KEY) return;
+
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const existing = await registration.pushManager.getSubscription();
+
+    if (!habilitado) {
+      if (existing) {
+        await supabase.from("push_subscriptions").delete().eq("user_id", userId).eq("endpoint", existing.endpoint);
+        await existing.unsubscribe();
+      }
+      return;
+    }
+
+    if (typeof Notification === "undefined") return;
+    if (Notification.permission === "default") {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") return;
+    }
+    if (Notification.permission !== "granted") return;
+
+    const subscription = existing ?? await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+    });
+
+    const json = subscription.toJSON() as { keys?: { p256dh?: string; auth?: string } };
+    if (!json.keys?.p256dh || !json.keys?.auth) return;
+
+    await supabase.from("push_subscriptions").upsert({
+      user_id: userId,
+      endpoint: subscription.endpoint,
+      p256dh: json.keys.p256dh,
+      auth: json.keys.auth,
+      user_agent: navigator.userAgent,
+    }, { onConflict: "user_id,endpoint" });
+  } catch (erro) {
+    console.warn("[push] não foi possível sincronizar a inscrição:", erro);
+  }
+}
+
 /**
  * Native Web Notification API integration.
  * - Reads `settings.push_notifications_enabled` for the current user.
@@ -32,13 +93,12 @@ export function usePushNotifications() {
     staleTime: 60_000,
   });
 
-  // Request permission when enabled — ALWAYS call useEffect
+  // Liga/desliga a inscrição de Web Push real conforme o usuário ativa ou
+  // desativa nas Configurações. `settings` só existe depois do fetch acima
+  // resolver — undefined não decide nada aqui, só true/false explícitos.
   useEffect(() => {
-    if (!user || !settings?.push_notifications_enabled) return;
-    if (typeof Notification === "undefined") return;
-    if (Notification.permission === "default") {
-      Notification.requestPermission().catch(() => {});
-    }
+    if (!user || settings?.push_notifications_enabled === undefined) return;
+    void sincronizarInscricaoPush(user.id, !!settings.push_notifications_enabled);
   }, [user, settings?.push_notifications_enabled]);
 
   // Subscribe to new notifications — ALWAYS call useEffect

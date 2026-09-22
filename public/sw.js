@@ -3,7 +3,7 @@
 // - Precache de todos os chunks gerados pelo Vite (inclusive rotas lazy)
 // - CacheFirst para assets com hash, que são imutáveis
 // - Nunca cacheia Supabase, APIs ou rotas internas (~oauth)
-const VERSION = "credmais-v21-mobile-shell";
+const VERSION = "credmais-v22-web-push";
 const STATIC_CACHE = `${VERSION}-static`;
 const RUNTIME_CACHE = `${VERSION}-runtime`;
 const HTML_CACHE = `${VERSION}-html`;
@@ -120,4 +120,43 @@ self.addEventListener("fetch", (event) => {
       })()
     );
   }
+});
+
+// Web Push: chega mesmo com o app fechado (o navegador acorda o SW). O corpo
+// vem de send-push/index.ts como JSON: { title, body, link, tag }.
+self.addEventListener("push", (event) => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch { /* payload não-JSON, ignora */ }
+
+  const title = data.title || "CredMais";
+  const options = {
+    body: data.body || "",
+    icon: "/pwa-192.png",
+    badge: "/favicon.png",
+    tag: data.tag || undefined,
+    data: { link: data.link || "/notificacoes" },
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+// Clique na notificação: foca uma aba já aberta do app se existir, senão abre
+// uma nova — sempre navegando para a rota que a notificação apontava.
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const link = event.notification.data?.link || "/notificacoes";
+
+  event.waitUntil(
+    (async () => {
+      const clientsList = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      for (const client of clientsList) {
+        if ("focus" in client) {
+          await client.focus();
+          if ("navigate" in client) await client.navigate(link).catch(() => {});
+          return;
+        }
+      }
+      await self.clients.openWindow(link);
+    })()
+  );
 });

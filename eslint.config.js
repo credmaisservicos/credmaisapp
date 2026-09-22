@@ -8,7 +8,10 @@ export default tseslint.config(
   {
     // `types.ts` é gerado pelo Supabase. As Edge Functions usam Deno e já são
     // verificadas separadamente por scripts/checar-funcoes.mjs no CI.
-    ignores: ["dist", "test-results/**", "playwright-report/**", "src/integrations/supabase/types.ts", "supabase/functions/**", "latest*.js", "z-index-*.js", "live-*.js", "*-release*.js"],
+    // `android/`/`ios/` são os projetos nativos do Capacitor (Java/Kotlin/Swift
+    // + bridges JS geradas pelo `cap sync`, inclusive dentro de android/app/build
+    // depois de um build local) — nunca foi código-fonte deste app.
+    ignores: ["dist", "dist-mobile", "android/**", "ios/**", "test-results/**", "playwright-report/**", "src/integrations/supabase/types.ts", "supabase/functions/**", "latest*.js", "z-index-*.js", "live-*.js", "*-release*.js"],
   },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],

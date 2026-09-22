@@ -53,16 +53,6 @@ serve(async (req) => {
       }
 
       for (const [userId, installments] of byUser) {
-        const { data: existing } = await supabase
-          .from("notifications")
-          .select("id")
-          .eq("user_id", userId)
-          .eq("type", "due_today")
-          .gte("created_at", todayStart)
-          .limit(1);
-
-        if (existing && existing.length > 0) continue;
-
         const total = installments.reduce((s, i) => s + Number(i.amount), 0);
         const clientIds = [...new Set(installments.map(i => i.client_id))];
         const { data: clients } = await supabase
@@ -72,14 +62,17 @@ serve(async (req) => {
 
         const names = clients?.map(c => c.name).join(", ") || "";
 
-        await supabase.from("notifications").insert({
+        // upsert com dedupe_key = dia de hoje: se este job rodar duas vezes
+        // no mesmo dia (retry/sobreposição), a segunda chamada não duplica.
+        const { error: upsertErr } = await supabase.from("notifications").upsert({
           user_id: userId,
           message: `📅 ${installments.length} parcela(s) vencem hoje totalizando R$ ${total.toFixed(2)}. Clientes: ${names}`,
           type: "due_today",
           from: "Automação",
           link: "/cobrancas",
-        });
-        created.push(`due_today:${userId}`);
+          dedupe_key: todayStr,
+        }, { onConflict: "user_id,type,dedupe_key", ignoreDuplicates: true });
+        if (!upsertErr) created.push(`due_today:${userId}`);
       }
     }
 
@@ -104,27 +97,18 @@ serve(async (req) => {
       }
 
       for (const [userId, installments] of byUser) {
-        const { data: existing } = await supabase
-          .from("notifications")
-          .select("id")
-          .eq("user_id", userId)
-          .eq("type", "overdue_summary")
-          .gte("created_at", todayStart)
-          .limit(1);
-
-        if (existing && existing.length > 0) continue;
-
         const total = installments.reduce((s, i) => s + Number(i.amount), 0);
         const clientIds = [...new Set(installments.map(i => i.client_id))];
 
-        await supabase.from("notifications").insert({
+        const { error: upsertErr } = await supabase.from("notifications").upsert({
           user_id: userId,
           message: `🚨 ${installments.length} parcela(s) atrasada(s) totalizando R$ ${total.toFixed(2)} de ${clientIds.length} cliente(s).`,
           type: "overdue_summary",
           from: "Automação",
           link: "/cobrancas",
-        });
-        created.push(`overdue_summary:${userId}`);
+          dedupe_key: todayStr,
+        }, { onConflict: "user_id,type,dedupe_key", ignoreDuplicates: true });
+        if (!upsertErr) created.push(`overdue_summary:${userId}`);
       }
     }
 
@@ -140,24 +124,18 @@ serve(async (req) => {
       const achieved = completedGoals.filter(g => Number(g.current_amount) >= Number(g.target_amount));
 
       for (const goal of achieved) {
-        const { data: existing } = await supabase
-          .from("notifications")
-          .select("id")
-          .eq("user_id", goal.user_id)
-          .eq("type", "goal_achieved")
-          .like("message", `%${goal.id.substring(0, 8)}%`)
-          .limit(1);
-
-        if (existing && existing.length > 0) continue;
-
-        await supabase.from("notifications").insert({
+        // dedupe_key = o próprio id da meta: "uma vez pra sempre por meta",
+        // sem depender de recortar pedaço de id de dentro do texto da mensagem
+        // (isso quebrava silenciosamente se a mensagem mudasse de formato).
+        const { error: upsertErr } = await supabase.from("notifications").upsert({
           user_id: goal.user_id,
-          message: `🏆 Meta atingida: "${goal.description}"! Valor: R$ ${Number(goal.current_amount).toFixed(2)} / R$ ${Number(goal.target_amount).toFixed(2)} [${goal.id.substring(0, 8)}]`,
+          message: `🏆 Meta atingida: "${goal.description}"! Valor: R$ ${Number(goal.current_amount).toFixed(2)} / R$ ${Number(goal.target_amount).toFixed(2)}`,
           type: "goal_achieved",
           from: "Automação",
           link: "/ferramentas/metas",
-        });
-        created.push(`goal_achieved:${goal.id}`);
+          dedupe_key: goal.id,
+        }, { onConflict: "user_id,type,dedupe_key", ignoreDuplicates: true });
+        if (!upsertErr) created.push(`goal_achieved:${goal.id}`);
       }
     }
 
@@ -179,25 +157,16 @@ serve(async (req) => {
       }
 
       for (const [userId, clients] of byUser) {
-        const { data: existing } = await supabase
-          .from("notifications")
-          .select("id")
-          .eq("user_id", userId)
-          .eq("type", "low_score_alert")
-          .gte("created_at", todayStart)
-          .limit(1);
-
-        if (existing && existing.length > 0) continue;
-
         const names = clients.map(c => c.name).join(", ");
-        await supabase.from("notifications").insert({
+        const { error: upsertErr } = await supabase.from("notifications").upsert({
           user_id: userId,
           message: `⚠️ ${clients.length} cliente(s) com score crítico (≤30): ${names}`,
           type: "low_score_alert",
           from: "Automação",
           link: "/clientes",
-        });
-        created.push(`low_score:${userId}`);
+          dedupe_key: todayStr,
+        }, { onConflict: "user_id,type,dedupe_key", ignoreDuplicates: true });
+        if (!upsertErr) created.push(`low_score:${userId}`);
       }
     }
 
@@ -218,14 +187,18 @@ serve(async (req) => {
 
     if (expiringSoon) {
       for (const user of expiringSoon) {
-        // Send internal notification
-        await supabase.from("notifications").insert({
+        // dedupe_key = dia de hoje: sem isso, se este job rodasse duas vezes
+        // no mesmo dia, o usuário recebia o e-mail de "teste acabando" em
+        // dobro — não tinha NENHUMA proteção contra isso antes.
+        const { data: inserted } = await supabase.from("notifications").upsert({
           user_id: user.id,
           message: `⏳ Seu teste grátis expira em 3 dias. Não perca o acesso!`,
           type: "trial_expiring_soon",
           from: "Sistema",
           link: "/configuracoes",
-        });
+          dedupe_key: todayStr,
+        }, { onConflict: "user_id,type,dedupe_key", ignoreDuplicates: true }).select("id");
+        if (!inserted || inserted.length === 0) continue; // já notificado hoje
 
         // Send Email via Brevo
         const emailTemplate = templates.trialExpiring(user.name || user.email, 3);
@@ -234,7 +207,7 @@ serve(async (req) => {
           subject: emailTemplate.subject,
           htmlContent: emailTemplate.html,
         });
-        
+
         created.push(`trial_expiring_email:${user.id}`);
       }
     }
