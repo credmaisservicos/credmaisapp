@@ -2020,6 +2020,24 @@ div[style*="Edit with Lovable"],
   border-color: hsl(0 0% 100% / .10);
 }
 
+/* Campos de escrita precisam se separar das superfícies escuras dos cards.
+   O seletor também cobre formulários que passam bg-card pelo className. */
+.app-content input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]):not([type="button"]):not([type="submit"]):not([type="reset"]),
+.app-content textarea,
+.app-content select {
+  color: hsl(var(--foreground)) !important;
+  background: linear-gradient(0deg, hsl(var(--primary) / .08), hsl(var(--primary) / .08)), hsl(var(--card)) !important;
+  border-color: hsl(var(--primary) / .34) !important;
+  box-shadow: inset 3px 0 0 hsl(var(--primary) / .55) !important;
+}
+
+.app-content input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]):not([type="button"]):not([type="submit"]):not([type="reset"]):focus,
+.app-content textarea:focus,
+.app-content select:focus {
+  background: linear-gradient(0deg, hsl(var(--primary) / .14), hsl(var(--primary) / .14)), hsl(var(--card)) !important;
+  border-color: hsl(var(--primary) / .75) !important;
+  box-shadow: inset 3px 0 0 hsl(var(--primary) / .85), 0 0 0 3px hsl(var(--primary) / .16) !important;
+}
 
 
 

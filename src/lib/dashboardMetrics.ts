@@ -92,6 +92,10 @@ export function computeDashboardMetrics(data: DashboardInput, agora: Date = new 
 
   const totalInstallments = activeInstallments.length;
   const overdueInstallments = activeInstallments.filter((i) => isEmAtraso(i, agora));
+  const overdueContractIds = new Set([
+    ...activeContracts.filter((contract) => contract.status === "overdue").map((contract) => contract.id),
+    ...overdueInstallments.map((installment) => installment.contract_id),
+  ]);
   const paidInstallments = activeInstallments.filter((i) => i.status === "paid");
 
   const taxaInadimplencia = totalInstallments > 0
@@ -164,7 +168,9 @@ export function computeDashboardMetrics(data: DashboardInput, agora: Date = new 
     totalLent: capitalNaRua,
     pendingReceivable,
     contratosAtivos: activeContracts.length,
-    contratosAtraso: contracts.filter((c) => c.status === "overdue").length,
+    // Um contrato em atraso pode ainda ter status "active" no banco. Conte-o
+    // também quando pelo menos uma parcela pendente já venceu.
+    contratosAtraso: overdueContractIds.size,
     totalContratos: activeContracts.length,
     totalClientes: clients.length,
     overdueCount: overdueInstallments.length,

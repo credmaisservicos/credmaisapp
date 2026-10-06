@@ -3,7 +3,7 @@ import { ModalPortal } from "@/components/ui/modal-portal";
 import { CheckCircle, CalendarDays, AlertTriangle, Loader2 } from "lucide-react";
 import { formatBR, todayLocalISO } from "@/lib/dateUtils";
 import { calculateFeeDiscount, type LateFeeBreakdown } from "@/lib/lateFee";
-import { interestOnlyAmount, nextInterestDueDate } from "@/lib/interestOnly";
+import { interestOnlyAmount, nextInterestDueDate, supportsInterestOnlyRenewal } from "@/lib/interestOnly";
 
 const safeNumber = (value: unknown) => {
   const number = Number(value);
@@ -31,9 +31,7 @@ const PayModal = ({ inst, fee, alreadyPaid, remaining, daysLate, onCancel, onCon
   const [nextDueDate, setNextDueDate] = useState(automaticNextDue);
   const loanMode = String(inst.contracts?.loan_mode || "").toLowerCase();
   const renewableMode = ["percentage", "interest_only"].includes(loanMode);
-  // In a bullet loan the single due amount contains the whole interest cycle.
-  // Paying only that interest rolls the principal into the next cycle.
-  const canPayInterestOnly = loanMode === "bullet";
+  const canPayInterestOnly = supportsInterestOnlyRenewal(loanMode);
   const canSettleRenewable = renewableMode && ["daily", "weekly", "biweekly", "monthly"].includes(String(inst.contracts?.frequency || "").toLowerCase());
   const capitalSettlement = Math.max(0, safeNumber(inst.contracts?.capital)) + safeRemaining;
 
@@ -235,7 +233,7 @@ const PayModal = ({ inst, fee, alreadyPaid, remaining, daysLate, onCancel, onCon
               <label htmlFor="interest-next-due" className="block text-xs font-semibold text-foreground mb-1.5">Novo vencimento</label>
               <input id="interest-next-due" type="date" value={nextDueDate} min={todayLocalISO()}
                 onChange={(e) => setNextDueDate(e.target.value)}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground" />
+                className="w-full rounded-lg border border-primary/25 bg-primary/10 px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/25" />
               <button type="button" onClick={() => setNextDueDate(automaticNextDue)} className="mt-1.5 text-[11px] font-semibold text-primary hover:underline">
                 Usar próxima data automática: {formatBR(automaticNextDue)}
               </button>
@@ -263,7 +261,7 @@ const PayModal = ({ inst, fee, alreadyPaid, remaining, daysLate, onCancel, onCon
 
           <div>
             <label className="text-xs text-muted-foreground font-medium">Valor recebido</label>
-            <div className="mt-1 flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-2.5 focus-within:ring-2 focus-within:ring-primary/30">
+            <div className="mt-1 flex items-center gap-2 rounded-xl border border-primary/25 bg-primary/10 px-3 py-2.5 transition-colors focus-within:border-primary/60 focus-within:ring-2 focus-within:ring-primary/25">
               <span className="text-muted-foreground text-sm">R$</span>
               <input
                 autoFocus

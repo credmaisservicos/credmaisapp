@@ -5,18 +5,23 @@
  * (juros do contrato + juros/multa de atraso, quando informados) e manter o
  * capital principal pendente para o próximo vencimento.
  *
- * Funciona para todos os tipos de empréstimo:
- * - parcelado (installments/price): juros totais divididos pelo nº de parcelas
- * - porcentagem / só juros / bullet: a própria parcela já é o rendimento
+ * Usa a decomposição gravada de cada parcela quando disponível (Price/carência)
+ * e mantém os cálculos por modo para contratos antigos sem essa decomposição.
  */
 export function interestOnlyAmount(
-  inst: { amount?: number | string | null },
+  inst: {
+    amount?: number | string | null;
+    scheduled_interest?: number | string | null;
+    installment_number?: number | string | null;
+  },
   contract?: {
     capital?: number | string | null;
     total_amount?: number | string | null;
     total_interest?: number | string | null;
     interest_rate?: number | string | null;
     num_installments?: number | string | null;
+    installment_amount?: number | string | null;
+    grace_periods?: number | string | null;
     loan_mode?: string | null;
   } | null,
   extraLateInterest = 0,
@@ -25,7 +30,7 @@ export function interestOnlyAmount(
   const instAmount = finite(inst?.amount);
   if (!contract) return 0;
 
-  const mode = contract.loan_mode || "installments";
+  const mode = String(contract.loan_mode || "installments").toLowerCase();
   const n = finite(contract.num_installments);
   const capital = finite(contract.capital);
   const totalAmount = finite(contract.total_amount);
@@ -37,6 +42,27 @@ export function interestOnlyAmount(
     base = totalInterest;
   } else if (mode === "percentage" || mode === "interest_only") {
     base = capital * (finite(contract.interest_rate) / 100);
+  } else if (finite(inst?.scheduled_interest) > 0) {
+    base = finite(inst.scheduled_interest);
+  } else if (mode === "price" && n > 0) {
+    const rate = Math.max(0, finite(contract.interest_rate)) / 100;
+    const periodsElapsed = Math.max(0, Math.floor(finite(inst?.installment_number) - 1));
+    const payment = finite(contract.installment_amount) || instAmount;
+    if (rate === 0) {
+      base = 0;
+    } else {
+      const growth = Math.pow(1 + rate, periodsElapsed);
+      const balanceBeforePayment = Math.max(0, capital * growth - payment * ((growth - 1) / rate));
+      base = balanceBeforePayment * rate;
+    }
+  } else if (mode === "grace" && n > 0) {
+    const gracePeriods = Math.max(0, Math.floor(finite(contract.grace_periods)));
+    const installmentNumber = Math.max(1, Math.floor(finite(inst?.installment_number)));
+    const remainingPayments = n - gracePeriods;
+    const payment = finite(contract.installment_amount) || instAmount;
+    base = installmentNumber <= gracePeriods
+      ? capital * (Math.max(0, finite(contract.interest_rate)) / 100)
+      : remainingPayments > 0 ? payment - capital / remainingPayments : totalInterest / n;
   } else if (n <= 0) {
     base = Math.min(instAmount, totalInterest || instAmount);
   } else {
@@ -48,64 +74,24 @@ export function interestOnlyAmount(
   return Math.round(Math.min(value, instAmount + extra) * 100) / 100;
 }
 
+const INTEREST_ONLY_RENEWAL_MODES = new Set([
+  "installments",
+  "percentage",
+  "interest_only",
+  "price",
+  "bullet",
+  "grace",
+]);
+
+/** Indica se o modo do contrato aceita renovar o vencimento pagando só juros. */
+export function supportsInterestOnlyRenewal(mode: unknown): boolean {
+  return INTEREST_ONLY_RENEWAL_MODES.has(String(mode || "installments").toLowerCase());
+}
+
 /** true quando o erro do PostgREST é "RPC não existe no schema cache". */
 export function isMissingRpcError(error: { code?: string; message?: string } | null | undefined): boolean {
   if (!error) return false;
   return error.code === "PGRST202" || /schema cache|could not find the function/i.test(error.message || "");
-}
-
-/**
- * Reproduz `renew_installment_interest` direto nas tabelas, para quando essa
- * migração ainda não chegou no banco (RPC ausente no schema cache). Mantém
- * "pagar só juros" funcionando sem depender do push da migração.
- */
-export async function applyInterestOnlyRenewalFallback(
-  supabase: any,
-  params: {
-    userId: string;
-    installment: { id: string; client_id?: string | null; contract_id?: string | null; due_date?: string | null; late_fee?: number | string | null; installment_number?: number | string | null };
-    nextDueDate: string;
-    received: number;
-    method?: string;
-    origin?: string;
-  },
-): Promise<void> {
-  const { userId, installment, nextDueDate, received, method = "pix", origin } = params;
-  if (!(received > 0)) throw new Error("invalid_renewal_amount");
-
-  const previousDueDate = installment.due_date;
-  const { error: updateError } = await supabase
-    .from("contract_installments")
-    .update({ due_date: nextDueDate, late_fee: 0, paid_amount: 0, paid_at: null, status: "pending", payment_method: method })
-    .eq("id", installment.id)
-    .eq("user_id", userId);
-  if (updateError) throw updateError;
-
-  const lateFeeAmount = Math.max(0, Number(installment.late_fee || 0));
-  const { error: transactionError } = await supabase.from("transactions").insert({
-    user_id: userId,
-    amount: received,
-    type: "payment",
-    category: "interest_renewal",
-    description: `Renovação por pagamento somente dos juros${origin ? ` (${origin})` : ""}`,
-    client_id: installment.client_id,
-    contract_id: installment.contract_id,
-    installment_id: installment.id,
-    principal_amount: 0,
-    interest_amount: Math.max(0, received - lateFeeAmount),
-    fee_amount: lateFeeAmount,
-  });
-  const { error: profitError } = transactionError ? { error: null } : await supabase.from("profits").insert({
-    user_id: userId,
-    amount: received,
-    description: `Juros de renovação · parcela #${installment.installment_number ?? "-"}`,
-    client_id: installment.client_id,
-    installment_id: null,
-  });
-  if (transactionError || profitError) {
-    await supabase.from("contract_installments").update({ due_date: previousDueDate }).eq("id", installment.id).eq("user_id", userId);
-    throw transactionError || profitError;
-  }
 }
 
 /** Próximo vencimento da renovação, respeitando a frequência do contrato. */

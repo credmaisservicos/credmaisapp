@@ -17,6 +17,7 @@ let enviadosNestaSessao = 0;
 let capturaInstalada = false;
 
 const ERRO_DE_CHUNK = /dynamically imported module|ChunkLoadError|Loading chunk/i;
+const ERRO_TRANSITORIO = /^(?:AbortError|CancelledError):/i;
 
 function contextoSeguro(contexto: ContextoErro): ContextoErro {
   try {
@@ -64,7 +65,14 @@ export async function reportError(
 
     // Erro de chunk após deploy é ruído conhecido: o app já se recupera sozinho
     // recarregando, então não polui o painel com isso.
-    if (ERRO_DE_CHUNK.test(mensagem)) return;
+    // Abort/cancel acontece normalmente quando uma consulta é substituída por
+    // navegação ou refetch; não indica falha real da tela.
+    if (
+      ERRO_DE_CHUNK.test(mensagem) ||
+      e.name === "AbortError" ||
+      e.name === "CancelledError" ||
+      ERRO_TRANSITORIO.test(mensagem)
+    ) return;
 
     if (!deveReportar(assinatura(mensagem, rota))) return;
     enviadosNestaSessao++;

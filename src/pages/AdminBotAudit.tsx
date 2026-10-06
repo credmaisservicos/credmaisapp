@@ -54,7 +54,7 @@ export default function AdminBotAudit() {
   const { user, isPlatformAdmin, loading: authLoading } = useAuth();
   const [audits, setAudits] = useState<AuditRow[]>([]);
   const [actions, setActions] = useState<BotAction[]>([]);
-  const [fsm, setFsm] = useState<Array<{ id: string; phone: string; agent_state: string | null; agent_state_updated_at: string | null; clients?: { name: string } | null }>>([]);
+  const [fsm, setFsm] = useState<Array<{ id: string; phone: string; contact_name: string | null; agent_state: string | null; agent_state_updated_at: string | null }>>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<unknown>(null);
   const [q, setQ] = useState("");
@@ -77,7 +77,9 @@ export default function AdminBotAudit() {
         .limit(200),
       supabase
         .from("whatsapp_conversations")
-        .select("id, phone, agent_state, agent_state_updated_at, clients(name)")
+        // whatsapp_conversations não tem FK declarada com clients no schema
+        // PostgREST; fazer o embed clients(name) faz a página inteira falhar.
+        .select("id, phone, contact_name, agent_state, agent_state_updated_at")
         .not("agent_state", "is", null)
         .neq("agent_state", "UNKNOWN")
         .order("agent_state_updated_at", { ascending: false })
@@ -257,7 +259,7 @@ export default function AdminBotAudit() {
                         {f.agent_state}
                       </Badge>
                       <div className="flex-1 min-w-0">
-                        <div className="truncate">{f.clients?.name || "—"}</div>
+                        <div className="truncate">{f.contact_name || "—"}</div>
                         <div className="text-xs text-muted-foreground font-mono">{f.phone}</div>
                       </div>
                       <div className="text-xs text-muted-foreground whitespace-nowrap">

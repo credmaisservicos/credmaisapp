@@ -1,5 +1,6 @@
 import { X } from "lucide-react";
 import { INPUT, FREQ } from "../constants";
+import { ModalPortal } from "@/components/ui/modal-portal";
 
 type Props = {
   form: any;
@@ -19,10 +20,11 @@ const DAILY_MODES: { v: "mon-fri" | "mon-sat" | "mon-sun"; label: string }[] = [
 
 export default function EditContratoModal({ form, setForm, regen, setRegen, saving, onClose, onSave }: Props) {
   return (
-    <div className="fixed inset-0 z-[90] flex items-start sm:items-center justify-center bg-background/80 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto overscroll-contain" onClick={onClose}>
-      <div className="w-full max-w-lg sm:max-h-[85vh] sm:overflow-y-auto my-auto rounded-2xl border border-border bg-card p-6 space-y-4" onClick={e => e.stopPropagation()}>
+    <ModalPortal>
+      <div className="fixed inset-0 z-[90] flex items-center justify-center overflow-y-auto overscroll-contain bg-background/80 p-3 backdrop-blur-sm" onClick={onClose}>
+        <div className="my-auto max-h-[92dvh] w-full max-w-lg overflow-y-auto overscroll-contain rounded-2xl border border-border bg-card p-6 space-y-4" role="dialog" aria-modal="true" aria-labelledby="edit-contract-title" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-foreground">Editar Empréstimo</h2>
+          <h2 id="edit-contract-title" className="text-lg font-bold text-foreground">Editar Empréstimo</h2>
           <button type="button" onClick={onClose} aria-label="Fechar" className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground"><X size={18} /></button>
         </div>
         <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3">
@@ -97,7 +99,8 @@ export default function EditContratoModal({ form, setForm, regen, setRegen, savi
             {saving ? "Salvando..." : "Salvar"}
           </button>
         </div>
+        </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }

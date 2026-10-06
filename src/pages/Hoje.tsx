@@ -14,7 +14,7 @@ import SmartAlerts from "@/components/SmartAlerts";
 import { formatBR, parseLocalDate } from "@/lib/dateUtils";
 import { fetchAll } from "@/lib/fetchAll";
 import { computeLateFeeBreakdown } from "@/lib/lateFee";
-import { applyInterestOnlyRenewalFallback, isMissingRpcError } from "@/lib/interestOnly";
+import { isMissingRpcError } from "@/lib/interestOnly";
 import PayModal from "@/components/cobrancas/PayModal";
 import ErrorState from "@/components/feedback/ErrorState";
 import { portalInstallmentAmount } from "@/lib/portalAmounts";
@@ -215,17 +215,10 @@ const Hoje = () => {
           _origin: "hoje",
         });
         if (error) {
-          // Banco ainda sem a migração da RPC: renova direto pelas tabelas
-          // protegidas por RLS, do mesmo jeito que o detalhe do cliente já faz.
-          if (!isMissingRpcError(error) || !user?.id) throw error;
-          await applyInterestOnlyRenewalFallback(supabase, {
-            userId: user.id,
-            installment: inst,
-            nextDueDate: options.nextDueDate,
-            received: Math.max(0, safeNumber(received)),
-            method: "pix",
-            origin: "hoje",
-          });
+          if (isMissingRpcError(error)) {
+            throw new Error("A função segura de renovação não está ativa no Supabase. A migração precisa ser aplicada antes de registrar este pagamento.");
+          }
+          throw error;
         }
         setPendingPayment(null);
         toast.success("Juros recebidos e vencimento renovado", {

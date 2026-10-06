@@ -12,7 +12,7 @@ import {
   , ChevronDown, ChevronRight, Layers, ListTree
 } from "lucide-react";
 import { computeLateFee, computeLateFeeBreakdown } from "@/lib/lateFee";
-import { applyInterestOnlyRenewalFallback, isMissingRpcError } from "@/lib/interestOnly";
+import { isMissingRpcError } from "@/lib/interestOnly";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -158,7 +158,7 @@ const Cobrancas = () => {
     queryFn: async () => {
       const data = await fetchAll((f, t) => supabase
         .from("contract_installments")
-        .select("*, clients:client_id(name, phone, whatsapp, email, credit_score), contracts(capital, frequency, interest_rate, num_installments, total_amount, total_interest, loan_mode, daily_interest_percent, max_interest_cap_percent, daily_penalty_type, daily_penalty_value)")
+        .select("*, clients:client_id(name, phone, whatsapp, email, credit_score), contracts(capital, frequency, interest_rate, num_installments, installment_amount, grace_periods, total_amount, total_interest, loan_mode, daily_interest_percent, max_interest_cap_percent, daily_penalty_type, daily_penalty_value)")
         .eq("user_id", user!.id)
         .order("due_date", { ascending: true })
         .range(f, t));
@@ -295,25 +295,11 @@ const Cobrancas = () => {
         _origin: "cobrancas",
       });
       if (error) {
-        // Banco ainda sem a migração da RPC: renova direto pelas tabelas
-        // protegidas por RLS, do mesmo jeito que o detalhe do cliente já faz.
-        if (!isMissingRpcError(error) || !user?.id) {
-          toast({ title: "Erro ao renovar vencimento", description: error.message, variant: "destructive" });
-          throw error;
-        }
-        try {
-          await applyInterestOnlyRenewalFallback(supabase, {
-            userId: user.id,
-            installment: inst,
-            nextDueDate: options.nextDueDate,
-            received: Math.max(0, safeNumber(paidValue)),
-            method: "pix",
-            origin: "cobrancas",
-          });
-        } catch (fallbackError: any) {
-          toast({ title: "Erro ao renovar vencimento", description: fallbackError.message, variant: "destructive" });
-          throw fallbackError;
-        }
+        const description = isMissingRpcError(error)
+          ? "A função segura de renovação não está ativa no Supabase. A migração precisa ser aplicada antes de registrar este pagamento."
+          : error.message;
+        toast({ title: "Erro ao renovar vencimento", description, variant: "destructive" });
+        throw error;
       }
       setConfirmPayId(null);
       await Promise.all([

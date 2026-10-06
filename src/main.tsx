@@ -86,7 +86,9 @@ const isPreviewHost =
 // mudam sem uma nova instalação do app.
 if (isInIframe || isPreviewHost || isNativeApp()) {
   // Em preview, desregistra qualquer SW pré-existente para evitar conteúdo stale
-  navigator.serviceWorker?.getRegistrations().then((regs) => regs.forEach((r) => r.unregister()));
+  navigator.serviceWorker?.getRegistrations()
+    .then((regs) => regs.forEach((r) => void r.unregister().catch(() => {})))
+    .catch(() => {});
 } else if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     const hadController = Boolean(navigator.serviceWorker.controller);
@@ -101,12 +103,15 @@ if (isInIframe || isPreviewHost || isNativeApp()) {
     });
 
     navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }).then((registration) => {
-      void registration.update();
+      const checkForUpdate = () => {
+        if (!navigator.onLine || document.visibilityState !== "visible") return;
+        // A browser pode rejeitar update durante troca/instalação do worker.
+        // Isso é transitório e não deve virar uma rejeição global sem tratamento.
+        void registration.update().catch(() => {});
+      };
+      checkForUpdate();
 
       // Abas que ficam abertas o dia inteiro também recebem novas publicações.
-      const checkForUpdate = () => {
-        if (document.visibilityState === "visible") void registration.update();
-      };
       document.addEventListener("visibilitychange", checkForUpdate);
       window.setInterval(checkForUpdate, 5 * 60_000);
     }).catch(() => {});
@@ -133,8 +138,8 @@ const recoverFromStaleChunk = (msg: string) => {
 
   // Limpa caches + service workers e recarrega forçadamente
   Promise.all([
-    caches?.keys?.().then((keys) => Promise.all(keys.map((k) => caches.delete(k)))) ?? Promise.resolve(),
-    navigator.serviceWorker?.getRegistrations().then((regs) => Promise.all(regs.map((r) => r.unregister()))) ?? Promise.resolve(),
+    caches?.keys?.().then((keys) => Promise.all(keys.map((k) => caches.delete(k).catch(() => false)))).catch(() => []) ?? Promise.resolve(),
+    navigator.serviceWorker?.getRegistrations().then((regs) => Promise.all(regs.map((r) => r.unregister().catch(() => false)))).catch(() => []) ?? Promise.resolve(),
   ]).finally(() => {
     // bypass cache
     location.reload();

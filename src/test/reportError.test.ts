@@ -27,6 +27,15 @@ describe("coletor de erros do navegador", () => {
     expect(supabaseMock.insert).not.toHaveBeenCalled();
   });
 
+  it("ignora cancelamentos de consulta causados por navegação", async () => {
+    const cancelled = new Error("query cancelled");
+    cancelled.name = "CancelledError";
+    await reportError(cancelled);
+
+    expect(supabaseMock.getSession).not.toHaveBeenCalled();
+    expect(supabaseMock.insert).not.toHaveBeenCalled();
+  });
+
   it("reduz contexto excessivo antes de enviá-lo", async () => {
     await reportError(new Error("falha com contexto extenso"), {
       origem: "manual",

@@ -4,8 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { Search, X, CheckCircle2, Loader2, Receipt, AlertCircle, Clock, SplitSquareHorizontal, CheckSquare, Square, Banknote } from "lucide-react";
-import { formatBR, parseLocalDate } from "@/lib/dateUtils";
-import { interestOnlyAmount } from "@/lib/interestOnly";
+import { formatBR, parseLocalDate, todayLocalISO } from "@/lib/dateUtils";
+import { interestOnlyAmount, nextInterestDueDate, supportsInterestOnlyRenewal } from "@/lib/interestOnly";
 import { computeLateFeeBreakdown } from "@/lib/lateFee";
 import { fetchAll } from "@/lib/fetchAll";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
@@ -37,6 +37,8 @@ const QuickPaymentModal = ({ open, onClose }: Props) => {
   const [activeIdx, setActiveIdx] = useState(0);
   const [partialFor, setPartialFor] = useState<string | null>(null);
   const [partialValue, setPartialValue] = useState<string>("");
+  const [interestOnlyFor, setInterestOnlyFor] = useState<string | null>(null);
+  const [interestNextDueDate, setInterestNextDueDate] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [method, setMethod] = useState<PaymentMethod>("pix");
   const [bulkSaving, setBulkSaving] = useState(false);
@@ -50,6 +52,9 @@ const QuickPaymentModal = ({ open, onClose }: Props) => {
       setActiveIdx(0);
       setSelected(new Set());
       setPartialFor(null);
+      setPartialValue("");
+      setInterestOnlyFor(null);
+      setInterestNextDueDate("");
       setTimeout(() => inputRef.current?.focus(), 30);
     }
   }, [open]);
@@ -59,7 +64,7 @@ const QuickPaymentModal = ({ open, onClose }: Props) => {
     queryFn: async () => {
       if (!user) return [];
       return fetchAll((from, to) => supabase.from("contract_installments")
-        .select("id, amount, paid_amount, late_fee, due_date, installment_number, client_id, contract_id, clients:client_id(name, cpf_cnpj), contracts:contract_id(capital, total_amount, total_interest, num_installments, loan_mode, interest_rate, daily_interest_percent, max_interest_cap_percent, daily_penalty_type, daily_penalty_value)")
+        .select("id, amount, scheduled_interest, paid_amount, late_fee, due_date, installment_number, client_id, contract_id, clients:client_id(name, cpf_cnpj), contracts:contract_id(capital, total_amount, total_interest, installment_amount, grace_periods, num_installments, loan_mode, interest_rate, frequency, daily_interest_percent, max_interest_cap_percent, daily_penalty_type, daily_penalty_value)")
         // `.eq("status","pending")` escondia as parcelas atrasadas: quando vencem,
         // o check-overdue muda o status para "overdue". Ou seja, o atalho de
         // pagamento rápido não mostrava justamente quem estava devendo — hoje são
@@ -217,6 +222,39 @@ const QuickPaymentModal = ({ open, onClose }: Props) => {
     const alreadyPaid = safeNumber(inst.paid_amount);
     const remaining = remainingDue(inst);
     if (!paidNow || paidNow <= 0) { toast.error("Informe um valor válido"); return; }
+    if (interestOnlyFor === inst.id) {
+      if (!interestNextDueDate || interestNextDueDate < todayLocalISO()) {
+        toast.error("Informe um novo vencimento válido");
+        return;
+      }
+      setSaving(inst.id);
+      try {
+        const { data, error } = await (supabase as any).rpc("renew_installment_interest", {
+          _installment_id: inst.id,
+          _next_due_date: interestNextDueDate,
+          _method: method,
+          _origin: "pagamento_rapido",
+        });
+        if (error) throw error;
+        const received = safeNumber(data?.amount) || paidNow;
+        toast.success(`Juros recebidos · R$ ${fmtBRL(received)} · novo vencimento ${formatBR(interestNextDueDate)}`);
+        setPartialFor(null);
+        setPartialValue("");
+        setInterestOnlyFor(null);
+        setInterestNextDueDate("");
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: ["quick-pay-installments"] }),
+          qc.invalidateQueries({ queryKey: ["hoje"] }),
+          qc.invalidateQueries({ queryKey: ["dashboard-data"] }),
+          qc.invalidateQueries({ queryKey: ["cobrancas-installments"] }),
+        ]);
+      } catch (error: any) {
+        toast.error("Não foi possível renovar os juros", { description: error?.message });
+      } finally {
+        setSaving(null);
+      }
+      return;
+    }
     if (paidNow >= remaining) {
       await handlePay(inst);
       setPartialFor(null); setPartialValue("");
@@ -411,7 +449,12 @@ const QuickPaymentModal = ({ open, onClose }: Props) => {
                     {fee.total > 0 && <p className="text-[9px] text-muted-foreground">inclui R$ {fmtBRL(fee.total)} juros</p>}
                   </div>
                   <button
-                    onClick={() => { setPartialFor(partialFor === inst.id ? null : inst.id); setPartialValue(""); }}
+                    onClick={() => {
+                      setPartialFor(partialFor === inst.id ? null : inst.id);
+                      setPartialValue("");
+                      setInterestOnlyFor(null);
+                      setInterestNextDueDate("");
+                    }}
                     title="Pagamento parcial"
                     className="quick-payment-partial px-2 py-1.5 rounded-lg bg-muted text-foreground text-[11px] font-bold hover:bg-accent transition-colors flex items-center justify-center gap-1 shrink-0"
                   >
@@ -432,35 +475,54 @@ const QuickPaymentModal = ({ open, onClose }: Props) => {
                     <span className="text-[11px] text-muted-foreground">Valor pago agora:</span>
                     <div className="relative flex-1 max-w-[160px]">
                       <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground">R$</span>
-                      <input
-                        type="number" step="0.01" min="0" max={dueNow} autoFocus
+                  <input
+                        type="number" step="0.01" min="0" max={dueNow} autoFocus readOnly={interestOnlyFor === inst.id}
                         value={partialValue}
                         onChange={(e) => setPartialValue(e.target.value)}
                         onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handlePartial(inst); } }}
                         placeholder="0,00"
-                        className="w-full h-8 pl-8 pr-2 rounded-md bg-background border border-border text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                        className="w-full h-8 pl-8 pr-2 rounded-md bg-primary/10 border border-primary/25 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                       />
                     </div>
                     <span className="text-[10px] text-muted-foreground">de R$ {fmtBRL(dueNow)}</span>
                     {(() => {
+                      if (!supportsInterestOnlyRenewal(inst.contracts?.loan_mode)) return null;
                       const io = interestOnlyAmount(inst, inst.contracts, fee.juros);
                       if (!io) return null;
                       return (
                         <button
-                          onClick={() => setPartialValue(io.toFixed(2))}
-                          title="Preenche apenas os juros do período; o capital continua devido"
-                          className="px-2 py-1.5 rounded-md border border-warning/40 bg-warning/10 text-warning text-[11px] font-bold hover:bg-warning/20"
+                          onClick={() => {
+                            const turningOff = interestOnlyFor === inst.id;
+                            setInterestOnlyFor(turningOff ? null : inst.id);
+                            setPartialValue(turningOff ? "" : io.toFixed(2));
+                            setInterestNextDueDate(turningOff ? "" : nextInterestDueDate(inst.due_date, inst.contracts?.frequency));
+                          }}
+                          aria-pressed={interestOnlyFor === inst.id}
+                          title="Recebe os juros e renova o vencimento, mantendo o capital pendente"
+                          className={`px-2 py-1.5 rounded-md border text-[11px] font-bold transition-colors ${interestOnlyFor === inst.id ? "border-warning/60 bg-warning/20 text-warning" : "border-warning/40 bg-warning/10 text-warning hover:bg-warning/20"}`}
                         >
-                          Só juros R$ {fmtBRL(io)}
+                          {interestOnlyFor === inst.id ? "Cancelar renovação" : `Só juros · renovar R$ ${fmtBRL(io)}`}
                         </button>
                       );
                     })()}
+                    {interestOnlyFor === inst.id && (
+                      <label className="flex items-center gap-2 text-[11px] text-foreground">
+                        Novo vencimento
+                        <input
+                          type="date"
+                          value={interestNextDueDate}
+                          min={todayLocalISO()}
+                          onChange={(e) => setInterestNextDueDate(e.target.value)}
+                          className="rounded-md border border-primary/30 bg-primary/10 px-2 py-1 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/25"
+                        />
+                      </label>
+                    )}
                     <button onClick={() => handlePartial(inst)} disabled={saving === inst.id}
                       className="ml-auto px-3 py-1.5 rounded-md bg-success text-success-foreground text-[11px] font-bold hover:opacity-90 disabled:opacity-50 flex items-center gap-1">
                       {saving === inst.id ? <Loader2 size={11} className="animate-spin" /> : <CheckCircle2 size={11} />}
                       Confirmar
                     </button>
-                    <button onClick={() => { setPartialFor(null); setPartialValue(""); }}
+                    <button onClick={() => { setPartialFor(null); setPartialValue(""); setInterestOnlyFor(null); setInterestNextDueDate(""); }}
                       className="px-2 py-1.5 rounded-md hover:bg-accent text-muted-foreground text-[11px]">Cancelar</button>
                   </div>
                 )}

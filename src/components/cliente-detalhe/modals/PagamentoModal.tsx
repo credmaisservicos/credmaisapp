@@ -3,7 +3,7 @@ import { X } from "lucide-react";
 import { ModalPortal } from "@/components/ui/modal-portal";
 import { INPUT, fmt } from "../constants";
 import { calculateFeeDiscount } from "@/lib/lateFee";
-import { nextInterestDueDate } from "@/lib/interestOnly";
+import { nextInterestDueDate, supportsInterestOnlyRenewal } from "@/lib/interestOnly";
 import { formatBR, todayLocalISO } from "@/lib/dateUtils";
 
 type Props = {
@@ -16,6 +16,7 @@ type Props = {
   setReceiptFile: (f: File | null) => void;
   uploading: boolean;
   interestOnly?: number;
+  loanMode?: string | null;
   remainingDue: number;
   feeTotal?: number;
   onFeeDiscount?: (amount: number) => void;
@@ -35,7 +36,8 @@ const METHODS = [
 export default function PagamentoModal(p: Props) {
   const [discountPercent, setDiscountPercent] = useState(0);
   const automaticNextDue = nextInterestDueDate(p.inst.due_date, p.frequency);
-  const canPayInterestOnly = String(p.inst.contracts?.loan_mode || "").toLowerCase() === "bullet";
+  const canPayInterestOnly = supportsInterestOnlyRenewal(p.loanMode ?? p.inst.contracts?.loan_mode)
+    && Number(p.interestOnly || 0) > 0;
   const [renewInterest, setRenewInterest] = useState(false);
   const [nextDueDate, setNextDueDate] = useState(automaticNextDue);
   const discountableFee = calculateFeeDiscount(p.remainingDue, Number(p.feeTotal || 0), 0).discountable;
@@ -63,11 +65,11 @@ export default function PagamentoModal(p: Props) {
         </div>
         <div>
           <label className="text-xs font-medium text-muted-foreground mb-1 block">Valor (R$)</label>
-          <input type="number" name="payment_amount" aria-label="Valor do pagamento" step="0.01" value={p.amount} onChange={e => p.setAmount(e.target.value)} placeholder={fmt(p.remainingDue)} className={INPUT} autoFocus />
+          <input type="number" name="payment_amount" aria-label="Valor do pagamento" step="0.01" value={p.amount} onChange={e => p.setAmount(e.target.value)} placeholder={fmt(p.remainingDue)} className={INPUT} autoFocus readOnly={renewInterest} />
         </div>
         <div className="flex gap-2">
-          <button type="button" onClick={() => { applyDiscount(0); p.setAmount(String(p.remainingDue.toFixed(2))); }} className="flex-1 px-3 py-2 rounded-lg border border-border text-xs text-muted-foreground hover:bg-accent">Total</button>
-          <button type="button" onClick={() => p.setAmount(String((p.remainingDue / 2).toFixed(2)))} className="flex-1 px-3 py-2 rounded-lg border border-border text-xs text-muted-foreground hover:bg-accent">Metade</button>
+          <button type="button" disabled={renewInterest} onClick={() => { applyDiscount(0); p.setAmount(String(p.remainingDue.toFixed(2))); }} className="flex-1 px-3 py-2 rounded-lg border border-border text-xs text-muted-foreground hover:bg-accent disabled:opacity-50">Total</button>
+          <button type="button" disabled={renewInterest} onClick={() => p.setAmount(String((p.remainingDue / 2).toFixed(2)))} className="flex-1 px-3 py-2 rounded-lg border border-border text-xs text-muted-foreground hover:bg-accent disabled:opacity-50">Metade</button>
         </div>
         {discountableFee > 0 && (
           <div className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-3">
@@ -86,10 +88,15 @@ export default function PagamentoModal(p: Props) {
         {canPayInterestOnly && !!p.interestOnly && p.interestOnly > 0 && (
           <div className="space-y-1.5">
             <button type="button"
-              onClick={() => { setRenewInterest(true); p.setAmount(String(p.interestOnly!.toFixed(2))); }}
-              className="w-full px-3 py-2.5 rounded-lg border border-warning/40 bg-warning/10 text-xs font-semibold text-warning hover:bg-warning/20 transition-colors"
+              onClick={() => {
+                const next = !renewInterest;
+                setRenewInterest(next);
+                p.setAmount(String((next ? p.interestOnly! : p.remainingDue).toFixed(2)));
+              }}
+              aria-pressed={renewInterest}
+              className={`w-full px-3 py-2.5 rounded-lg border text-xs font-semibold transition-colors ${renewInterest ? "border-warning/60 bg-warning/20 text-warning" : "border-warning/40 bg-warning/10 text-warning hover:bg-warning/20"}`}
             >
-              Pagar só juros — R$ {fmt(p.interestOnly)}
+              {renewInterest ? "Cancelar pagamento só de juros" : `Pagar só juros — R$ ${fmt(p.interestOnly)}`}
             </button>
             <p className="text-[10px] text-muted-foreground leading-relaxed">
               Quita apenas os juros do período. O capital continua devido para o próximo vencimento.

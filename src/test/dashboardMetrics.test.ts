@@ -68,6 +68,19 @@ describe("classificação de parcela", () => {
 });
 
 describe("inadimplência no painel", () => {
+  it("conta contrato ativo como em atraso quando uma parcela já venceu", () => {
+    const m = computeDashboardMetrics(
+      entrada([
+        parcela({ status: "overdue", due_date: dias(-10) }),
+        parcela({ status: "pending", due_date: dias(10) }),
+      ]),
+      AGORA,
+    );
+
+    expect(m.overdueCount).toBe(1);
+    expect(m.contratosAtraso).toBe(1);
+  });
+
   it("soma pending e overdue vencidas — o bug que escondia 97% do atraso", () => {
     const m = computeDashboardMetrics(
       entrada([

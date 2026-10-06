@@ -315,7 +315,7 @@ const Dashboard = () => {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 md:gap-3">
             {[
               { label: "Contratos ativos",   value: metrics.contratosAtivos, icon: FileSignature, color: "text-success",     bg: "bg-success/10" },
-              { label: "Em atraso",          value: metrics.contratosAtraso, icon: AlertCircle,   color: "text-destructive", bg: "bg-destructive/10" },
+              { label: "Contratos em atraso", value: metrics.contratosAtraso, icon: AlertCircle,   color: "text-destructive", bg: "bg-destructive/10" },
               { label: "Total clientes",     value: metrics.totalClientes,   icon: Users,         color: "text-primary",     bg: "bg-primary/10" },
               { label: "Parcelas atrasadas", value: metrics.overdueCount,    icon: Clock,         color: "text-warning",     bg: "bg-warning/10" },
             ].map((item, i) => (

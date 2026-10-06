@@ -918,55 +918,9 @@ const ClienteDetalhe = () => {
         _method: payMethod,
         _origin: "detalhe_cliente",
       });
-      let received = Number(renewed?.amount || partialAmount || 0);
-      if (error) {
-        // Compatibilidade para bancos que ainda estejam com a versão antiga da RPC.
-        // A chamada acima é transacional: em caso de erro nada foi gravado, então
-        // podemos concluir a renovação pelas tabelas protegidas por RLS.
-        const contract: any = (contracts as any[]).find((c: any) => c.id === partialPayModal.contract_id);
-        received = Number(partialAmount) || interestOnlyAmount(partialPayModal, contract, Number(partialPayModal.late_fee || 0));
-        if (!(received > 0)) throw error;
-
-        const previousDueDate = partialPayModal.due_date;
-        const installmentPatch: any = {
-          due_date: nextDueDate,
-          late_fee: 0,
-          paid_amount: 0,
-          paid_at: null,
-          status: "pending",
-          payment_method: payMethod,
-        };
-        if (receiptUrl) installmentPatch.receipt_url = receiptUrl;
-        const { error: updateError } = await supabase.from("contract_installments")
-          .update(installmentPatch).eq("id", partialPayModal.id).eq("user_id", user.id);
-        if (updateError) throw error;
-
-        const periodInterest = Math.max(0, received - Number(partialPayModal.late_fee || 0));
-        const { error: transactionError } = await supabase.from("transactions").insert({
-          user_id: user.id,
-          amount: received,
-          type: "payment",
-          category: "interest_renewal",
-          description: "Renovação por pagamento somente dos juros (detalhe do cliente)",
-          client_id: partialPayModal.client_id,
-          contract_id: partialPayModal.contract_id,
-          installment_id: partialPayModal.id,
-          principal_amount: 0,
-          interest_amount: periodInterest,
-          fee_amount: Math.max(0, Number(partialPayModal.late_fee || 0)),
-        });
-        const { error: profitError } = transactionError ? { error: null } : await supabase.from("profits").insert({
-          user_id: user.id,
-          amount: received,
-          description: `Juros de renovação · parcela #${partialPayModal.installment_number || "-"}`,
-          client_id: partialPayModal.client_id,
-          installment_id: null,
-        });
-        if (transactionError || profitError) {
-          await supabase.from("contract_installments").update({ due_date: previousDueDate }).eq("id", partialPayModal.id).eq("user_id", user.id);
-          throw transactionError || profitError;
-        }
-      } else if (receiptUrl) {
+      if (error) throw error;
+      const received = Number(renewed?.amount || partialAmount || 0);
+      if (receiptUrl) {
         await supabase.from("contract_installments").update({ receipt_url: receiptUrl })
           .eq("id", partialPayModal.id).eq("user_id", user.id);
       }
@@ -1719,6 +1673,7 @@ const ClienteDetalhe = () => {
             setReceiptFile={setPayReceiptFile}
             uploading={payUploading}
             interestOnly={interestOnly}
+            loanMode={c?.loan_mode}
             frequency={c?.frequency}
             remainingDue={remainingDue}
             feeTotal={feeTotal}

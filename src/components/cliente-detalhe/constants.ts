@@ -21,4 +21,4 @@ export const formatFrequency = (value?: string | null) => {
   if (raw.startsWith("daily_")) return `Diário · ${DAILY_MODES[raw.slice(6)] || raw.slice(6)}`;
   return FREQ[raw] || raw;
 };
-export const INPUT = "w-full px-3 py-2.5 rounded-lg bg-card border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring";
+export const INPUT = "w-full px-3 py-2.5 rounded-lg bg-primary/10 border border-primary/25 text-sm text-foreground placeholder:text-muted-foreground transition-colors hover:border-primary/40 focus:outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/25";
