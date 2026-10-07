@@ -6,12 +6,12 @@ for(const [k,v] of Object.entries({SUPABASE_URL:backend,SUPABASE_SERVICE_ROLE_KE
 Deno.env.delete('ANTHROPIC_API_KEY');Deno.env.delete('LOVABLE_API_KEY');
 let calls:any[]=[],messages:any[]=[],reviews:any[]=[],jobs:any[]=[];
 let settings:any,conversation:any,knownClient=true,failSettings=false,ownsLease=true,eventCompleted=false;
-let clientMemory:string,installment:any,contract:any,failPromise=false,failCancel=false,failContract=false,failReview=false,failMemory=false,geminiStatus=200;
+let clientMemory:string,installment:any,contract:any,failPromise=false,failCancel=false,failContract=false,failReview=false,failMemory=false,geminiStatus=200,portalReceipt=false;
 const json=(v:any,status=200)=>new Response(JSON.stringify(v),{status,headers:{'Content-Type':'application/json'}});
 const rows=(v:any,req:Request)=>json(req.headers.get('Accept')?.includes('vnd.pgrst.object')?v:(v?[v]:[]));
 function reset(){
  calls=[];messages=[];reviews=[];jobs=[];knownClient=true;failSettings=false;ownsLease=true;eventCompleted=false;
- clientMemory=JSON.stringify({service_menu_started:true});failPromise=false;failCancel=false;failContract=false;failReview=false;failMemory=false;geminiStatus=200;
+ clientMemory=JSON.stringify({service_menu_started:true});failPromise=false;failCancel=false;failContract=false;failReview=false;failMemory=false;geminiStatus=200;portalReceipt=false;
  installment={id:'installment-test',user_id:owner,client_id:clientId,contract_id:'contract-test',amount:100,paid_amount:40,late_fee:0,scheduled_interest:10,status:'pending',due_date:'2099-01-01',installment_number:1,contracts:{status:'active',daily_interest_percent:4}};
  contract={id:'contract-test',status:'active',capital:90,total_amount:100,total_interest:10,interest_rate:10,num_installments:1,loan_mode:'fixed'};
  settings={user_id:owner,company_name:'Teste',bot_enabled:true,bot_auto_send:false,bot_auto_confirm_payment:true,bot_use_ai:false,bot_process_receipts:true,bot_process_audio:false,bot_work_days:['mon','tue','wed','thu','fri','sat','sun'],bot_business_start:'00:00',bot_business_end:'23:59',whatsapp_instance:'test',whatsapp_api_url:provider,whatsapp_api_key:'isolated-provider'};
@@ -62,7 +62,7 @@ globalThis.fetch=async(input,init)=>{
  }
  if(table==='whatsapp_receipt_reviews'&&req.method==='POST'){reviews.push(body);return new Response(null,{status:201});}
  if(table==='whatsapp_receipt_reviews'&&req.method==='GET'&&failReview)return json({message:'Unavailable'},503);
- if(table==='contract_installments')return json([installment]);
+ if(table==='contract_installments')return json(u.searchParams.get('receipt_review_status')==='eq.pending'?(portalReceipt?[{id:installment.id}]:[]):[installment]);
  if(table==='contracts')return failContract?json({message:'Unavailable'},503):rows(contract,req);
  if(req.method==='GET')return json([]);
  return new Response(null,{status:201});
@@ -114,6 +114,12 @@ Deno.test('changed promise failure does not tell the customer the date was saved
 });
 Deno.test('receipt status lookup failure never says that no receipt was received',async()=>{
  reset();failReview=true;const {response}=await invoke({conversation:'qual o status do comprovante'});assertEquals(response.status,500);assertEquals(jobs.length,0);
+});
+Deno.test('receipt uploaded through the portal is reported as pending without claiming a payment',async()=>{
+ reset();portalReceipt=true;const {response,body}=await invoke({conversation:'qual o status do comprovante'});
+ assertEquals(response.status,200);assertEquals(body.review_status,'pending');
+ assert(jobs.some(j=>j.text.includes('continua em análise')));assert(jobs.every(j=>!j.text.includes('baixa foi registrada')));
+ assertEquals(calls.filter(c=>/system_pay_installment/.test(c.path)).length,0);
 });
 Deno.test('loan menu preserves the selected stage across messages',async()=>{
  reset();const first=await invoke({conversation:'1'});assertEquals(first.body.status,'loan_type_menu');assertEquals(JSON.parse(clientMemory).service_menu_stage,'loan_type');

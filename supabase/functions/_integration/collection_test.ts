@@ -7,7 +7,7 @@ const backend='https://collection.test.invalid',provider='https://provider.test.
 for(const [key,value] of Object.entries({SUPABASE_URL:backend,SUPABASE_SERVICE_ROLE_KEY:'test-service',CRON_SECRET:'test-cron'}))Deno.env.set(key,value);
 for(const key of ['ANTHROPIC_API_KEY','LOVABLE_API_KEY','DEEPSEEK_API_KEY'])Deno.env.delete(key);
 const calls:{url:URL;method:string;body:any}[]=[];
-let jobs:any[]=[],promise=false,paused=false,policyFailure=false,cooldown=false,ledgerPayment=false;
+let jobs:any[]=[],promise=false,paused=false,policyFailure=false,cooldown=false,ledgerPayment=false,portalReceipt=false,whatsappReceipt=false,receiptFailure=false;
 let settings:any={};
 const today=saoPauloDay();
 const prior=new Date(`${today}T12:00:00Z`);prior.setUTCDate(prior.getUTCDate()-10);
@@ -35,7 +35,13 @@ globalThis.fetch=async(input,init)=>{
   if(table==='settings')data=[settings];
   else if(table==='profiles')data=[{id:owner,plan_tier:'completo',subscription_type:'lifetime',name:'Empresa teste'}];
   else if(table==='clients')data=[{id:client,name:'Cliente fictício',whatsapp:'11999999999',credit_score:100}];
-  else if(table==='contract_installments')data=rows;
+  else if(table==='contract_installments'){
+    if(url.searchParams.get('receipt_review_status')==='eq.pending'){
+      if(receiptFailure)return json({message:'Unavailable'},503);
+      data=portalReceipt?[{id:'pending-portal-receipt'}]:[];
+    }else data=rows;
+  }
+  else if(table==='whatsapp_receipt_reviews')data=whatsappReceipt?[{id:'pending-whatsapp-receipt'}]:[];
   else if(table==='payment_promises'){
     if(policyFailure)return json({message:'Database unavailable'},503);
     data=promise?[{id:'promise',client_id:client,status:'open',promised_for:today}]:[];
@@ -51,7 +57,7 @@ globalThis.fetch=async(input,init)=>{
 await import('../auto-collection/index.ts');const collection=handlers.at(-1)!;
 const db=createClient(backend,'test-service');
 function reset(){
-  calls.length=0;jobs=[];promise=paused=policyFailure=cooldown=ledgerPayment=false;
+  calls.length=0;jobs=[];promise=paused=policyFailure=cooldown=ledgerPayment=portalReceipt=whatsappReceipt=receiptFailure=false;
   const parts=new Intl.DateTimeFormat('en-US',{timeZone:'America/Sao_Paulo',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date());
   const part=(key:string)=>Number(parts.find(p=>p.type===key)?.value);
   settings={user_id:owner,bot_enabled:true,bot_auto_send:true,bot_use_ai:false,bot_work_days:['mon','tue','wed','thu','fri','sat','sun'],bot_send_hour:part('hour'),bot_send_minute:part('minute'),bot_escalation_rules:[{days:1,template:'',channel:'whatsapp'},{days:-3,template:'',channel:'whatsapp'}],bot_stop_on_payment:true,whatsapp_api_url:provider,whatsapp_api_key:'test-key',whatsapp_instance:'main'};
@@ -91,4 +97,32 @@ Deno.test('queued charge: agreement lookup failure leaves job retryable without 
 });
 Deno.test('queued charge: partial payment after scheduling cancels even on another installment',async()=>{
   reset();await invoke();ledgerPayment=true;assertEquals(await deliverBotJob(db,jobs[0]),'cancelled');assertEquals(jobs[0].error,'payment_received');assert(!calls.some(c=>c.url.origin===provider&&c.method==='POST'));
+});
+for(const channel of ['portal','whatsapp'] as const) {
+  Deno.test(`collection HTTP: pending ${channel} receipt prevents a new charge`,async()=>{
+    reset();if(channel==='portal')portalReceipt=true;else whatsappReceipt=true;
+    assertEquals((await invoke()).status,200);assertEquals(jobs.length,0);
+    const table=channel==='portal'?'contract_installments':'whatsapp_receipt_reviews';
+    const read=calls.find(c=>c.url.pathname.endsWith('/'+table)&&c.url.searchParams.get(channel==='portal'?'receipt_review_status':'status')==='eq.pending')!;
+    assertEquals(read.url.searchParams.get('user_id'),`eq.${owner}`);
+    assertEquals(read.url.searchParams.get('client_id'),`eq.${client}`);
+  });
+  Deno.test(`queued charge: ${channel} receipt uploaded after scheduling cancels even with approval`,async()=>{
+    reset();await invoke();jobs[0].approved_by=owner;
+    if(channel==='portal')portalReceipt=true;else whatsappReceipt=true;
+    assertEquals(await deliverBotJob(db,jobs[0]),'cancelled');assertEquals(jobs[0].error,'receipt_under_review');
+    assert(!calls.some(c=>c.url.origin===provider&&c.method==='POST'));
+  });
+}
+Deno.test('queued follow-up: pending portal receipt prevents another collection reminder',async()=>{
+  reset();await invoke();jobs[0].purpose='service_followup';portalReceipt=true;
+  assertEquals(await deliverBotJob(db,jobs[0]),'cancelled');assertEquals(jobs[0].error,'receipt_under_review');
+  assert(!calls.some(c=>c.url.origin===provider&&c.method==='POST'));
+});
+Deno.test('queued charge: receipt lookup failure leaves job retryable without sending',async()=>{
+  reset();await invoke();receiptFailure=true;await deliverBotJob(db,jobs[0]);
+  assertEquals(jobs[0].status,'pending');assert(!calls.some(c=>c.url.origin===provider&&c.method==='POST'));
+});
+Deno.test('collection HTTP: receipt lookup failure prevents a new charge',async()=>{
+  reset();receiptFailure=true;assertEquals((await invoke()).status,500);assertEquals(jobs.length,0);
 });

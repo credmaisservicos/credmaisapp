@@ -32,16 +32,28 @@ export function collectionCooldownHours(value: unknown) {
   const hours = Number(value);
   return Number.isFinite(hours) && hours >= 1 ? Math.min(168, hours) : 24;
 }
+/** Portal and WhatsApp receipts require human review before another charge. */
+export async function pendingClientReceipt(db:any,owner:string,client:string) {
+  const [portal,whatsapp]=await Promise.all([
+    db.from('contract_installments').select('id').eq('user_id',owner).eq('client_id',client)
+      .eq('receipt_review_status','pending').not('status','in','("paid","cancelled")').limit(1),
+    db.from('whatsapp_receipt_reviews').select('id').eq('user_id',owner).eq('client_id',client).eq('status','pending').limit(1),
+  ]);
+  if(portal.error || whatsapp.error)throw Error('receipt_state_unavailable');
+  return !!(portal.data?.length || whatsapp.data?.length);
+}
 
 /** Every queued charge rechecks agreements and opt-out across the client's inbox. */
 export async function collectionSuppression(db: any, owner: string, client: string, now = new Date(), humanApproved = false) {
-  const [promises, conversations] = await Promise.all([
+  const [promises, conversations,receiptPending] = await Promise.all([
     db.from('payment_promises').select('id').eq('user_id', owner).eq('client_id', client)
       .eq('status', 'open').gte('promised_for', saoPauloDay(now)).limit(1),
     db.from('whatsapp_conversations').select('id').eq('user_id', owner).eq('client_id', client)
       .or('blocked.eq.true,bot_paused.eq.true,needs_human.eq.true').limit(1),
+    pendingClientReceipt(db,owner,client),
   ]);
   if (promises.error || conversations.error) throw Error('collection_policy_unavailable');
+  if (receiptPending) return 'receipt_under_review';
   if (promises.data?.length) return 'payment_promise_active';
   if (conversations.data?.length && !humanApproved) return 'human_takeover';
   return null;

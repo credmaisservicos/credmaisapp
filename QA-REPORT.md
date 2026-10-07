@@ -4,7 +4,7 @@
 
 Gemini integrado ao agente com escopo por conta e modo de testes restrito ao destinatário autorizado. Consulta de parcelas e portal podem interromper a seleção da modalidade; menu e respostas de ajuda usam comandos consistentes. Credenciais permanecem no servidor.
 
-Validação: 457 testes Vitest, 156 compartilhados sem rede, 62 integrações HTTP sem rede e 218 testes de interface: 893 testes distintos. Portal publicado verificado em celular e computador, incluindo acesso, filtros, detalhes, extrato PDF e logout. API real do Gemini verificada com dados fictícios e chamada de ferramenta. Cliente e cobrança fictícia na conta autorizada, sem pagamento ou desembolso. Publicação de 11 arquivos com backup e sem migrações. Detalhes e limites dos testes externos em [agente-gemini-testes-2026-10-07.md](docs/agente-gemini-testes-2026-10-07.md).
+Validação: 457 testes Vitest, 156 compartilhados sem rede, 70 integrações HTTP sem rede e 218 testes de interface: 901 testes distintos. Portal publicado verificado em celular e computador, incluindo acesso, filtros, detalhes, extrato PDF, envio de arquivo de teste e logout. Comprovantes pendentes no portal ou WhatsApp bloqueiam cobranças e lembretes antes do envio, inclusive com aprovação manual. API real do Gemini verificada com dados fictícios e chamada de ferramenta. Cliente e cobrança fictícia na conta autorizada, sem pagamento ou desembolso. Publicação de 13 arquivos com backup e sem migrações. Detalhes e limites dos testes externos em [agente-gemini-testes-2026-10-07.md](docs/agente-gemini-testes-2026-10-07.md).
 
 ## 2026-10-07 — Valores, promessas e continuidade do agente
 

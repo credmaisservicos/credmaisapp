@@ -28,13 +28,18 @@ Referências: [API de geração](https://ai.google.dev/api/generate-content), [c
 - O menu tem uma única instrução e os textos de ajuda seguem a mesma numeração: 2 para parcelas, 3 para renegociação, 5 para atendente. `portal` gera o acesso exclusivo do cliente.
 - Perguntas contendo “entender melhor” deixam de ser interpretadas como elogios. Orientações sobre desconto e antecipação dependem da equipe, sem prometer um desconto calculado automaticamente.
 - O diagnóstico de atendimento reconhece Gemini, incluindo disponibilidade de áudio. Sugestões do inbox e cobranças passam o dono à seleção do provedor.
+- Comprovantes pendentes no portal ou WhatsApp suspendem cobranças novas, cobranças já agendadas e lembretes de atendimento. A verificação ocorre novamente antes da entrega, mesmo com aprovação manual, e erros de consulta impedem o envio. A consulta de comprovante pelo bot reconhece arquivos pendentes enviados pelo portal.
 
 ## Validação
 
-893 testes automatizados distintos aprovados: 457 Vitest, 156 compartilhados sem rede, 62 integrações HTTP sem rede e 218 testes de interface com backend fictício. Tipos de 43 funções, lint, tipos do app e regras de hooks verificados. Os testes abrangem valor parcial, juros, promessa, pausa humana, comprovante pendente, erro do provedor, isolamento de contas e restrição do destinatário de testes.
+901 testes automatizados distintos aprovados: 457 Vitest, 156 compartilhados sem rede, 70 integrações HTTP sem rede e 218 testes de interface com backend fictício. Tipos de 43 funções, lint, tipos do app e regras de hooks verificados. Os testes abrangem valor parcial, juros, promessa, pausa humana, comprovante pendente, erro do provedor, isolamento de contas e restrição do destinatário de testes.
 
 Na conta de testes autorizada foi criado um cliente identificado como teste, com nome, CPF validado e telefone informados pelo titular. Uma parcela fictícia de R$ 1,00 exercita cobrança e consulta, sem desembolso e sem lançamento de pagamento. A cobrança e respostas iniciais foram aceitas pelo provedor; mensagens reais do telefone de teste foram recebidas. Até a publicação das correções não houve envio para outro destinatário da conta nem transação financeira do cliente de teste.
 
 O portal publicado foi exercitado com esse cliente em 360 e 1366 pixels: login, parcela fictícia, filtros, recarregamento da sessão, detalhes de pagamento, download do extrato PDF e logout. Sem erro de página, resposta HTTP de erro ou transbordamento horizontal. Os extratos e capturas ficam na área local ignorada e não são publicados.
+
+O envio de arquivo pelo portal foi exercitado com o próprio extrato de teste, identificado como documento que não é comprovante bancário. O endpoint respondeu 200; a parcela ficou pendente de análise, com valor pago zero e nenhuma transação financeira. O arquivo não foi aprovado como pagamento.
+
+Após a publicação, duas mensagens sintéticas aprovadas, de cobrança e de acompanhamento, foram processadas pela fila real. Ambas terminaram canceladas com `receipt_under_review`, sem chamada aceita pelo provedor. O teste ficou restrito ao cliente e conversa autorizados; a contagem de mensagens enviadas a outros destinatários permaneceu zero.
 
 A API real do Gemini respondeu a uma consulta fictícia com chamada de função e leitura do resultado; nenhum dado de cliente real foi usado nesse teste de API. A publicação inclui backup privado das funções, banco e configuração, sem migração nova. Conversas livres, áudio, comprovantes e negociação pelo WhatsApp dependem de mensagens do telefone autorizado para verificar o percurso externo completo; a cobertura automatizada usa provedores simulados.

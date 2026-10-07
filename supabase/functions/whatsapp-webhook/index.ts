@@ -30,6 +30,7 @@ import { automationAccountActive, withinBotHours } from "../_shared/bot_policy.t
 import { saveBotAttachment } from "../_shared/bot_media.ts";
 import {callGemini, geminiConfigured} from '../_shared/gemini.ts';
 import {testRecipientScope} from '../_shared/bot_test_scope.ts';
+import {pendingClientReceipt} from '../_shared/bot_collection.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1294,12 +1295,15 @@ serve(async (req) => {
         const { data: review } = await checkedBotQuery<{data:{status:string}|null;error?:unknown}>((supabase as any).from("whatsapp_receipt_reviews")
           .select("status,created_at,reviewed_at,metadata").eq("user_id", userId).eq("client_id", client.id)
           .order("created_at", { ascending: false }).limit(1).maybeSingle());
-        const statusText = !review ? "Não encontrei comprovante enviado para análise."
+        const pendingReceipt=await pendingClientReceipt(supabase,userId,client.id);
+        const reviewStatus=pendingReceipt?'pending':review?.status || 'not_found';
+        const statusText = pendingReceipt ? "Seu comprovante foi recebido e continua em análise. A cobrança permanece pausada até a conferência."
+          : !review ? "Não encontrei comprovante enviado para análise."
           : review.status === "approved" ? "Seu comprovante foi aprovado e a baixa foi registrada."
           : review.status === "rejected" ? "O comprovante não foi aprovado. A equipe poderá orientar o motivo e solicitar um novo arquivo."
           : "Seu comprovante foi recebido e continua em análise. A cobrança permanece pausada até a conferência.";
         await botSay(statusText);
-        return new Response(JSON.stringify({ status: "receipt_status", review_status: review?.status || "not_found" }), { headers: corsHeaders });
+        return new Response(JSON.stringify({ status: "receipt_status", review_status: reviewStatus }), { headers: corsHeaders });
       }
 
       if (/cancelar|desmarcar|esquecer/.test(txtLow) && /promessa|previs[aã]o|combinado|pagamento/.test(txtLow)) {

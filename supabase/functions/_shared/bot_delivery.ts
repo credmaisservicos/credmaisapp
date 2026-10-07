@@ -1,7 +1,7 @@
 import { deliveryPolicy } from './bot_policy.ts';
 import { botRows } from './bot_data.ts';
 import { activeDebt, botBalance, BOT_CONTRACT_FIELDS } from './bot_finance.ts';
-import { collectionSuppression, collectionPaymentAfter } from './bot_collection.ts';
+import { collectionSuppression, collectionPaymentAfter, pendingClientReceipt } from './bot_collection.ts';
 export const SESSION_TIMEOUT_MESSAGE = 'Atendimento encerrado por falta de resposta. Quando precisar continuar, envie uma nova mensagem para abrir o menu novamente.';
 export async function resolveWhatsAppInstance(supabase: any, ownerId: string, settings: any, name?: string) {
   const instance = name || settings?.whatsapp_instance;
@@ -44,6 +44,9 @@ export async function deliverBotJob(supabase: any, job: any) {
       if (settings.bot_stop_on_payment !== false && job.created_at && await collectionPaymentAfter(supabase,job.user_id,job.client_id,job.created_at)) {
         await update({status:'cancelled',error:'payment_received'});return 'cancelled';
       }
+    }
+    if(job.purpose==='service_followup' && job.client_id && await pendingClientReceipt(supabase,job.user_id,job.client_id)) {
+      await update({status:'cancelled',error:'receipt_under_review'});return 'cancelled';
     }
     if (['collection','service_followup'].includes(job.purpose) && job.client_id) {
       const rows = await botRows(()=>supabase.from('contract_installments').select(`id,amount,paid_amount,late_fee,status,due_date,pre_settlement_snapshot,contracts(${BOT_CONTRACT_FIELDS})`)
