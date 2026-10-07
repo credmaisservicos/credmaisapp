@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { formatBR, formatBRDateTime, parseLocalDate, todayLocalISO } from "@/lib/dateUtils";
 import { SafeMessageContent } from "@/components/agent/SafeMessageContent";
+import { parsePaymentAmount } from '@/lib/paymentInput';
 import { useNavigate } from "react-router-dom";
 
 interface Message {
@@ -401,8 +402,8 @@ const AgenteIA = ({embedded=false,view='chat'}:{embedded?:boolean;view?:'chat'|'
   const [receiptDates,setReceiptDates]=useState<Record<string,string>>({});
   const approveReceipt = async (reviewId: string) => {
     const item=(reviewCenter?.receipts || []).find((row:any)=>row.id===reviewId);
-    const amount=Number((receiptAmounts[reviewId] || String(item?.amount || 0)).replace(",","."));
-    if(!Number.isFinite(amount) || amount<=0){toast({title:"Informe o valor recebido",variant:"destructive"});return;}
+    const amount=parsePaymentAmount(receiptAmounts[reviewId] ?? String(item?.amount || ''));
+    if(amount==null || amount<=0){toast({title:"Informe um valor recebido válido",description:'Use, por exemplo, 1.234,56.',variant:"destructive"});return;}
     const nextDue=item?.metadata?.payment_kind==='interest_only'?receiptDates[reviewId]:null;
     if(item?.metadata?.payment_kind==='interest_only'&&!nextDue){toast({title:'Informe o novo vencimento da renovação.',variant:'destructive'});return;}
     const { error } = await (supabase as any).rpc("confirm_whatsapp_receipt", { _review_id: reviewId, _received_amount:amount,_next_due_date:nextDue });

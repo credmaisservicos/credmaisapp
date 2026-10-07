@@ -24,6 +24,20 @@ export const MEMORY_SECTIONS = [
 
 export type MemorySection = typeof MEMORY_SECTIONS[number];
 
+// Estado gravado pelo fluxo determinístico. Atualizações da IA não o alteram.
+function flowState(raw: any): Record<string, unknown> {
+  const state: Record<string, unknown> = {};
+  const strings = ['service_menu_stage','last_menu_choice','loan_profile','request_kind','pending_payment_kind','pending_payment_installment_id','pending_payment_set_at','payment_promise_cancelled_at','resumed_at'];
+  const numbers = ['last_menu_at','human_reason_asked_at','pending_payment_amount'];
+  for (const key of strings) if (typeof raw?.[key] === 'string' && raw[key].length <= 150) state[key] = raw[key];
+  for (const key of numbers) if (typeof raw?.[key] === 'number' && Number.isFinite(raw[key]) && raw[key] >= 0) state[key] = raw[key];
+  if (typeof raw?.service_menu_started === 'boolean') state.service_menu_started = raw.service_menu_started;
+  for (const key of ['loan_documents_received','loan_documents_missing','loan_document_validations']) {
+    if (Array.isArray(raw?.[key])) state[key] = dedupArr([],raw[key],SECTION_LIMIT);
+  }
+  return state;
+}
+
 export interface BotMemory {
   fatos: any[];
   preferencias: any[];
@@ -107,6 +121,7 @@ export function parseMemory(raw: unknown): BotMemory {
     }
     if (typeof parsed.ultima_interacao === "string") base.ultima_interacao = parsed.ultima_interacao;
     if (typeof parsed.notas_legadas === "string") base.notas_legadas = parsed.notas_legadas.slice(0, 1500);
+    Object.assign(base, flowState(parsed));
     return base;
   } catch {
     return { ...base, notas_legadas: s.slice(0, 1500) };
@@ -125,6 +140,7 @@ export function mergeMemory(
 ): BotMemory {
   const safeUpdate = update && typeof update === "object" && !Array.isArray(update) ? update : {};
   const merged: BotMemory = {
+    ...flowState(existing),
     fatos: dedupArr(existing.fatos, safeUpdate.fatos, limit),
     preferencias: dedupArr(existing.preferencias, safeUpdate.preferencias, limit),
     motivos_atraso: dedupArr(existing.motivos_atraso, safeUpdate.motivos_atraso, limit),
@@ -157,10 +173,16 @@ export function serializeMemory(memory: BotMemory, maxBytes = MAX_BYTES): string
     "preferencias",
     "fatos",
     "promessas",
+    "intencoes",
   ];
   for (let cap = SECTION_LIMIT - 1; cap >= 1; cap--) {
     for (const sec of order) {
       attempt = { ...attempt, [sec]: (attempt[sec] || []).slice(0, cap) };
+      serialized = JSON.stringify(attempt);
+      if (serialized.length <= maxBytes) return serialized;
+    }
+    if (Array.isArray(attempt.loan_document_validations)) {
+      attempt = { ...attempt, loan_document_validations: attempt.loan_document_validations.slice(-cap) };
       serialized = JSON.stringify(attempt);
       if (serialized.length <= maxBytes) return serialized;
     }
@@ -171,6 +193,7 @@ export function serializeMemory(memory: BotMemory, maxBytes = MAX_BYTES): string
   if (serialized.length <= maxBytes) return serialized;
   // Garantia final: trunca de forma segura mantendo JSON válido.
   return JSON.stringify({
+    ...Object.fromEntries(Object.entries(flowState(memory)).filter(([key]) => key !== 'loan_document_validations')),
     fatos: [],
     preferencias: [],
     motivos_atraso: [],

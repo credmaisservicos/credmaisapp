@@ -138,6 +138,8 @@ export type InstallmentRow = {
   amount: number;
   paid_amount: number | null;
   late_fee: number | null;
+  stored_late_fee?: number;
+  scheduled_interest?: number | null;
   due_date: string;
   status: string;
 };
@@ -172,7 +174,7 @@ export async function loadClientInstallments(
   if (!ownerId) throw new Error("owner_required");
   const data = await botRows(() => supabase
     .from("contract_installments")
-    .select("id, contract_id, installment_number, amount, paid_amount, late_fee, due_date, status, pre_settlement_snapshot, contracts:contract_id(status,daily_interest_percent,daily_penalty_type,daily_penalty_value,max_interest_cap_percent)")
+    .select("id, contract_id, installment_number, amount, paid_amount, late_fee, scheduled_interest, due_date, status, pre_settlement_snapshot, contracts:contract_id(status,daily_interest_percent,daily_penalty_type,daily_penalty_value,max_interest_cap_percent)")
     .eq("client_id", clientId)
     .eq("user_id", ownerId)
     .not("status", "in", '("paid","cancelled")')
@@ -187,6 +189,8 @@ export async function loadClientInstallments(
       amount: Number(r.amount) || 0,
       paid_amount: Number(r.paid_amount) || 0,
       late_fee: botLateFee(r),
+      stored_late_fee: Number(r.late_fee) || 0,
+      scheduled_interest: r.scheduled_interest == null ? null : Number(r.scheduled_interest),
       due_date: ymd(r.due_date),
       status: String(r.status || ""),
     }))

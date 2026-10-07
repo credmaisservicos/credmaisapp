@@ -2,6 +2,7 @@
 import { PGlite } from '@electric-sql/pglite';
 import { beforeAll,beforeEach,afterAll,it,expect } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { botRenewalQuote } from '../../supabase/functions/_shared/bot_finance';
 const owner='00000000-0000-0000-0000-000000000001', other='00000000-0000-0000-0000-000000000002';
 const id=(n:number)=>`00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
 const migration=(name:string)=>readFileSync(`supabase/migrations/${name}`,'utf8');
@@ -24,15 +25,16 @@ beforeAll(async()=>{
       principal_amount numeric,interest_amount numeric,fee_amount numeric,source_key text);
     CREATE TABLE profits(user_id uuid,amount numeric,description text,client_id uuid,installment_id uuid);
     CREATE TABLE settings(user_id uuid,bot_auto_confirm_payment boolean);
+    CREATE TABLE audit_logs(user_id uuid,entity_type text,entity_id uuid,action text,details jsonb);
     CREATE TABLE whatsapp_receipt_reviews(id uuid PRIMARY KEY,user_id uuid,client_id uuid,installment_id uuid,amount numeric,status text DEFAULT 'pending',metadata jsonb DEFAULT '{}',reviewed_at timestamptz,reviewed_by uuid);
     CREATE TABLE whatsapp_event_claims(user_id uuid,instance text,message_id text,claimed_at timestamptz DEFAULT now(),PRIMARY KEY(user_id,instance,message_id));
     CREATE TABLE whatsapp_response_windows(user_id uuid,jid text,claimed_until timestamptz,updated_at timestamptz,PRIMARY KEY(user_id,jid));
     CREATE TABLE whatsapp_conversations(id uuid PRIMARY KEY,user_id uuid,bot_paused boolean DEFAULT false,needs_human boolean DEFAULT false,bot_status text);
     CREATE TABLE whatsapp_scheduled_messages(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),conversation_id uuid,user_id uuid,text text,status text DEFAULT 'pending',
       scheduled_for timestamptz DEFAULT now(),claimed_at timestamptz,attempts integer DEFAULT 0,error text,purpose text DEFAULT 'manual',sent_at timestamptz,created_at timestamptz DEFAULT now(),client_id uuid,installment_id uuid);`);
-  for(const name of ['20260905110000_contract_lifecycle.sql','20260922130000_dynamic_late_fee_tracks_settlement.sql','20261005120000_renew_interest_uses_scheduled_breakdown.sql','20261006120000_guard_contract_completion.sql','20261007093000_bot_delivery_reliability.sql','20261007100000_receipt_review_partial_payments.sql'])await db.exec(migration(name));
+  for(const name of ['20260905110000_contract_lifecycle.sql','20260905100000_payment_promises.sql','20260922130000_dynamic_late_fee_tracks_settlement.sql','20261005120000_renew_interest_uses_scheduled_breakdown.sql','20261006120000_guard_contract_completion.sql','20261007093000_bot_delivery_reliability.sql','20261007100000_receipt_review_partial_payments.sql'])await db.exec(migration(name));
 },30_000);
-beforeEach(async()=>{await db.exec('RESET ROLE;SET test.auth_role=service_role;TRUNCATE contracts,transactions,profits,whatsapp_event_claims,whatsapp_response_windows,whatsapp_scheduled_messages,whatsapp_conversations,whatsapp_receipt_reviews CASCADE;');});
+beforeEach(async()=>{await db.exec('RESET ROLE;SET test.auth_role=service_role;TRUNCATE contracts,transactions,profits,audit_logs,payment_promises,whatsapp_event_claims,whatsapp_response_windows,whatsapp_scheduled_messages,whatsapp_conversations,whatsapp_receipt_reviews CASCADE;');});
 afterAll(async()=>{await db?.close();});
 async function scalar(query:string,args:any[]=[]){return Object.values((await db.query(query,args)).rows[0])[0];}
 async function seed(paid=0,fee=0){
@@ -41,6 +43,27 @@ async function seed(paid=0,fee=0){
   await db.query('INSERT INTO whatsapp_receipt_reviews(id,user_id,client_id,installment_id,amount) VALUES($1,$2,$2,$3,20)',[id(12),owner,id(11)]);
 }
 const confirm=(amount:number,date:string|null=null)=>scalar('SELECT confirm_whatsapp_receipt($1::uuid,$2::numeric,$3::date)',[id(12),amount,date]);
+
+it.each([
+  {mode:'fixed',scheduled:43.21,number:2,n:3,payment:450,grace:0},
+  {mode:'price',scheduled:0,number:2,n:3,payment:450,grace:0},
+  {mode:'price',scheduled:23.45,number:3,n:3,payment:450,grace:0},
+  {mode:'grace',scheduled:0,number:1,n:4,payment:400,grace:1},
+  {mode:'grace',scheduled:0,number:2,n:4,payment:400,grace:1},
+  {mode:'bullet',scheduled:23.45,number:1,n:3,payment:450,grace:0},
+  {mode:'percentage',scheduled:23.45,number:1,n:3,payment:450,grace:0},
+  {mode:'interest_only',scheduled:23.45,number:1,n:3,payment:450,grace:0},
+  {mode:'fixed',scheduled:0,number:2,n:3,payment:450,grace:0},
+])('bot quote matches the actual SQL renewal for $mode (period $number, saved $scheduled)',async({mode,scheduled,number,n,payment,grace})=>{
+  await seed(0,5);
+  await db.query('UPDATE contracts SET capital=1000,total_interest=300,total_amount=1300,interest_rate=10,loan_mode=$1,num_installments=$2,installment_amount=$3,grace_periods=$4',[mode,n,payment,grace]);
+  await db.query('UPDATE contract_installments SET amount=$1,scheduled_interest=$2,installment_number=$3',[payment,scheduled,number]);
+  const contract=(await db.query<Record<string,any>>('SELECT * FROM contracts')).rows[0],inst=(await db.query<Record<string,any>>('SELECT * FROM contract_installments')).rows[0];
+  const quote=botRenewalQuote({...inst,stored_late_fee:inst.late_fee,late_fee:999},contract);
+  const result=await scalar('SELECT renew_installment_interest($1::uuid,current_date+60)',[id(11)]) as {amount:number};
+  expect(quote).toBe(Number(result.amount));
+  expect(Number(await scalar('SELECT amount FROM transactions'))).toBe(quote);
+});
 it('blocks anonymous and authenticated users from worker claims',async()=>{
   for(const role of ['anon','authenticated']){
     expect(await scalar("SELECT has_function_privilege($1,'public.claim_due_whatsapp_messages(integer)','EXECUTE')",[role])).toBe(false);
@@ -119,4 +142,39 @@ it('interest renewal requires a future due date and matching bank amount',async(
   expect(await scalar('SELECT due_date::text FROM contract_installments')).toBe(date);
   expect(await scalar('SELECT status FROM contract_installments')).toBe('pending');
   expect(Number(await scalar('SELECT amount FROM transactions'))).toBe(10);
+});
+
+it('interest quote rounds half-cent boundaries the same way as SQL numeric',async()=>{
+  await seed();await db.exec("UPDATE contracts SET loan_mode='percentage',capital=1005,interest_rate=0.1");
+  const contract=(await db.query<Record<string,any>>('SELECT * FROM contracts')).rows[0],inst=(await db.query<Record<string,any>>('SELECT * FROM contract_installments')).rows[0];
+  const quote=botRenewalQuote(inst,contract);
+  const result=await scalar('SELECT renew_installment_interest($1::uuid,current_date+60)',[id(11)]) as {amount:number};
+  expect(Number(result.amount)).toBe(1.01);expect(quote).toBe(Number(result.amount));
+});
+
+it('audit events create and change a single operational promise; cancellation is scoped by owner',async()=>{
+  await seed();
+  const record=(action:string,date:string,amount:number|null)=>db.query('INSERT INTO audit_logs VALUES($1,$2,$1,$3,$4)',[owner,'whatsapp_bot',action,{promise_date:date,promise_amount:amount}]);
+  await record('promise_to_pay','2099-01-01',20.5);
+  expect(Number(await scalar('SELECT promised_amount FROM payment_promises'))).toBe(20.5);
+  expect(await scalar('SELECT installment_id FROM payment_promises')).toBe(id(11));
+  await record('payment_promise_changed','2099-01-02',null);
+  expect((await db.query('SELECT * FROM payment_promises')).rows).toHaveLength(1);
+  expect(await scalar('SELECT promised_for::text FROM payment_promises')).toBe('2099-01-02');
+  await db.query('INSERT INTO payment_promises(user_id,client_id,promised_for) VALUES($1,$1,$2)',[other,'2099-01-01']);
+  await db.query("UPDATE payment_promises SET status='cancelled' WHERE user_id=$1 AND client_id=$1 AND status='open'",[owner]);
+  expect(await scalar('SELECT status FROM payment_promises WHERE user_id=$1',[owner])).toBe('cancelled');
+  expect(await scalar('SELECT status FROM payment_promises WHERE user_id=$1',[other])).toBe('open');
+});
+it('promise persistence failure rolls back the audit instead of claiming a saved agreement',async()=>{
+  await expect(db.query('INSERT INTO audit_logs VALUES($1,$2,$3,$4,$5)',[owner,'whatsapp_bot',id(99),'promise_to_pay',{promise_date:'2099-01-01'}])).rejects.toThrow(/foreign key/);
+  expect((await db.query('SELECT * FROM audit_logs')).rows).toHaveLength(0);
+  expect((await db.query('SELECT * FROM payment_promises')).rows).toHaveLength(0);
+});
+it('partial receipt preserves the promise and full settlement fulfills it',async()=>{
+  await seed(40);await db.query('INSERT INTO audit_logs VALUES($1,$2,$1,$3,$4)',[owner,'whatsapp_bot','promise_to_pay',{promise_date:'2099-01-01',promise_amount:60}]);
+  await confirm(20);expect(await scalar('SELECT status FROM payment_promises')).toBe('open');
+  await db.query('INSERT INTO whatsapp_receipt_reviews(id,user_id,client_id,installment_id,amount) VALUES($1,$2,$2,$3,40)',[id(13),owner,id(11)]);
+  await db.query('SELECT confirm_whatsapp_receipt($1::uuid,40)',[id(13)]);
+  expect(await scalar('SELECT status FROM payment_promises')).toBe('fulfilled');
 });

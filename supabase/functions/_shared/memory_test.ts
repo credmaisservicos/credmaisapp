@@ -12,6 +12,26 @@ import {
   SECTION_LIMIT,
 } from "./memory.ts";
 
+Deno.test('flow state survives the next message and AI memory updates cannot replace it',()=>{
+  const state={service_menu_started:true,service_menu_stage:'loan_type',last_menu_at:100,pending_payment_kind:'interest_only',pending_payment_amount:45.21,pending_payment_installment_id:'installment',pending_payment_set_at:'2026-10-07T12:00:00Z',loan_documents_received:['identity'],loan_document_validations:[{decision:'accepted',document_type:'identity'}]};
+  const parsed=parseMemory(JSON.stringify(state));
+  const updated=mergeMemory(parsed,{fatos:['novo'],service_menu_stage:'main',pending_payment_amount:999},'2026-10-07');
+  const next=parseMemory(serializeMemory(updated));
+  for(const [key,value] of Object.entries(state))assertEquals(next[key],value);
+  assertEquals(next.fatos,['novo']);
+});
+Deno.test('flow memory rejects invalid types and unexpected control keys',()=>{
+  const parsed=parseMemory(JSON.stringify({service_menu_started:'true',service_menu_stage:{value:'main'},last_menu_at:'100',pending_payment_amount:-1,loan_documents_received:'identity',unsafe_key:true}));
+  for(const key of ['service_menu_started','service_menu_stage','last_menu_at','pending_payment_amount','loan_documents_received','unsafe_key'])assertEquals(parsed[key],undefined);
+});
+Deno.test('large memory keeps the current menu and payment state within its size limit',()=>{
+  const memory=parseMemory(JSON.stringify({service_menu_started:true,service_menu_stage:'documents',pending_payment_kind:'partial',pending_payment_amount:20,loan_document_validations:[{notes:'x'.repeat(10_000)}],fatos:['x'.repeat(10_000)]}));
+  const serialized=serializeMemory(memory);
+  assert(serialized.length<=MAX_BYTES);
+  const next=parseMemory(serialized);
+  assertEquals(next.service_menu_stage,'documents');assertEquals(next.pending_payment_amount,20);
+});
+
 Deno.test("dedupArr: prioriza itens mais recentes (incoming vence em duplicata)", () => {
   const out = dedupArr(["pagamento atrasado"], ["Pagamento Atrasado"]);
   assertEquals(out.length, 1);

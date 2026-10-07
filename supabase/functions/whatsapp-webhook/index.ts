@@ -8,7 +8,6 @@ import {
   sanitizeAiResult,
   validateReceipt,
   sha256Hex,
-  computeRolloverInterest,
   validatePixReply,
   computeClientBehavior,
   detectResponseLoop,
@@ -23,8 +22,9 @@ import { identifyClient, loadClientInstallments, auditDecision, todayInSP, sameP
 import { runAgentWithTools } from "../_shared/agent_tools.ts";
 import { normalizeSnapshot, transition, saveSnapshot, type AgentState } from "../_shared/agent_fsm.ts";
 import { isEmAtraso, isEmAberto } from "../_shared/installmentStatus.ts";
-import { botBalance, botLateFee } from "../_shared/bot_finance.ts";
-import { botRows, botPortalLink } from "../_shared/bot_data.ts";
+import { botBalance, botLateFee, botRenewalQuote } from "../_shared/bot_finance.ts";
+import { botRows, botPortalLink, checkedBotQuery } from "../_shared/bot_data.ts";
+import {parsePaymentDate as parseNaturalPaymentDate, extractPaymentAmount as extractPromisedAmount} from '../_shared/payment_input.ts';
 import { queueBotMessage, deliverBotJob } from "../_shared/bot_delivery.ts";
 import { automationAccountActive, withinBotHours } from "../_shared/bot_policy.ts";
 import { saveBotAttachment } from "../_shared/bot_media.ts";
@@ -75,38 +75,6 @@ function matchesAny(text: string, words: string[]): boolean {
 
 function money(v: number) {
   return `R$ ${Number(v || 0).toFixed(2).replace(".", ",")}`;
-}
-
-function parseNaturalPaymentDate(text: string, today = new Date()): string | null {
-  const normalized = (text || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-  const base = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12);
-  if (/\bamanha\b/.test(normalized)) base.setDate(base.getDate() + 1);
-  else if (/\bsemana que vem\b|\bproxima semana\b/.test(normalized)) base.setDate(base.getDate() + 7);
-  else {
-    const weekdays: Record<string, number> = { domingo: 0, segunda: 1, terca: 2, quarta: 3, quinta: 4, sexta: 5, sabado: 6 };
-    const weekday = Object.keys(weekdays).find(day => new RegExp(`\\b${day}(?:-feira)?\\b`).test(normalized));
-    if (weekday) {
-      let delta = (weekdays[weekday] - base.getDay() + 7) % 7;
-      if (delta === 0) delta = 7;
-      base.setDate(base.getDate() + delta);
-    } else {
-      const dayMatch = /\bdia\s+(\d{1,2})\b/.exec(normalized);
-      if (!dayMatch) return null;
-      const day = Number(dayMatch[1]);
-      if (day < 1 || day > 31) return null;
-      base.setDate(day);
-      if (base.getTime() < today.getTime()) base.setMonth(base.getMonth() + 1);
-      if (base.getDate() !== day) return null;
-    }
-  }
-  return `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, "0")}-${String(base.getDate()).padStart(2, "0")}`;
-}
-
-function extractPromisedAmount(text: string): number | null {
-  const match = /(?:r\$\s*|pagar(?:\s+s[oó])?\s+|pago\s+|consigo\s+(?:pagar|dar)\s+)(\d{1,7}(?:[.,]\d{1,2})?)/i.exec(text || "");
-  if (!match) return null;
-  const value = Number(match[1].replace(".", "").replace(",", "."));
-  return Number.isFinite(value) && value > 0 ? Math.round(value * 100) / 100 : null;
 }
 
 const SERVICE_MENU = `Escolha uma opção respondendo com o número:
@@ -1240,7 +1208,7 @@ serve(async (req) => {
     // Menu contextual + linguagem natural + PIX Copia&Cola + deep-link
     // portal + escolha de parcela + pagamento parcial + confirmação de
     // handoff + follow-up + cooldown por opção + idempotência.
-    try {
+    {
       const txtRaw = (incomingText || "").trim();
       const txtLow = txtRaw.toLowerCase();
 
@@ -1296,9 +1264,9 @@ serve(async (req) => {
       const humanRequested = !!(convoExisting as any)?.needs_human;
 
       if (/status.*comprovante|comprovante.*(?:status|aprov|analis|rejeit)|foi aprovado/i.test(txtLow)) {
-        const { data: review } = await (supabase as any).from("whatsapp_receipt_reviews")
+        const { data: review } = await checkedBotQuery<{data:{status:string}|null;error?:unknown}>((supabase as any).from("whatsapp_receipt_reviews")
           .select("status,created_at,reviewed_at,metadata").eq("user_id", userId).eq("client_id", client.id)
-          .order("created_at", { ascending: false }).limit(1).maybeSingle();
+          .order("created_at", { ascending: false }).limit(1).maybeSingle());
         const statusText = !review ? "Não encontrei comprovante enviado para análise."
           : review.status === "approved" ? "Seu comprovante foi aprovado e a baixa foi registrada."
           : review.status === "rejected" ? "O comprovante não foi aprovado. A equipe poderá orientar o motivo e solicitar um novo arquivo."
@@ -1308,21 +1276,26 @@ serve(async (req) => {
       }
 
       if (/cancelar|desmarcar|esquecer/.test(txtLow) && /promessa|previs[aã]o|combinado|pagamento/.test(txtLow)) {
+        await checkedBotQuery(supabase.from('payment_promises').update({status:'cancelled'})
+          .eq('user_id',userId).eq('client_id',client.id).eq('status','open'));
         const keptPromises = (Array.isArray(mem.promessas) ? mem.promessas : []).filter((promise: any) => !promise?.data || promise.data < nowBrDay);
-        await supabase.from("clients").update({ bot_memory: serializeMemory({ ...mem, promessas: keptPromises, payment_promise_cancelled_at: new Date().toISOString() }) }).eq("id", client.id);
-        await supabase.from("audit_logs").insert({ user_id: userId, entity_type: "whatsapp_bot", action: "payment_promise_cancelled", entity_id: client.id, details: { message: txtRaw.slice(0, 200) } });
+        await checkedBotQuery(supabase.from("clients").update({ bot_memory: serializeMemory({ ...mem, promessas: keptPromises, payment_promise_cancelled_at: new Date().toISOString() }) }).eq("id", client.id).eq('user_id',userId));
+        await checkedBotQuery(supabase.from("audit_logs").insert({ user_id: userId, entity_type: "whatsapp_bot", action: "payment_promise_cancelled", entity_id: client.id, details: { message: txtRaw.slice(0, 200) } }));
         await botSay(`Certo, ${firstName}. Cancelei a previsão de pagamento anterior. Se quiser informar uma nova data, pode escrever, por exemplo: “pago sexta-feira”.`);
         return new Response(JSON.stringify({ status: "promise_cancelled" }), { headers: corsHeaders });
       }
 
       const newPromiseDate = /pag|acert|deposit|transfer|mudar|alterar/.test(txtLow) ? parseNaturalPaymentDate(txtRaw) : null;
-      if (newPromiseDate && /mudar|alterar|corrigir|nova data|na verdade/.test(txtLow)) {
+      const changingPromise = /mudar|alterar|corrigir|nova data|na verdade/.test(txtLow);
+      const committingPayment = /\b(?:pago|pagarei|vou pagar|consigo pagar|posso pagar|vou depositar|vou transferir)\b/.test(txtLow);
+      if (newPromiseDate && (changingPromise || committingPayment) && hasOpen && !/(?:s[oó]|somente|apenas)\s+(?:os\s+)?juros/.test(txtLow)) {
         const display = newPromiseDate.split("-").reverse().join("/");
+        const promisedAmount = extractPromisedAmount(txtRaw);
         const previous = (Array.isArray(mem.promessas) ? mem.promessas : []).filter((promise: any) => !promise?.data || promise.data < nowBrDay);
-        await supabase.from("clients").update({ bot_memory: serializeMemory({ ...mem, promessas: [{ data: newPromiseDate, contexto: "Data corrigida pelo cliente" }, ...previous] }) }).eq("id", client.id);
-        await supabase.from("audit_logs").insert({ user_id: userId, entity_type: "whatsapp_bot", action: "payment_promise_changed", entity_id: client.id, details: { promise_date: newPromiseDate, message: txtRaw.slice(0, 200) } });
-        await botSay(`Atualizei sua previsão de pagamento para ${display}. Quando pagar, envie o comprovante por aqui.`);
-        return new Response(JSON.stringify({ status: "promise_changed", promise_date: newPromiseDate }), { headers: corsHeaders });
+        await checkedBotQuery(supabase.from("audit_logs").insert({ user_id: userId, entity_type: "whatsapp_bot", action: changingPromise ? "payment_promise_changed" : "promise_to_pay", entity_id: client.id, details: { promise_date: newPromiseDate, promise_amount: promisedAmount, message: txtRaw.slice(0, 200) } }));
+        await checkedBotQuery(supabase.from("clients").update({ bot_memory: serializeMemory({ ...mem, promessas: [{ data: newPromiseDate, valor: promisedAmount, contexto: changingPromise ? "Data corrigida pelo cliente" : "Previsão informada pelo cliente" }, ...previous] }) }).eq("id", client.id).eq('user_id',userId));
+        await botSay(`${changingPromise ? 'Atualizei' : 'Registrei'} sua previsão de pagamento${promisedAmount ? ` de ${money(promisedAmount)}` : ''} para ${display}. Quando pagar, envie o comprovante para conferência.`);
+        return new Response(JSON.stringify({ status: changingPromise ? "promise_changed" : "promise_registered", promise_date: newPromiseDate }), { headers: corsHeaders });
       }
 
       const asksInterestOnly = /(?:s[oó]|apenas|somente)\s+(?:os\s+)?juros|pagar juros|renovar.*juros/i.test(txtLow);
@@ -1333,25 +1306,25 @@ serve(async (req) => {
         let paymentAmount = extractPromisedAmount(txtRaw);
         if (partialRequested && /metade/i.test(txtLow)) paymentAmount = Math.round(balance * 50) / 100;
         if (asksInterestOnly) {
-          const { data: contract } = await supabase.from("contracts").select("capital,interest_rate,status")
-            .eq("id", target.contract_id).eq("user_id", userId).in("status", ["active", "overdue"]).maybeSingle();
-          if (!contract) {
-            await botSay("Não encontrei um contrato ativo para calcular os juros. Encaminhei para a equipe conferir.");
+          const { data: contract } = await checkedBotQuery(supabase.from("contracts").select("capital,interest_rate,status,loan_mode,total_interest,total_amount,num_installments,installment_amount,grace_periods")
+            .eq("id", target.contract_id).eq("user_id", userId).in("status", ["active", "overdue"]).maybeSingle());
+          paymentAmount = botRenewalQuote(target,contract);
+          if (paymentAmount==null) {
             await escalateToHuman(supabase, convoId!, "Não foi possível calcular pagamento somente de juros");
+            await botSay("O pagamento somente dos juros precisa de conferência da equipe, especialmente quando já houve pagamento parcial. Encaminhei seu atendimento.");
             return new Response(JSON.stringify({ status: "interest_only_needs_human" }), { headers: corsHeaders });
           }
-          paymentAmount = Math.round(Number(contract.capital || 0) * Number(contract.interest_rate || 0)) / 100;
         }
         if (!paymentAmount || paymentAmount <= 0 || paymentAmount > balance + 0.01) {
           await botSay(`O saldo atual da parcela #${target.installment_number} é ${money(balance)}. Informe quanto pretende pagar, por exemplo: “consigo pagar R$ 200”.`);
           return new Response(JSON.stringify({ status: "partial_amount_needed" }), { headers: corsHeaders });
         }
         const remaining = Math.max(0, balance - paymentAmount);
-        await supabase.from("clients").update({ bot_memory: serializeMemory({ ...mem,
+        await checkedBotQuery(supabase.from("clients").update({ bot_memory: serializeMemory({ ...mem,
           pending_payment_kind: asksInterestOnly ? "interest_only" : "partial",
           pending_payment_amount: paymentAmount, pending_payment_installment_id: target.id,
           pending_payment_set_at: new Date().toISOString(),
-        }) }).eq("id", client.id);
+        }) }).eq("id", client.id).eq('user_id',userId));
         if (!profile?.pix_key) {
           await botSay("O valor foi calculado, mas a chave PIX ainda não está cadastrada. Encaminhei para uma pessoa da equipe.");
           await escalateToHuman(supabase, convoId!, "Pagamento parcial/juros sem chave PIX cadastrada");
@@ -1359,7 +1332,7 @@ serve(async (req) => {
         }
         const emv = buildPixEmv({ key: profile.pix_key, amount: paymentAmount, merchantName: profile.name || empresa, merchantCity: "SAO PAULO", txid: `PARC${target.installment_number || 1}` });
         const description = asksInterestOnly
-          ? `Pagamento somente dos juros: *${money(paymentAmount)}*. O capital será renovado após a confirmação do comprovante.`
+          ? `Valor calculado para pagamento somente dos juros: *${money(paymentAmount)}*. A equipe precisa conferir o recebimento e confirmar o novo vencimento. A renovação fica pendente até essa conferência.`
           : `Pagamento parcial: *${money(paymentAmount)}*. Depois da confirmação, restará aproximadamente *${money(remaining)}* nesta parcela.`;
         await botSay(`${description}\n\n*Chave PIX:* ${profile.pix_key}\n*PIX Copia e Cola:*\n\`${emv}\``);
 
@@ -1381,9 +1354,9 @@ serve(async (req) => {
       const showMenu = async (prefix?: string) => {
         const header = prefix ? `${prefix}\n\n` : "";
         await botSay(`${header}📋 *Menu — ${empresa}*\nEscolha uma opção respondendo com o número:\n\n${menuBody}`);
-        await supabase.from("clients").update({
+        await checkedBotQuery(supabase.from("clients").update({
           bot_memory: serializeMemory({ ...mem, last_menu_at: now }),
-        }).eq("id", client.id);
+        }).eq("id", client.id).eq("user_id", userId));
       };
 
       if (mem.service_menu_stage === "documents" && messageType !== "text" && apiUrl && apiKey) {
@@ -1406,13 +1379,13 @@ serve(async (req) => {
         validations.push({ ...review, path: upload.error ? null : path, reviewed_at: new Date().toISOString() });
         const missing = requiredDocumentTypes(loanProfile).filter(type => !received.includes(type));
         const completed = missing.length === 0;
-        await supabase.from("clients").update({ bot_memory: serializeMemory({
+        await checkedBotQuery(supabase.from("clients").update({ bot_memory: serializeMemory({
           ...mem,
           service_menu_stage: completed ? "human" : "documents",
           loan_documents_received: received,
           loan_document_validations: validations,
           loan_documents_missing: missing,
-        }) }).eq("id", client.id);
+        }) }).eq("id", client.id).eq("user_id", userId));
 
         if (review.decision === "resend") {
           await botSay(`Não consegui validar este arquivo. ${review.reasons.join("; ") || "A imagem está incompleta ou ilegível."}\n\nEnvie novamente com boa iluminação, sem cortes, reflexos ou desfoque.`);
@@ -1433,18 +1406,18 @@ serve(async (req) => {
       // pedir um empréstimo, a próxima mensagem é interpretada como modalidade.
       if (!mem.service_menu_started && messageType === "text" && !/comprovante|paguei|transferi/i.test(incomingText)) {
         await showMenu(`Olá ${firstName}! Você está falando com o atendimento virtual da *${empresa}*.`);
-        await supabase.from("clients").update({
+        await checkedBotQuery(supabase.from("clients").update({
           bot_memory: serializeMemory({ ...mem, service_menu_started: true, service_menu_stage: "main", last_menu_at: now }),
-        }).eq("id", client.id);
+        }).eq("id", client.id).eq("user_id", userId));
         return new Response(JSON.stringify({ status: "menu_first_interaction" }), { headers: corsHeaders });
       }
 
       if (mem.service_menu_stage === "loan_type") {
         if (/^(menu|opcoes|opções|voltar|inicio|início)$/.test(txtLow)) {
           await showMenu();
-          await supabase.from("clients").update({
+          await checkedBotQuery(supabase.from("clients").update({
             bot_memory: serializeMemory({ ...mem, service_menu_stage: "main", last_menu_at: now }),
-          }).eq("id", client.id);
+          }).eq("id", client.id).eq("user_id", userId));
           return new Response(JSON.stringify({ status: "menu_shown" }), { headers: corsHeaders });
         }
         const type = loanTypeFromText(txtRaw);
@@ -1453,9 +1426,9 @@ serve(async (req) => {
           return new Response(JSON.stringify({ status: "loan_type_invalid" }), { headers: corsHeaders });
         }
         await botSay(`${loanDocumentsMessage(empresa, type)}\n\nPode enviar os documentos por aqui, um arquivo por vez.`);
-        await supabase.from("clients").update({
+        await checkedBotQuery(supabase.from("clients").update({
           bot_memory: serializeMemory({ ...mem, service_menu_stage: "documents", loan_profile: type, last_menu_at: now }),
-        }).eq("id", client.id);
+        }).eq("id", client.id).eq("user_id", userId));
         return new Response(JSON.stringify({ status: "loan_documents", type }), { headers: corsHeaders });
       }
 
@@ -1510,7 +1483,7 @@ serve(async (req) => {
         const choice = route.choice;
 
         if (choice === "1" || choice === "4") {
-          await supabase.from("clients").update({
+          await checkedBotQuery(supabase.from("clients").update({
             bot_memory: serializeMemory({
               ...mem,
               service_menu_started: true,
@@ -1519,7 +1492,7 @@ serve(async (req) => {
               last_menu_choice: choice,
               last_menu_at: now,
             }),
-          }).eq("id", client.id);
+          }).eq("id", client.id).eq("user_id", userId));
           await botSay(`${choice === "4" ? "Vamos iniciar uma nova solicitação usando sua ficha atual." : "Certo, vamos iniciar sua solicitação."}\n\n${LOAN_TYPE_MENU}`);
           return new Response(JSON.stringify({ status: "loan_type_menu", choice }), { headers: corsHeaders });
         }
@@ -1559,9 +1532,9 @@ serve(async (req) => {
               `👤 Claro, ${firstName}! Antes de eu chamar um atendente, me diz *em uma linha o que você precisa* — assim ele já entra ciente do assunto. 😉\n\n` +
               `_(Se preferir seguir direto, é só responder "quero atendente")._`
             );
-            await supabase.from("clients").update({
+            await checkedBotQuery(supabase.from("clients").update({
               bot_memory: serializeMemory({ ...mem, human_reason_asked_at: now, last_menu_choice: "4_waiting" }),
-            }).eq("id", client.id);
+            }).eq("id", client.id).eq("user_id", userId));
             await scheduleFollowUp(`Oi ${firstName}, ainda precisa falar com um atendente? Se sim, me responde qualquer mensagem e eu chamo já. Se resolveu, digite *menu*.`);
             return new Response(JSON.stringify({ status: "human_reason_pending" }), { headers: corsHeaders });
           }
@@ -1719,19 +1692,19 @@ serve(async (req) => {
               `💠 *Chave PIX (${pixTypeLabel}):*\n\`${profile.pix_key}\`\n` +
               `👤 *Favorecido:* ${profile.name || empresa}\n\n` +
               `📋 *PIX Copia e Cola:*\n\`\`\`${emv}\`\`\`\n\n` +
-              `Depois de pagar, *envie o comprovante* aqui (imagem ou PDF) que eu registro a baixa na hora. 📎`
+              `Depois de pagar, *envie o comprovante* aqui (imagem ou PDF). A equipe confere o recebimento antes de registrar a baixa. 📎`
             );
             if (partialAmount) {
               // Registra promessa/pagamento parcial na memória
               const mem2 = parseMemory(client.bot_memory);
               const promessas = Array.isArray(mem2.promessas) ? mem2.promessas : [];
               promessas.push({ data: nowBrDay, valor: partialAmount, parcela: target.installment_number, tipo: "parcial" });
-              await supabase.from("clients").update({
+              await checkedBotQuery(supabase.from("clients").update({
                 bot_memory: serializeMemory({ ...mem2, promessas }),
-              }).eq("id", client.id);
+              }).eq("id", client.id).eq("user_id", userId));
             }
             // Follow-up: se em 24h não veio comprovante, pergunta
-            await scheduleFollowUp(`Oi ${firstName}! Já conseguiu concluir o pagamento da parcela #${target.installment_number}? Se sim, me manda o comprovante que registro na hora 📎`);
+            await scheduleFollowUp(`Oi ${firstName}! Já conseguiu concluir o pagamento da parcela #${target.installment_number}? Se sim, envie o comprovante para conferência da equipe.`);
           }
         }
 
@@ -1761,9 +1734,9 @@ serve(async (req) => {
         }
 
         // Persiste última escolha
-        await supabase.from("clients").update({
+        await checkedBotQuery(supabase.from("clients").update({
           bot_memory: serializeMemory({ ...mem, last_menu_at: now, last_menu_choice: choice }),
-        }).eq("id", client.id);
+        }).eq("id", client.id).eq("user_id", userId));
 
         // Log estruturado
         await supabase.from("audit_logs").insert({
@@ -1789,11 +1762,6 @@ serve(async (req) => {
         return new Response(JSON.stringify({ status: "menu_shown" }), { headers: corsHeaders });
       }
 
-      // Deixa o menu disponível para o bloco de saudação abaixo
-
-
-    } catch (e) {
-      console.warn("[menu] falhou (seguindo fluxo normal):", (e as Error).message);
     }
 
 
@@ -1836,12 +1804,12 @@ serve(async (req) => {
         const totOver = bucket.totalOverdue;
         const totToday = bucket.totalDueToday;
 
-        const memObj = parseMemory(client.bot_memory);
-        const openPromise = (memObj.promessas || []).find((p: any) => p && typeof p === "object" && p.data && p.data >= todayStr);
+        const {data:openPromise} = await checkedBotQuery(supabase.from('payment_promises').select('promised_for,promised_amount')
+          .eq('user_id',userId).eq('client_id',client.id).eq('status','open').gte('promised_for',todayStr).limit(1).maybeSingle());
 
         let greeting: string;
         if (openPromise) {
-          greeting = `Oi ${firstName}! 👋 Aqui é da *${empresa}*. Vi aqui que você tinha combinado de acertar até *${openPromise.data}*${openPromise.valor ? ` (${money(Number(openPromise.valor))})` : ""}. Consegue fechar hoje?`;
+          greeting = `Oi ${firstName}! Aqui é da *${empresa}*. Sua previsão de pagamento está registrada para *${openPromise.promised_for.split('-').reverse().join('/')}*${openPromise.promised_amount ? ` (${money(Number(openPromise.promised_amount))})` : ""}. Como posso te ajudar?`;
         } else if (overdueQ.length > 0) {
           const oldest = overdueQ[0];
           greeting = `Oi ${firstName}! 👋 Aqui é da *${empresa}*. Sua parcela #${oldest.installment_number} está em atraso — total a regularizar: *${money(totOver)}*. Vou te enviar o PIX agora pra você quitar. 🙏`;
@@ -1916,8 +1884,8 @@ serve(async (req) => {
       { data: openPromises },
       { data: messageTemplates },
     ] = await Promise.all([
-      botRows(()=>supabase.from("contracts").select("id, capital, total_amount, start_date, status, loan_mode, frequency, interest_rate, num_installments").eq("user_id",userId).eq("client_id", client.id).eq("user_id",userId).in("status", ["active", "overdue"]).order("id")).then(data=>({data})),
-      botRows(()=>supabase.from("contract_installments").select("id, amount, paid_amount, due_date, status, late_fee, installment_number, contract_id, pre_settlement_snapshot, contracts(status,daily_interest_percent,daily_penalty_type,daily_penalty_value,max_interest_cap_percent)").eq("user_id",userId).eq("client_id", client.id).eq("user_id",userId).not("status","in",'("paid","cancelled")').order("due_date", { ascending: true }).order("id")).then(data=>({data:data.map(row=>({...row,late_fee:botLateFee(row)}))})),
+      botRows(()=>supabase.from("contracts").select("id, capital, total_amount, total_interest, installment_amount, grace_periods, start_date, status, loan_mode, frequency, interest_rate, num_installments").eq("user_id",userId).eq("client_id", client.id).in("status", ["active", "overdue"]).order("id")).then(data=>({data})),
+      botRows(()=>supabase.from("contract_installments").select("id, amount, paid_amount, due_date, status, late_fee, scheduled_interest, installment_number, contract_id, pre_settlement_snapshot, contracts(status,daily_interest_percent,daily_penalty_type,daily_penalty_value,max_interest_cap_percent)").eq("user_id",userId).eq("client_id", client.id).not("status","in",'("paid","cancelled")').order("due_date", { ascending: true }).order("id")).then(data=>({data:data.map(row=>({...row,stored_late_fee:row.late_fee,late_fee:botLateFee(row)}))})),
       supabase.from("audit_logs").select("action, created_at, details").eq("entity_id", client.id).eq("user_id",userId).eq("entity_type", "whatsapp_bot").order("created_at", { ascending: false }).limit(10),
       botRows(()=>supabase.from("contract_installments").select("id").eq("user_id",userId).eq("client_id", client.id).eq("user_id",userId).eq("status", "paid").order("id")).then(data=>({data})),
       supabase.from("contract_installments").select("amount, paid_amount, paid_at, installment_number, payment_method").eq("client_id", client.id).eq("user_id",userId).eq("status", "paid").order("paid_at", { ascending: false }).limit(5),
@@ -1926,7 +1894,7 @@ serve(async (req) => {
       // que a equipe escreve sobre o cliente NUNCA chegavam ao contexto da IA:
       // o bot atendia sem saber de nada que foi combinado por fora.
       supabase.from("whatsapp_notes").select("content, author_name, created_at").eq("conversation_id", convoId).eq("user_id",userId).order("created_at", { ascending: false }).limit(8),
-      supabase.from("audit_logs").select("created_at, details").eq("entity_id", client.id).eq("user_id",userId).eq("entity_type", "whatsapp_bot").eq("action", "promise_to_pay").order("created_at", { ascending: false }).limit(5),
+      supabase.from("payment_promises").select("created_at, promised_for, promised_amount, status").eq("client_id", client.id).eq("user_id",userId).order("created_at", { ascending: false }).limit(40),
       supabase.from("message_templates").select("name, content").eq("user_id", userId).limit(8),
     ].map(async query=>{
       const result=await query;
@@ -1969,19 +1937,16 @@ serve(async (req) => {
     const totalOverdue = overdue.reduce((s, i) => s + (Number(i.amount) - (Number(i.paid_amount) || 0)) + (Number(i.late_fee) || 0), 0);
     const totalDueToday = dueToday.reduce((s, i) => s + botBalance(i), 0);
 
-    // Renovação (pagar só juros) — usa cálculo estável (capital × taxa)
+    // Mesma cotação da confirmação financeira; pagamento parcial exige atendente.
     const rolloverOptions = (activeContracts || []).map(c => {
-      const inst = installments?.find(i => i.contract_id === c.id);
+      const inst = openWithBalance.find(i => i.contract_id === c.id);
       if (!inst) return null;
+      const interestOnly = botRenewalQuote(inst, c);
+      if (interestOnly === null) return null;
       return {
         contractId: c.id,
-        interestOnly: computeRolloverInterest({
-          capital: Number(c.capital),
-          interestRate: Number(c.interest_rate),
-          installmentAmount: Number(inst.amount),
-          numInstallments: Number(c.num_installments),
-        }),
-        totalAmount: Number(inst.amount),
+        interestOnly,
+        totalAmount: botBalance(inst),
         frequency: c.frequency,
       };
     }).filter(Boolean);
@@ -2061,11 +2026,11 @@ serve(async (req) => {
     const intentSummary = summarizeIntents(memoryObj, 6);
     const priorApproach = lastApproach(memoryObj);
 
-    // Promessas pendentes (audit_logs) ainda não concluídas
-    const pendingPromises = (openPromises || []).map(p => ({
-      date: p.details?.promise_date,
+    // O registro operacional exclui promessas canceladas, cumpridas ou vencidas.
+    const pendingPromises = (openPromises || []).filter(p => p.status === 'open').map(p => ({
+      date: p.promised_for,
       created_at: p.created_at,
-      message: p.details?.message,
+      amount: p.promised_amount,
     })).filter(p => p.date && p.date >= todayStr);
 
     // Notas humanas e templates como referência
@@ -2105,6 +2070,7 @@ serve(async (req) => {
       .from("contract_installments")
       .select("amount, paid_amount, paid_at, due_date, installment_number, status")
       .eq("client_id", client.id)
+      .eq("user_id", userId)
       .eq("status", "paid")
       .order("paid_at", { ascending: false })
       .limit(40);
@@ -2112,8 +2078,8 @@ serve(async (req) => {
     const behavior = computeClientBehavior({
       paidHistory: (fullPaid || []) as any,
       pending: (installments || []) as any,
-      promises: (openPromises || []).map((p: any) => ({
-        promise_date: p.details?.promise_date,
+      promises: (openPromises || []).filter(p => ['open','broken'].includes(p.status)).map((p: any) => ({
+        promise_date: p.promised_for,
         created_at: p.created_at,
       })),
       todayStr,
@@ -2203,7 +2169,7 @@ ${recentPaidText || '(nenhum pagamento ainda)'}
 ${humanNotesText || '(nenhuma)'}
 
 ═══ 🤝 PROMESSAS PENDENTES ═══
-${pendingPromises.length ? pendingPromises.map(p => `- Prometeu pagar até ${p.date} ${p.message ? `("${String(p.message).slice(0,120)}")` : ''}`).join('\n') : '(nenhuma)'}
+${pendingPromises.length ? pendingPromises.map(p => `- Prometeu pagar até ${p.date}${p.amount ? `: ${money(p.amount)}` : ''}`).join('\n') : '(nenhuma)'}
 
 ═══ 🧠 MEMÓRIA DE LONGO PRAZO ═══
 ${memoryPretty}
@@ -2377,8 +2343,9 @@ Ex6 — "queria mais 3 mil emprestado":
     }
     const result: any = sanitizeAiResult(parsed);
 
-    const pendingPaymentFresh = memoryObj.pending_payment_set_at
-      && Date.now() - new Date(memoryObj.pending_payment_set_at).getTime() < 48 * 3600_000;
+    const pendingPaymentAge = Date.now() - new Date(memoryObj.pending_payment_set_at || '').getTime();
+    const quotedInstallment = openWithBalance.find(i => i.id === memoryObj.pending_payment_installment_id);
+    const pendingPaymentFresh = pendingPaymentAge >= 0 && pendingPaymentAge < 48 * 3600_000 && !!quotedInstallment;
     if (result.is_receipt && pendingPaymentFresh) {
       if (memoryObj.pending_payment_kind === "interest_only") result.is_rollover = true;
       if (Number(result.receipt_value || 0) <= 0 && Number(memoryObj.pending_payment_amount || 0) > 0) {
@@ -2486,8 +2453,8 @@ Ex6 — "queria mais 3 mil emprestado":
         pushAmt(totalDueToday);
         pushAmt(Number(totalOverdue || 0) + Number(totalDueToday || 0));
         for (const r of ((rolloverOptions || []) as any[])) {
-          pushAmt((r as any).amount);
-          pushAmt((r as any).total);
+          pushAmt(r.interestOnly);
+          pushAmt(r.totalAmount);
         }
         const allowedAmounts = Array.from(new Set(amountsBase.map((v) => Math.round(v * 100) / 100)));
         const hasMoney = /R\$\s*\d/.test(result.reply);
@@ -2582,8 +2549,19 @@ Ex6 — "queria mais 3 mil emprestado":
       }
     }
 
-    // Comprovantes só recebem resposta depois da validação e da baixa. Isso
-    // evita confirmar ao cliente antes da transação e evita duas mensagens.
+    if (result.is_promise) {
+      const promiseDate = parseNaturalPaymentDate(String(result.promise_date || ''));
+      if (promiseDate && openWithBalance.length) {
+        await checkedBotQuery(supabase.from('audit_logs').insert({user_id:userId,entity_type:'whatsapp_bot',entity_id:client.id,action:'promise_to_pay',details:{promise_date:promiseDate,promise_amount:extractPromisedAmount(incomingText),message:incomingText.slice(0,200)}}));
+        result.promise_date = promiseDate;
+      } else {
+        result.is_promise = false;
+        result.promise_date = null;
+        result.reply = 'Informe a data em que pretende pagar, por exemplo: “pago amanhã” ou “pago dia 15”. A previsão precisa ser para hoje ou uma data futura.';
+      }
+    }
+
+    // Comprovantes recebem resposta depois da triagem, sem confirmar baixa.
     if (result.reply && !result.is_receipt) await botSay(result.reply);
 
 
@@ -2783,7 +2761,7 @@ Ex6 — "queria mais 3 mil emprestado":
     }
 
     if (result.is_receipt && mediaData && !trustedReceipt) {
-      const reviewInstallmentId = receiptCheck?.matchedInstallmentId || installments?.[0]?.id || null;
+      const reviewInstallmentId = receiptCheck?.matchedInstallmentId || (pendingPaymentFresh ? quotedInstallment?.id : null) || openWithBalance[0]?.id || null;
       const { error: reviewInsertError } = await supabase.from("whatsapp_receipt_reviews").insert({
         user_id: userId,
         client_id: client.id,
@@ -2798,7 +2776,7 @@ Ex6 — "queria mais 3 mil emprestado":
           reasons: receiptCheck?.reasons || [],
           message_type: messageType,
           storage_path: inboundAttachmentPath,
-          payment_kind: memoryObj.pending_payment_kind || "payment",
+          payment_kind: pendingPaymentFresh && reviewInstallmentId === quotedInstallment?.id ? memoryObj.pending_payment_kind || "payment" : "payment",
         },
       });
       if (reviewInsertError && reviewInsertError.code !== "23505") {

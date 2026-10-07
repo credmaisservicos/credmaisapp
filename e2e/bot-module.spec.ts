@@ -18,7 +18,7 @@ async function setup(page:Page,failSettings=false){
     await route.fulfill({status:200,json:data,headers:{'content-range':'*/0'}});
   });
   await page.goto('/login');await page.getByLabel(/e-?mail/i).fill(user.email);await page.getByLabel(/senha/i).first().fill('SenhaDeTeste123!');await page.getByRole('button',{name:/entrar/i}).click();await expect(page).toHaveURL(/dashboard$/);
-  return {writes};
+  return {writes,origin};
 }
 for(const width of [360,1366])test(`módulo único: navegação, revisão e salvamento em ${width}px`,async({page})=>{
   await page.setViewportSize({width,height:900});const {writes}=await setup(page);
@@ -42,4 +42,15 @@ test('configurações indisponíveis não permitem salvar valores padrão',async
 });
 test('link antigo de conversas mantém o módulo e a aba correta',async({page})=>{
   await setup(page);await page.goto('/comunicacao/inbox');await expect(page).toHaveURL(/comunicacao\?tab=inbox/);await expect(page.getByRole('tab',{name:'Conversas',exact:true})).toHaveAttribute('data-state','active');
+});
+
+for(const amount of ['1.234,56','100.50',''])test(`conferência de comprovante respeita o valor digitado ${amount || '(vazio)'}`,async({page})=>{
+  await page.setViewportSize({width:360,height:900});const {origin}=await setup(page);const payments:any[]=[];let approved=false;
+  await page.route(`${origin}/rest/v1/whatsapp_receipt_reviews**`,route=>route.fulfill({json:approved?[]:[{id:'review-test',user_id:user.id,status:'pending',amount:1200,installment_id:'installment-test',clients:{name:'Cliente fictício'},contract_installments:{installment_number:1,due_date:'2099-01-01',amount:2000,paid_amount:0},metadata:{}}]}));
+  await page.route(`${origin}/rest/v1/rpc/confirm_whatsapp_receipt`,async route=>{payments.push(route.request().postDataJSON());approved=true;await route.fulfill({json:{ok:true}});});
+  await page.goto('/comunicacao?tab=revisoes');await page.getByLabel('Valor recebido de Cliente fictício').fill(amount);
+  await page.getByRole('button',{name:'Confirmar recebimento e registrar',exact:true}).click();
+  if(amount){await expect.poll(()=>payments.length).toBe(1);expect(payments[0]).toEqual({_review_id:'review-test',_received_amount:amount.includes(',')?1234.56:100.5,_next_due_date:null});}
+  else {await expect(page.getByText('Informe um valor recebido válido',{exact:true})).toBeVisible();expect(payments).toEqual([]);await expect(page.getByLabel('Valor recebido de Cliente fictício')).toHaveValue('');}
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
 });

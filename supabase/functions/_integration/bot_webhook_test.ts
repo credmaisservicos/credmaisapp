@@ -6,16 +6,20 @@ for(const [k,v] of Object.entries({SUPABASE_URL:backend,SUPABASE_SERVICE_ROLE_KE
 Deno.env.delete('ANTHROPIC_API_KEY');Deno.env.delete('LOVABLE_API_KEY');
 let calls:any[]=[],messages:any[]=[],reviews:any[]=[],jobs:any[]=[];
 let settings:any,conversation:any,knownClient=true,failSettings=false,ownsLease=true,eventCompleted=false;
+let clientMemory:string,installment:any,contract:any,failPromise=false,failCancel=false,failContract=false,failReview=false,failMemory=false;
 const json=(v:any,status=200)=>new Response(JSON.stringify(v),{status,headers:{'Content-Type':'application/json'}});
 const rows=(v:any,req:Request)=>json(req.headers.get('Accept')?.includes('vnd.pgrst.object')?v:(v?[v]:[]));
 function reset(){
  calls=[];messages=[];reviews=[];jobs=[];knownClient=true;failSettings=false;ownsLease=true;eventCompleted=false;
+ clientMemory=JSON.stringify({service_menu_started:true});failPromise=false;failCancel=false;failContract=false;failReview=false;failMemory=false;
+ installment={id:'installment-test',user_id:owner,client_id:clientId,contract_id:'contract-test',amount:100,paid_amount:40,late_fee:0,scheduled_interest:10,status:'pending',due_date:'2099-01-01',installment_number:1,contracts:{status:'active',daily_interest_percent:4}};
+ contract={id:'contract-test',status:'active',capital:90,total_amount:100,total_interest:10,interest_rate:10,num_installments:1,loan_mode:'fixed'};
  settings={user_id:owner,company_name:'Teste',bot_enabled:true,bot_auto_send:false,bot_auto_confirm_payment:true,bot_use_ai:false,bot_process_receipts:true,bot_process_audio:false,bot_work_days:['mon','tue','wed','thu','fri','sat','sun'],bot_business_start:'00:00',bot_business_end:'23:59',whatsapp_instance:'test',whatsapp_api_url:provider,whatsapp_api_key:'isolated-provider'};
  conversation={id:'conversation-test',user_id:owner,phone:'5511999999999',jid:'5511999999999@s.whatsapp.net',instance:'test',client_id:clientId,bot_paused:false,needs_human:false,blocked:false,unread_count:0};
 }
 globalThis.fetch=async(input,init)=>{
  const req=new Request(input,init),u=new URL(req.url),raw=await req.clone().text();let body:any={};try{body=JSON.parse(raw||'{}');}catch{/* binary attachment */}
- calls.push({path:u.pathname,method:req.method,body,origin:u.origin});
+ calls.push({path:u.pathname,method:req.method,body,origin:u.origin,query:Object.fromEntries(u.searchParams)});
  if(u.origin===provider){
    if(u.pathname.includes('getBase64FromMediaMessage'))return json({base64:btoa('isolated fictional receipt')});
    return json({key:{id:'provider-test'}});
@@ -25,7 +29,7 @@ globalThis.fetch=async(input,init)=>{
  const table=u.pathname.split('/').at(-1);
  if(u.pathname.includes('/rpc/')){
    if(table==='try_consume_rate_limit')return json({allowed:true,remaining:100});
-   if(table==='system_find_clients_by_phone')return json(knownClient?[{id:clientId,user_id:owner,name:'Cliente fictício',phone:'11999999999',bot_memory:{service_menu_started:true}}]:[]);
+   if(table==='system_find_clients_by_phone')return json(knownClient?[{id:clientId,user_id:owner,name:'Cliente fictício',phone:'11999999999',bot_memory:clientMemory}]:[]);
    if(table==='begin_whatsapp_event')return json(!eventCompleted);
    if(table==='begin_whatsapp_response')return json(ownsLease);
    if(table==='system_pay_installment'||table==='system_renew_installment_interest')throw Error('Financial mutation forbidden in the webhook');
@@ -33,14 +37,16 @@ globalThis.fetch=async(input,init)=>{
    return json(null);
  }
  if(table==='settings')return failSettings?json({message:'database unavailable'},503):rows(settings,req);
- if(table==='profiles')return rows({id:owner,is_admin:true,plan_tier:'completo',name:'Teste'},req);
+ if(table==='profiles')return rows({id:owner,is_admin:true,plan_tier:'completo',name:'Teste',pix_key:'pix@example.test'},req);
  if(table==='whatsapp_instances')return json([]);
  if(table==='whatsapp_event_claims')return rows({status:eventCompleted?'completed':'failed'},req);
  if(table==='whatsapp_conversations'){
    if(req.method==='PATCH'){Object.assign(conversation,body);return new Response(null,{status:204});}
    return rows(conversation,req);
  }
- if(table==='clients')return rows({id:clientId,user_id:owner,name:'Cliente fictício',phone:'11999999999',bot_memory:{service_menu_started:true}},req);
+ if(table==='clients'){if(req.method==='PATCH'&&body.bot_memory){if(failMemory)return json({message:'Unavailable'},503);clientMemory=body.bot_memory;}return rows({id:clientId,user_id:owner,name:'Cliente fictício',phone:'11999999999',bot_memory:clientMemory},req);}
+ if(table==='payment_promises'&&req.method==='PATCH')return failCancel?json({message:'Unavailable'},503):new Response(null,{status:204});
+ if(table==='audit_logs'&&req.method==='POST'&&['promise_to_pay','payment_promise_changed'].includes(body.action)&&failPromise)return json({message:'Unavailable'},503);
  if(table==='whatsapp_messages'){
    if(req.method==='POST'){messages.push(body);return new Response(null,{status:201});}
    if(req.method==='PATCH'){const m=messages.find(m=>u.searchParams.get('wa_message_id')===`eq.${m.wa_message_id}`);if(m)Object.assign(m,body);return new Response(null,{status:204});}
@@ -52,8 +58,9 @@ globalThis.fetch=async(input,init)=>{
    return rows(jobs.find(j=>u.searchParams.get('source_key')===`eq.${j.source_key}`)||null,req);
  }
  if(table==='whatsapp_receipt_reviews'&&req.method==='POST'){reviews.push(body);return new Response(null,{status:201});}
- if(table==='contract_installments')return json([{id:'installment-test',user_id:owner,client_id:clientId,contract_id:'contract-test',amount:100,paid_amount:40,late_fee:0,status:'pending',due_date:'2099-01-01',installment_number:1,contracts:{status:'active',daily_interest_percent:4}}]);
- if(table==='contracts')return json([{id:'contract-test',status:'active',capital:90,total_amount:100,interest_rate:10,num_installments:1}]);
+ if(table==='whatsapp_receipt_reviews'&&req.method==='GET'&&failReview)return json({message:'Unavailable'},503);
+ if(table==='contract_installments')return json([installment]);
+ if(table==='contracts')return failContract?json({message:'Unavailable'},503):rows(contract,req);
  if(req.method==='GET')return json([]);
  return new Response(null,{status:201});
 };
@@ -72,3 +79,53 @@ Deno.test('incoming receipt never mutates payments despite legacy auto-confirm s
 Deno.test('paused conversations preserve private attachment for the human team',async()=>{reset();conversation.bot_paused=true;const {body}=await invoke({imageMessage:{mimetype:'image/png'}});assertEquals(body.status,'paused');assert(messages[0].metadata.storage_path.startsWith(`${owner}/`));assertEquals(jobs.length,0);});
 Deno.test('disabled receipt recognition stores the file and routes it to humans',async()=>{reset();settings.bot_process_receipts=false;const {body}=await invoke({imageMessage:{mimetype:'image/png'}});assertEquals(body.status,'receipt_recognition_disabled');assert(conversation.needs_human);assertEquals(reviews.length,0);assert(messages[0].metadata.storage_path);});
 Deno.test('new contact audio is preserved without calling an AI provider',async()=>{reset();knownClient=false;conversation.client_id=null;settings.bot_process_audio=true;const {body}=await invoke({audioMessage:{mimetype:'audio/ogg'}});assertEquals(body.status,'lead_attachment_received');assert(conversation.needs_human);assert(messages[0].metadata.storage_path);});
+
+Deno.test('interest-only quote uses the saved installment interest rather than a flat rate',async()=>{
+ reset();installment.paid_amount=0;installment.scheduled_interest=23.45;contract.capital=1000;contract.loan_mode='price';
+ const {response,body}=await invoke({conversation:'quero pagar só juros'});
+ assertEquals(response.status,200);assertEquals(body.status,'interest_only_pix');assertEquals(body.amount,23.45);
+ assert(jobs.some(j=>j.text.includes('conferir o recebimento')));assertEquals(JSON.parse(clientMemory).pending_payment_amount,23.45);
+});
+Deno.test('partial installments route interest-only requests to a human without offering a renewal',async()=>{
+ reset();const {body}=await invoke({conversation:'pagar só juros'});assertEquals(body.status,'interest_only_needs_human');assert(conversation.needs_human);assertEquals(JSON.parse(clientMemory).pending_payment_kind,undefined);
+});
+Deno.test('failed contract lookup retries instead of inventing an interest quote',async()=>{
+ reset();failContract=true;const {response}=await invoke({conversation:'pagar só juros'});assertEquals(response.status,500);assertEquals(jobs.length,0);assertEquals(eventCompleted,false);
+});
+Deno.test('partial PIX preserves decimal point in the promised amount',async()=>{
+ reset();const {body}=await invoke({conversation:'consigo pagar 20.50'});assertEquals(body.status,'partial_pix');assertEquals(body.amount,20.5);assertEquals(body.remaining,39.5);
+});
+Deno.test('promise cancellation closes the owner-scoped operational promise before acknowledging',async()=>{
+ reset();const {body}=await invoke({conversation:'cancelar promessa de pagamento'});assertEquals(body.status,'promise_cancelled');
+ const update=calls.find(c=>c.path.endsWith('/payment_promises')&&c.method==='PATCH');assertEquals(update.body,{status:'cancelled'});assertEquals(update.query.user_id,`eq.${owner}`);assertEquals(update.query.client_id,`eq.${clientId}`);assertEquals(update.query.status,'eq.open');
+});
+Deno.test('failed promise cancellation remains retryable without a false acknowledgement',async()=>{
+ reset();failCancel=true;const {response}=await invoke({conversation:'cancelar promessa de pagamento'});assertEquals(response.status,500);assertEquals(jobs.length,0);assertEquals(eventCompleted,false);
+});
+Deno.test('new promises materialize the operational amount before the reply',async()=>{
+ reset();const {body}=await invoke({conversation:'pago R$ 20.50 amanhã'});assertEquals(body.status,'promise_registered');
+ const audit=calls.find(c=>c.body.action==='promise_to_pay');assertEquals(audit.body.details.promise_amount,20.5);assertEquals(audit.body.user_id,owner);assert(jobs.some(j=>j.text.includes('20,50')));
+});
+Deno.test('changed promise failure does not tell the customer the date was saved',async()=>{
+ reset();failPromise=true;const {response}=await invoke({conversation:'na verdade vou pagar amanhã'});assertEquals(response.status,500);assertEquals(jobs.length,0);assertEquals(eventCompleted,false);
+});
+Deno.test('receipt status lookup failure never says that no receipt was received',async()=>{
+ reset();failReview=true;const {response}=await invoke({conversation:'qual o status do comprovante'});assertEquals(response.status,500);assertEquals(jobs.length,0);
+});
+Deno.test('loan menu preserves the selected stage across messages',async()=>{
+ reset();const first=await invoke({conversation:'1'});assertEquals(first.body.status,'loan_type_menu');assertEquals(JSON.parse(clientMemory).service_menu_stage,'loan_type');
+ eventCompleted=false;const second=await invoke({conversation:'2'},true,'second-event');assertEquals(second.body.status,'loan_documents');assertEquals(JSON.parse(clientMemory).loan_profile,'clt');assertEquals(JSON.parse(clientMemory).service_menu_stage,'documents');
+});
+Deno.test('failed loan menu state remains retryable without pretending to advance',async()=>{
+ reset();failMemory=true;const {response}=await invoke({conversation:'1'});assertEquals(response.status,500);assertEquals(jobs.length,0);assertEquals(eventCompleted,false);assertEquals(JSON.parse(clientMemory).service_menu_stage,undefined);
+});
+Deno.test('receipt after an interest quote preserves the selected installment and pending renewal',async()=>{
+ reset();installment.paid_amount=0;installment.scheduled_interest=23.45;
+ await invoke({conversation:'pagar só juros'});eventCompleted=false;
+ const {response}=await invoke({imageMessage:{mimetype:'image/png',caption:'comprovante'}},true,'receipt-after-quote');
+ assertEquals(response.status,200);assertEquals(reviews[0].installment_id,installment.id);assertEquals(reviews[0].amount,23.45);assertEquals(reviews[0].metadata.payment_kind,'interest_only');
+});
+for(const scenario of ['expired','unrelated','future'])Deno.test(`receipt ignores ${scenario} payment context`,async()=>{
+ reset();clientMemory=JSON.stringify({service_menu_started:true,pending_payment_kind:'interest_only',pending_payment_amount:23.45,pending_payment_installment_id:scenario==='unrelated'?'another-installment':installment.id,pending_payment_set_at:new Date(Date.now()+(scenario==='expired'?-72:scenario==='future'?24:-1)*3600_000).toISOString()});
+ const {response}=await invoke({imageMessage:{mimetype:'image/png',caption:'comprovante'}});assertEquals(response.status,200);assertEquals(reviews[0].metadata.payment_kind,'payment');assertEquals(reviews[0].amount,0);
+});
