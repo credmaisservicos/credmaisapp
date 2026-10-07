@@ -7,18 +7,24 @@ Deno.env.delete('ANTHROPIC_API_KEY');Deno.env.delete('LOVABLE_API_KEY');
 let calls:any[]=[],messages:any[]=[],reviews:any[]=[],jobs:any[]=[];
 let settings:any,conversation:any,knownClient=true,failSettings=false,ownsLease=true,eventCompleted=false,failHandoff=false;
 let geminiReply:any;
+let geminiTranscript:string|null=null;
 let testCase=0;
 let lead:any=null;
 let clientMemory:string,installment:any,contract:any,failPromise=false,failCancel=false,failContract=false,failReview=false,failMemory=false,geminiStatus=200,portalReceipt=false;
+let additionalInstallments:any[]=[],additionalContracts:any[]=[];
+let profilePix:string|null;
 const json=(v:any,status=200)=>new Response(JSON.stringify(v),{status,headers:{'Content-Type':'application/json'}});
 const rows=(v:any,req:Request)=>json(req.headers.get('Accept')?.includes('vnd.pgrst.object')?v:(v?[v]:[]));
 function reset(){
  calls=[];messages=[];reviews=[];jobs=[];knownClient=true;failSettings=false;ownsLease=true;eventCompleted=false;failHandoff=false;
  lead=null;
+ geminiTranscript=null;
+ additionalInstallments=[];additionalContracts=[];
+ profilePix='pix@example.test';
  geminiReply={reply:'Posso orientar sobre suas parcelas e encaminhar pedidos para a equipe.',intent:'duvida',needs_human:false};
  clientMemory=JSON.stringify({service_menu_started:true});failPromise=false;failCancel=false;failContract=false;failReview=false;failMemory=false;geminiStatus=200;portalReceipt=false;
  installment={id:'installment-test',user_id:owner,client_id:clientId,contract_id:'contract-test',amount:100,paid_amount:40,late_fee:0,scheduled_interest:10,status:'pending',due_date:'2099-01-01',installment_number:1,contracts:{status:'active',daily_interest_percent:4}};
- contract={id:'contract-test',status:'active',capital:90,total_amount:100,total_interest:10,interest_rate:10,num_installments:1,loan_mode:'fixed'};
+ contract={id:'contract-test',user_id:owner,client_id:clientId,status:'active',capital:90,total_amount:100,total_interest:10,interest_rate:10,num_installments:1,loan_mode:'fixed'};
  settings={user_id:owner,company_name:'Teste',bot_enabled:true,bot_auto_send:false,bot_auto_confirm_payment:true,bot_use_ai:false,bot_process_receipts:true,bot_process_audio:false,bot_work_days:['mon','tue','wed','thu','fri','sat','sun'],bot_business_start:'00:00',bot_business_end:'23:59',whatsapp_instance:'test',whatsapp_api_url:provider,whatsapp_api_key:'isolated-provider'};
  conversation={id:'conversation-test',user_id:owner,phone:'5511999999999',jid:'5511999999999@s.whatsapp.net',instance:'test',client_id:clientId,bot_paused:false,needs_human:false,blocked:false,unread_count:0};
  // Each scenario has its own instance, including the production per-JID limiter.
@@ -28,10 +34,10 @@ globalThis.fetch=async(input,init)=>{
  const req=new Request(input,init),u=new URL(req.url),raw=await req.clone().text();let body:any={};try{body=JSON.parse(raw||'{}');}catch{/* binary attachment */}
  calls.push({path:u.pathname,method:req.method,body,origin:u.origin,query:Object.fromEntries(u.searchParams)});
  if(u.origin==='https://generativelanguage.googleapis.com')return geminiStatus===200
-   ? json({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify(geminiReply)}]}}]})
+   ? json({candidates:[{finishReason:'STOP',content:{parts:[{text:geminiTranscript!==null&&body.contents?.some((c:any)=>c.parts?.some((p:any)=>p.inlineData?.mimeType?.startsWith('audio/')))?geminiTranscript:JSON.stringify(geminiReply)}]}}]})
    : json({error:{message:'isolated-provider-error'}},geminiStatus);
  if(u.origin===provider){
-   if(u.pathname.includes('getBase64FromMediaMessage'))return json({base64:btoa('isolated fictional receipt')});
+   if(u.pathname.includes('getBase64FromMediaMessage'))return json({base64:btoa(body.message?.message?.audioMessage?'x'.repeat(600):'isolated fictional receipt')});
    return json({key:{id:'provider-test'}});
  }
  if(u.origin!==backend)throw Error(`Unexpected external request: ${u.origin}`);
@@ -47,7 +53,7 @@ globalThis.fetch=async(input,init)=>{
    return json(null);
  }
  if(table==='settings')return failSettings?json({message:'database unavailable'},503):rows(settings,req);
- if(table==='profiles')return rows({id:owner,is_admin:true,plan_tier:'completo',name:'Teste',pix_key:'pix@example.test'},req);
+ if(table==='profiles')return rows({id:owner,is_admin:true,plan_tier:'completo',name:'Teste',pix_key:profilePix},req);
  if(table==='whatsapp_instances')return json([]);
  if(table==='leads'&&lead){if(req.method==='PATCH'){Object.assign(lead,body);return new Response(null,{status:204});}return rows(lead,req);}
  if(table==='whatsapp_event_claims')return rows({status:eventCompleted?'completed':'failed'},req);
@@ -70,8 +76,18 @@ globalThis.fetch=async(input,init)=>{
  }
  if(table==='whatsapp_receipt_reviews'&&req.method==='POST'){reviews.push(body);return new Response(null,{status:201});}
  if(table==='whatsapp_receipt_reviews'&&req.method==='GET'&&failReview)return json({message:'Unavailable'},503);
- if(table==='contract_installments')return json(u.searchParams.get('receipt_review_status')==='eq.pending'?(portalReceipt?[{id:installment.id}]:[]):[installment]);
- if(table==='contracts')return failContract?json({message:'Unavailable'},503):rows(contract,req);
+ if(table==='contract_installments'){
+   if(u.searchParams.get('receipt_review_status')==='eq.pending')return json(portalReceipt?[{id:installment.id}]:[]);
+   const data=[installment,...additionalInstallments].filter(row=>['id','user_id','client_id','contract_id'].every(key=>!u.searchParams.has(key)||u.searchParams.get(key)===`eq.${row[key]}`))
+     .filter(row=>!u.searchParams.get('status')?.startsWith('not.in')||!['paid','cancelled'].includes(row.status))
+     .sort((a,b)=>a.due_date.localeCompare(b.due_date)||a.id.localeCompare(b.id));
+   return req.headers.get('Accept')?.includes('vnd.pgrst.object')?json(data[0]||null):json(data);
+ }
+ if(table==='contracts'){
+   if(failContract)return json({message:'Unavailable'},503);
+   const data=[contract,...additionalContracts].filter(row=>['id','user_id','client_id'].every(key=>!u.searchParams.has(key)||u.searchParams.get(key)===`eq.${row[key]}`));
+   return req.headers.get('Accept')?.includes('vnd.pgrst.object')?json(data[0]||null):json(data);
+ }
  if(req.method==='GET')return json([]);
  return new Response(null,{status:201});
 };
@@ -151,7 +167,7 @@ Deno.test('loan menu preserves the selected stage across messages',async()=>{
 for (const stage of ['loan_type','documents'])Deno.test(`parcel inquiry interrupts ${stage} without restarting the loan application`,async()=>{
  reset();clientMemory=JSON.stringify({service_menu_started:true,service_menu_stage:stage,loan_profile:'clt'});
  const {response,body}=await invoke({conversation:'Quero saber das minhas parcelas'});
- assertEquals(response.status,200);assertEquals(body.status,'menu_choice');assertEquals(body.choice,'2');
+ assertEquals(response.status,200);assertEquals(body.status,'installment_list');assertEquals(body.count,1);
  assertEquals(JSON.parse(clientMemory).service_menu_stage,'main');
  assert(jobs.some(j=>j.text.includes('60,00')));assert(jobs.every(j=>!j.text.includes('Não consegui identificar a modalidade')));
 });
@@ -224,4 +240,150 @@ for(const known of [true,false])for(const stage of ['main','loan_type','document
 for(const scenario of ['expired','unrelated','future'])Deno.test(`receipt ignores ${scenario} payment context`,async()=>{
  reset();clientMemory=JSON.stringify({service_menu_started:true,pending_payment_kind:'interest_only',pending_payment_amount:23.45,pending_payment_installment_id:scenario==='unrelated'?'another-installment':installment.id,pending_payment_set_at:new Date(Date.now()+(scenario==='expired'?-72:scenario==='future'?24:-1)*3600_000).toISOString()});
  const {response}=await invoke({imageMessage:{mimetype:'image/png',caption:'comprovante'}});assertEquals(response.status,200);assertEquals(reviews[0].metadata.payment_kind,'payment');assertEquals(reviews[0].amount,0);
+});
+
+async function turn(text:string,id:string){eventCompleted=false;return await invoke({conversation:text},true,id);}
+function addParcel(number:number,overrides:any={}){
+ const row={...installment,id:`installment-${number}`,installment_number:number,amount:250,paid_amount:50,due_date:`2099-0${number}-01`,...overrides};
+ if(row.contract_id!==contract.id&&!additionalContracts.some(c=>c.id===row.contract_id))additionalContracts.push({...contract,id:row.contract_id});
+ additionalInstallments.push(row);return row;
+}
+function paymentQuote(){return JSON.parse(clientMemory);}
+function pixAmount(){
+ const code=jobs.map(j=>j.text).join('\n').match(/`(000201[^`]+)`/)?.[1];
+ assert(code,'Expected a contractual PIX code');
+ for(let offset=0;offset<code.length;){
+  const tag=code.slice(offset,offset+2),length=Number(code.slice(offset+2,offset+4));
+  assert(Number.isFinite(length)&&length>0);const value=code.slice(offset+4,offset+4+length);
+  if(tag==='54')return Number(value);offset+=4+length;
+ }
+ throw Error('Missing PIX amount');
+}
+Deno.test('first specific installment inquiry is answered before the welcome menu',async()=>{
+ reset();clientMemory='{}';addParcel(2);
+ const {body}=await turn('PIX da parcela 2','first-specific');
+ assertEquals(body.status,'installment_selected');assertEquals(body.installment_id,'installment-2');
+ assertEquals(paymentQuote().pending_payment_installment_id,'installment-2');assertEquals(pixAmount(),200);
+ assert(jobs.every(j=>!j.text.includes('Escolha uma opção respondendo com o número:')));
+});
+Deno.test('immediate changes and short followups preserve the actual installment rather than menu cooldown',async()=>{
+ reset();addParcel(2);addParcel(3,{amount:300,paid_amount:100});
+ for(const [text,id,expected] of [['parcela 2','select-2','installment-2'],['parcela 3','select-3','installment-3'],['manda o PIX','follow-pix','installment-3'],['quando vence?','follow-date','installment-3']] as const){
+  jobs=[];const {body}=await turn(text,id);assertEquals(body.status,'installment_selected');assertEquals(body.installment_id,expected);assertEquals(paymentQuote().pending_payment_installment_id,expected);assertEquals(pixAmount(),200);
+ }
+ assert(jobs.some(j=>j.text.includes('01/03/2099')));
+});
+Deno.test('duplicate installment numbers require a choice and keep that contract on followups',async()=>{
+ reset();addParcel(2);const other=addParcel(2,{id:'other-contract-2',contract_id:'bbbb2222',amount:500,paid_amount:20});
+ const first=await turn('parcela 2','duplicate-number');assertEquals(first.body.status,'installment_ambiguous');
+ assertEquals(paymentQuote().pending_payment_installment_id,'');assert(jobs.every(j=>!j.text.includes('000201')));
+ jobs=[];const second=await turn('escolher 2','choose-contract');assertEquals(second.body.installment_id,other.id);assertEquals(pixAmount(),480);
+ jobs=[];const third=await turn('qual o valor?','same-contract');assertEquals(third.body.installment_id,other.id);assertEquals(pixAmount(),480);
+});
+Deno.test('last installment belongs to the requested contract and never completes earlier debt',async()=>{
+ reset();addParcel(2);addParcel(3);addParcel(2,{id:'last-other',contract_id:'bbbb2222'});
+ assertEquals((await turn('última parcela','last-ambiguous')).body.status,'installment_ambiguous');
+ const chosen=await turn('última parcela contrato contract-test','last-contract');assertEquals(chosen.body.installment_id,'installment-3');
+ assertEquals(installment.paid_amount,40);assertEquals(contract.status,'active');
+ assertEquals(calls.filter(c=>/system_pay_installment|system_renew_installment_interest/.test(c.path)).length,0);
+});
+Deno.test('next installment excludes overdue debt and date selection handles future installments',async()=>{
+ reset();installment.due_date='2026-01-01';installment.contracts={status:'active',daily_interest_percent:0.1,max_interest_cap_percent:10};addParcel(2);addParcel(3);
+ assertEquals((await turn('próxima parcela','next')).body.installment_id,'installment-2');
+ assertEquals((await turn('parcela vencimento 01/03/2099','by-date')).body.installment_id,'installment-3');
+ assertEquals((await turn('e a segunda?','ordinal-followup')).body.installment_id,'installment-2');
+});
+for(const scenario of ['paid','cancelled','closed-contract','foreign-owner','foreign-client'])Deno.test(`installment selector ignores ${scenario} records`,async()=>{
+ reset();const row=addParcel(2);
+ if(scenario==='paid'||scenario==='cancelled')row.status=scenario;
+ if(scenario==='closed-contract')row.contracts={status:'completed'};
+ if(scenario==='foreign-owner')row.user_id='other-owner';
+ if(scenario==='foreign-client')row.client_id='other-client';
+ const {body}=await turn('PIX parcela 2','invalid-scope');assertEquals(body.status,'installment_not_found');
+ assert(jobs.every(j=>!j.text.includes('000201')));assertEquals(paymentQuote().pending_payment_installment_id,'');
+});
+for(const scenario of ['expired','paid-after-selection','invalid-date'])Deno.test(`a ${scenario} selection never redirects PIX to a different debt`,async()=>{
+ reset();const row=addParcel(2);await turn('parcela 2','initial-selection');
+ if(scenario==='expired')clientMemory=JSON.stringify({...paymentQuote(),pending_payment_set_at:new Date(Date.now()-72*3600_000).toISOString()});
+ if(scenario==='paid-after-selection'){row.status='paid';row.paid_amount=250;}
+ jobs=[];const {body}=await turn(scenario==='invalid-date'?'parcela 31/02/2099':'pix','stale-followup');
+ assertEquals(body.status,'installment_not_found');assert(jobs.every(j=>!j.text.includes('000201')));
+});
+Deno.test('failed selection persistence is retryable without sending an unsaved payment quote',async()=>{
+ reset();failMemory=true;const {response}=await turn('parcela 1','fail-selection');
+ assertEquals(response.status,500);assertEquals(eventCompleted,false);assertEquals(jobs.length,0);assertEquals(paymentQuote().pending_payment_installment_id,undefined);
+});
+Deno.test('unquoted receipt with unknown amount is never attached to the oldest installment',async()=>{
+ reset();addParcel(2);await invoke({imageMessage:{mimetype:'image/png',caption:'comprovante'}});
+ assertEquals(reviews[0].installment_id,null);assertEquals(reviews[0].amount,0);assertEquals(reviews[0].metadata.quoted_amount,null);
+ assertEquals(reviews[0].status,'pending');assert(conversation.needs_human);
+});
+Deno.test('receipt keeps the selected installment but never invents the amount received from the quote',async()=>{
+ reset();addParcel(2);await turn('parcela 2','receipt-selection');eventCompleted=false;
+ await invoke({imageMessage:{mimetype:'image/png',caption:'comprovante'}},true,'quoted-receipt');
+ assertEquals(reviews[0].installment_id,'installment-2');assertEquals(reviews[0].amount,0);assertEquals(reviews[0].metadata.quoted_amount,200);
+ assertEquals(reviews[0].metadata.payment_kind,'payment');assertEquals(reviews[0].status,'pending');
+ assertEquals(calls.filter(c=>/system_pay_installment|system_renew_installment_interest/.test(c.path)).length,0);
+});
+Deno.test('explicit receipt installment overrides the previous quote without copying its amount',async()=>{
+ reset();addParcel(2);await turn('parcela 2','prior-quote');eventCompleted=false;
+ await invoke({imageMessage:{mimetype:'image/png',caption:'comprovante parcela 1'}},true,'explicit-receipt');
+ assertEquals(reviews[0].installment_id,installment.id);assertEquals(reviews[0].metadata.quoted_amount,null);assertEquals(reviews[0].amount,0);
+});
+Deno.test('ambiguous explicit receipt reference awaits a human without guessing either contract',async()=>{
+ reset();addParcel(2);addParcel(2,{id:'duplicate-receipt',contract_id:'bbbb2222'});
+ await invoke({imageMessage:{mimetype:'image/png',caption:'comprovante parcela 2'}});
+ assertEquals(reviews[0].installment_id,null);assertEquals(reviews[0].status,'pending');
+});
+for(const stage of ['loan_type','documents'])Deno.test(`receipt caption exits ${stage} without becoming a loan document or a menu choice`,async()=>{
+ reset();clientMemory=JSON.stringify({service_menu_started:true,service_menu_stage:stage});
+ const {response}=await invoke({imageMessage:{mimetype:'image/png',caption:'comprovante parcela 1'}});
+ assertEquals(response.status,200);assertEquals(reviews[0].installment_id,installment.id);assertEquals(reviews[0].status,'pending');
+ assert(conversation.bot_paused);assert(jobs.every(j=>!j.text.includes('000201')));
+});
+Deno.test('missing PIX key routes the selected installment to humans without generating a code',async()=>{
+ reset();profilePix=null;const {body}=await turn('parcela 1','missing-pix');
+ assertEquals(body.status,'installment_selected');assert(conversation.needs_human&&conversation.bot_paused);
+ assert(jobs.every(j=>!j.text.includes('000201')));assert(jobs.some(j=>j.text.includes('chave PIX ainda não')));
+});
+Deno.test('transcribed audio selects a specific installment and preserves it for written followups',async()=>{
+ reset();addParcel(2);addParcel(3);settings.bot_process_audio=true;
+ const keys=['GEMINI_API_KEY','GEMINI_ALLOWED_USER_IDS'],before=keys.map(k=>Deno.env.get(k));
+ Deno.env.set(keys[0],'isolated-gemini-key');Deno.env.set(keys[1],owner);
+ try{
+  geminiTranscript='quero o PIX da parcela 2';
+  const first=await invoke({audioMessage:{mimetype:'audio/ogg'}},true,'audio-select-2');
+  assertEquals(first.body.status,'installment_selected');assertEquals(first.body.installment_id,'installment-2');
+  assert(messages[0].metadata.transcribed);assertEquals(paymentQuote().pending_payment_installment_id,'installment-2');
+  const second=await turn('qual o valor?','written-after-audio');assertEquals(second.body.installment_id,'installment-2');
+  geminiTranscript='e a terceira?';eventCompleted=false;
+  const third=await invoke({audioMessage:{mimetype:'audio/ogg'}},true,'audio-select-3');assertEquals(third.body.installment_id,'installment-3');
+  assertEquals(calls.filter(c=>c.origin==='https://generativelanguage.googleapis.com').length,2);
+  assertEquals(calls.filter(c=>c.path.includes('/message/send')).length,0);
+ }finally{keys.forEach((k,i)=>before[i]===undefined?Deno.env.delete(k):Deno.env.set(k,before[i]!));}
+});
+for(const command of ['pare bot, parcela 1','quero falar com um atendente sobre a parcela 1'])Deno.test(`human control precedes a payment query and the first welcome: ${command}`,async()=>{
+ reset();clientMemory='{}';const {body}=await turn(command,'human-control');
+ assertEquals(body.status,command.startsWith('pare')?'stopped':'human_handoff');assert(conversation.needs_human&&conversation.bot_paused);
+ assert(jobs.every(j=>!j.text.includes('000201')&&!j.text.includes('Escolha uma opção respondendo com o número:')));
+});
+Deno.test('starting a loan flow clears the previous installment and does not treat its confirmation as PIX consent',async()=>{
+ reset();addParcel(2);await turn('parcela 2','payment-before-loan');
+ await turn('1','loan-after-payment');assertEquals(paymentQuote().pending_payment_installment_id,'');
+ jobs=[];const {body}=await turn('sim','loan-confirmation');assertEquals(body.status,'loan_type_invalid');assert(jobs.every(j=>!j.text.includes('000201')));
+});
+for(const c of [
+ {name:'future without fees',days:-10,rate:0.1,penalty:0,type:'percentage',paid:40,stored:0,cap:0,expected:60},
+ {name:'due today with fixed penalty configured',days:0,rate:4,penalty:5,type:'fixed',paid:40,stored:0,cap:0,expected:60},
+ {name:'partial with percentage penalty',days:3,rate:0.1,penalty:2,type:'percentage',paid:40,stored:0,cap:0,expected:66.3},
+ {name:'partial with fixed daily penalty',days:2,rate:0.1,penalty:5,type:'fixed',paid:40,stored:0,cap:0,expected:70.2},
+ {name:'capped late charges',days:30,rate:4,penalty:2,type:'percentage',paid:40,stored:0,cap:10,expected:70},
+ {name:'only unpaid fees remain',days:0,rate:0.1,penalty:0,type:'percentage',paid:110,stored:20,cap:0,expected:10},
+])Deno.test(`payment reply and encoded PIX agree: ${c.name}`,async()=>{
+ reset();installment.paid_amount=c.paid;installment.late_fee=c.stored;
+ installment.due_date=new Date(Date.now()-c.days*86400000).toISOString().slice(0,10);
+ installment.contracts={status:'active',daily_interest_percent:c.rate,daily_penalty_value:c.penalty,daily_penalty_type:c.type,max_interest_cap_percent:c.cap};
+ const {body}=await turn('parcela 1','financial-case');assertEquals(body.status,'installment_selected');
+ assertEquals(paymentQuote().pending_payment_amount,c.expected);assertEquals(pixAmount(),c.expected);
+ assert(jobs.every(j=>j.status==='awaiting_approval'));assertEquals(calls.filter(c=>c.path.includes('/message/send')).length,0);
 });

@@ -234,15 +234,17 @@ export function validateReceipt(opts: ReceiptValidationInput): ReceiptValidation
   let matchType: ReceiptValidation["matchType"] = "none";
 
   // valor exato
-  const exact = insts.find(i => i.amt === value);
-  if (exact) {
-    matchedInstallmentId = exact.id;
+  const exact = insts.filter(i => i.amt === value);
+  if (exact.length) {
+    if(exact.length===1)matchedInstallmentId = exact[0].id;
+    else reasons.push('varias_parcelas_com_mesmo_valor');
     matchType = "exact";
   } else {
     // dentro da tolerância
-    const tol = insts.find(i => within(value, i.amt));
-    if (tol) {
-      matchedInstallmentId = tol.id;
+    const tol = insts.filter(i => within(value, i.amt));
+    if (tol.length) {
+      if(tol.length===1)matchedInstallmentId = tol[0].id;
+      else reasons.push('varias_parcelas_com_valor_proximo');
       matchType = "tolerance";
     } else {
       // soma de atrasos

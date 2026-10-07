@@ -1,5 +1,9 @@
 # QA Report — CredMais
 
+## 2026-10-07 — Contexto e seleção de parcelas no atendimento
+
+Pedidos de parcelas são tratados antes do menu e da IA, sem bloquear a troca imediata por cooldown. A seleção fica vinculada ao cliente, contrato e parcela; números repetidos exigem escolha. Saldo e PIX consideram recebimentos, encargos e limites do contrato. Comprovantes sem referência única aguardam conferência humana, sem associação à primeira parcela nem valor inferido da cotação. Áudio transcrito usa a mesma seleção; parar o bot e pedir uma pessoa têm prioridade. Validação local: 467 testes Vitest, 173 compartilhados e 114 integrações HTTP sem rede, totalizando 754 testes. Tipos de 43 funções, tipos do app, lint, hooks e build aprovados. A suíte de 224 testes de interface permanece na verificação de CI. [Cenários e limites](docs/agente-contexto-parcelas-2026-10-07.md).
+
 ## 2026-10-07 — Portal monocromático e negociação exclusivamente humana
 
 Chat de negociação removido do portal, com modos claro e escuro sem brilho ou neon. Negociações, propostas parciais e renovações automáticas encaminhadas para a equipe, com pausa do bot. A função antiga responde HTTP 410 e as simulações de leads exigem análise humana. Validação: 457 testes de frontend, 160 compartilhados, 83 integrações HTTP e 224 de interface, totalizando 924 testes distintos. Tipos de 43 funções, tipos do app, lint e hooks aprovados. Portal publicado conferido em celular e computador nos dois temas, com acesso, filtros, sessão, detalhes, PDF e logout. Publicação do servidor com backup e sem migração. [Detalhes e limites](docs/portal-cliente-humano-2026-10-07.md).

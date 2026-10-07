@@ -8,6 +8,7 @@ export function botLateFee(row: any, today = new Date().toISOString().slice(0,10
   if(['paid','cancelled'].includes(row.status)||row.pre_settlement_snapshot||c?.daily_interest_percent===undefined||!row.due_date)return stored;
   const days=Math.max(0,Math.floor((new Date(`${today}T12:00:00Z`).getTime()-new Date(`${String(row.due_date).slice(0,10)}T12:00:00Z`).getTime())/86400000));
   const base=money(row.amount),rate=Math.max(0,Number(c.daily_interest_percent)||4),penalty=money(c.daily_penalty_value);
+  if(base===0||days===0)return stored;
   let fee=cents(base*(Math.pow(1+rate/100,days)-1)+(c.daily_penalty_type==='fixed'?penalty*days:base*penalty/100*days));
   const cap=money(c.max_interest_cap_percent);
   if(cap>0)fee=Math.min(fee,cents(base*cap/100));

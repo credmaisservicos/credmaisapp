@@ -180,12 +180,20 @@ const TODAY = "2026-06-16";
 Deno.test("validateReceipt: confiança alta com mídia + valor exato", () => {
   const r = validateReceipt({
     messageType: "image", hasMedia: true, incomingText: "comprovante",
-    receiptValue: 250, installments: baseInsts, todayStr: TODAY,
+    receiptValue: 250, installments: [baseInsts[0]], todayStr: TODAY,
   });
   assert(r.trusted);
   assertEquals(r.matchType, "exact");
   assertEquals(r.matchedInstallmentId, "i1");
   assert(r.riskScore < 50);
+});
+
+Deno.test("validateReceipt: valores iguais não identificam uma parcela única", () => {
+  for (const receiptValue of [250, 253]) {
+    const r=validateReceipt({messageType:'image',hasMedia:true,incomingText:'comprovante',receiptValue,installments:baseInsts,todayStr:TODAY});
+    assertEquals(r.matchedInstallmentId,undefined);
+    assert(r.reasons.some(reason=>reason.startsWith('varias_parcelas_')));
+  }
 });
 
 Deno.test("validateReceipt: compara comprovante com saldo após pagamento parcial", () => {

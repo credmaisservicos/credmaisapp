@@ -27,11 +27,12 @@ export type MemorySection = typeof MEMORY_SECTIONS[number];
 // Estado gravado pelo fluxo determinístico. Atualizações da IA não o alteram.
 function flowState(raw: any): Record<string, unknown> {
   const state: Record<string, unknown> = {};
-  const strings = ['service_menu_stage','last_menu_choice','loan_profile','request_kind','pending_payment_kind','pending_payment_installment_id','pending_payment_set_at','payment_promise_cancelled_at','resumed_at'];
+  const strings = ['service_menu_stage','last_menu_choice','loan_profile','request_kind','pending_payment_kind','pending_payment_installment_id','pending_payment_set_at','installment_choice_set_at','payment_promise_cancelled_at','resumed_at'];
   const numbers = ['last_menu_at','human_reason_asked_at','pending_payment_amount'];
   for (const key of strings) if (typeof raw?.[key] === 'string' && raw[key].length <= 150) state[key] = raw[key];
   for (const key of numbers) if (typeof raw?.[key] === 'number' && Number.isFinite(raw[key]) && raw[key] >= 0) state[key] = raw[key];
   if (typeof raw?.service_menu_started === 'boolean') state.service_menu_started = raw.service_menu_started;
+  if(Array.isArray(raw?.installment_choice_ids))state.installment_choice_ids=[...new Set(raw.installment_choice_ids.filter((id:unknown)=>typeof id==='string'&&id.length>0&&id.length<=150))].slice(0,10);
   for (const key of ['loan_documents_received','loan_documents_missing','loan_document_validations']) {
     if (Array.isArray(raw?.[key])) state[key] = dedupArr([],raw[key],SECTION_LIMIT);
   }

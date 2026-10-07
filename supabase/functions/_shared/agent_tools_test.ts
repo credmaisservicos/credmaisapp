@@ -88,8 +88,8 @@ Deno.test("listar_parcelas_em_aberto usa os mesmos juros compostos da cobrança"
   if (r.ok) {
     const p = (r.data as any).parcelas[0];
     assertEquals(p.dias_atraso, 10);
-    assertEquals(p.multa, 0);
-    assertEquals(p.juros_diarios, 10.05);
+    assertEquals(p.multa, undefined);
+    assertEquals(p.encargos_totais, 10.05);
     assertEquals(p.taxa_diaria_percentual, 0.1);
     assertEquals(p.total_com_encargos, 1010.05);
   }
@@ -115,7 +115,7 @@ Deno.test("listar_parcelas_em_aberto aplica fallback e teto de juros", async () 
   if (r.ok) {
     const p = (r.data as any).parcelas[0];
     assertEquals(p.saldo_devedor, 80);
-    assertEquals(p.juros_diarios, 50);
+    assertEquals(p.encargos_totais, 50);
     assertEquals(p.taxa_diaria_percentual, 0);
     assertEquals(p.total_com_encargos, 130);
   }
@@ -149,7 +149,8 @@ Deno.test("gerar_link_pix inclui os mesmos encargos da parcela", async () => {
   assertEquals(r.ok, true);
   if (r.ok) {
     assertEquals((r.data as any).saldo_base, 80);
-    assertEquals((r.data as any).juros_atraso, 2.01);
+    assertEquals((r.data as any).encargos_restantes, 2.01);
+    assertEquals((r.data as any).encargos_totais, 2.01);
     assertEquals((r.data as any).valor, 82.01);
   }
 });
@@ -193,6 +194,11 @@ Deno.test("tools reject replacing the verified client and foreign installment",a
 });
 Deno.test("tools require server identity even when supplied IDs are plausible",async()=>{
   assertEquals((await executeTool("enviar_portal_link",{client_id:"cli-1"},{supabase:mkSupabase(),siteUrl:"https://x",today,ownerId:"",verifiedClientId:""})).ok,false);
+});
+Deno.test("PIX tool cannot replace the installment selected by the customer",async()=>{
+  const ctx={supabase:mkSupabase(),siteUrl:'https://x',today,ownerId:'owner',verifiedClientId:'cli-1',selectedInstallmentId:'selected'};
+  const result=await executeTool('gerar_link_pix',{installment_id:'different'},ctx);
+  assertEquals(result,{ok:false,error:'parcela_diferente_da_selecionada'});
 });
 Deno.test("fee-only remaining balance stays listed and payable",async()=>{
   const row={id:"fee-only",amount:100,paid_amount:110,late_fee:20,due_date:today,status:"pending",contracts:{status:"active"}};

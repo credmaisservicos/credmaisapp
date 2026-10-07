@@ -32,6 +32,7 @@ import {callGemini, geminiConfigured} from '../_shared/gemini.ts';
 import {testRecipientScope} from '../_shared/bot_test_scope.ts';
 import {pendingClientReceipt} from '../_shared/bot_collection.ts';
 import {requestsHumanNegotiation, HUMAN_NEGOTIATION_REPLY} from '../_shared/human_negotiation.ts';
+import {parseInstallmentReference,resolveInstallmentReference,freshPaymentContext,type InstallmentReference} from '../_shared/bot_installment_context.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1232,6 +1233,14 @@ serve(async (req) => {
     {
       const txtRaw = (incomingText || "").trim();
       const txtLow = txtRaw.toLowerCase();
+      const hasTextRequest=messageType==='text'||(messageType==='audio'&&!!mediaData&&!!txtRaw);
+      if(hasTextRequest&&(matchesAny(txtRaw,STOP_WORDS)||matchesAny(txtRaw,HUMAN_WORDS))){
+        const stopped=matchesAny(txtRaw,STOP_WORDS);
+        if(convoId)await escalateToHuman(supabase,convoId,stopped?'Cliente solicitou parar o bot':'Cliente pediu atendente humano');
+        await checkedBotQuery(supabase.from('notifications').insert({user_id:userId,type:'warning',message:`${client.name}: ${stopped?'solicitou parar o bot':'solicitou atendimento humano'}.`}));
+        await botSay(stopped?'Bot pausado. Seu atendimento foi encaminhado para a equipe.':'Encaminhei seu atendimento para uma pessoa da equipe.');
+        return new Response(JSON.stringify({status:stopped?'stopped':'human_handoff'}),{headers:corsHeaders});
+      }
 
       const siteUrl = (Deno.env.get("SITE_URL") || "https://credmaisapp.com.br").replace(/\/$/, "");
       const empresa = settings.company_name || profile?.name || "CredMais Digital Pay";
@@ -1241,9 +1250,10 @@ serve(async (req) => {
       const mem = parseMemory(client.bot_memory);
       // A text request for an existing debt or a human can interrupt a loan
       // application. Numeric replies still select the requested loan profile.
-      const serviceInterrupt = /\b(?:parcelas?|prestacoes?|debito|divida|renegociacao|acordo|portal)\b/.test(normalizeMenuText(txtRaw))
+      const serviceInterrupt = /\b(?:parcelas?|prestacoes?|debito|divida|renegociacao|acordo|portal|pix|saldo|vencimento|encargos)\b/.test(normalizeMenuText(txtRaw))
         || matchesAny(txtRaw, HUMAN_WORDS);
-      if (messageType === 'text' && serviceInterrupt && ['loan_type','documents'].includes(String(mem.service_menu_stage))) {
+      const receiptCaption=messageType!=='text'&&/comprovante|paguei|transferi/i.test(txtRaw);
+      if (((hasTextRequest && serviceInterrupt)||receiptCaption) && ['loan_type','documents'].includes(String(mem.service_menu_stage))) {
         mem.service_menu_stage = 'main';
         await checkedBotQuery(supabase.from('clients').update({bot_memory:serializeMemory(mem)}).eq('id',client.id).eq('user_id',userId));
       }
@@ -1291,6 +1301,45 @@ serve(async (req) => {
       const hasOpen = openInstQuick.length > 0;
       const hasPix = !!profile?.pix_key;
       const humanRequested = !!(convoExisting as any)?.needs_human;
+      const clearPaymentContext={pending_payment_installment_id:'',pending_payment_set_at:'',pending_payment_kind:'',pending_payment_amount:0,installment_choice_ids:[],installment_choice_set_at:''};
+
+      const respondInstallment = async (reference:InstallmentReference) => {
+        const selected=resolveInstallmentReference(openInstQuick,reference,mem,nowBrDay,now);
+        const due=(row:any)=>String(row.due_date).split('-').reverse().join('/');
+        const label=(row:any)=>`Parcela #${row.installment_number} · contrato ${String(row.contract_id).slice(0,8)} · vence ${due(row)} · ${money(botBalance(row))}`;
+        const saveContext=async(patch:Record<string,unknown>)=>{
+          Object.assign(mem,patch,{service_menu_started:true});
+          await checkedBotQuery(supabase.from('clients').update({bot_memory:serializeMemory(mem)}).eq('id',client.id).eq('user_id',userId));
+        };
+        const clearQuote=clearPaymentContext;
+        if(reference.list) {
+          await saveContext({...clearQuote,installment_choice_ids:[],installment_choice_set_at:''});
+          const lines=selected.slice(0,20).map(label).join('\n');
+          await botSay(lines?`Suas parcelas em aberto:\n\n${lines}\n\n${selected.length>20?`Exibindo 20 de ${selected.length} parcelas. `:''}Para consultar ou receber o PIX de uma parcela, informe o número e, se necessário, o código do contrato.`:'Não há parcelas ativas com saldo em aberto.');
+          return new Response(JSON.stringify({status:'installment_list',count:selected.length}),{headers:corsHeaders});
+        }
+        if(selected.length!==1) {
+          const options=selected.slice(0,10);
+          await saveContext({...clearQuote,installment_choice_ids:options.map(row=>row.id),installment_choice_set_at:new Date(now).toISOString()});
+          await botSay(options.length
+            ? `Encontrei mais de uma parcela. Qual você deseja?\n\n${options.map((row,index)=>`${index+1}. ${label(row)}`).join('\n')}\n\nResponda “escolher 1”, “escolher 2” ou informe o número da parcela e o contrato.${selected.length>10?' Existem outras parcelas; informe também o contrato para localizá-las.':''}`
+            : 'Não encontrei uma parcela ativa em aberto com essa referência. Informe o número da parcela e o contrato, ou escreva “consultar parcelas”.');
+          return new Response(JSON.stringify({status:options.length?'installment_ambiguous':'installment_not_found'}),{headers:corsHeaders});
+        }
+        const installment=selected[0],amount=botBalance(installment);
+        await saveContext({pending_payment_installment_id:installment.id,pending_payment_kind:'payment',pending_payment_amount:amount,
+          pending_payment_set_at:new Date(now).toISOString(),installment_choice_ids:[],installment_choice_set_at:''});
+        await botSay(`${label(installment)}\n\nValor da parcela: ${money(installment.amount)}\nJá recebido: ${money(installment.paid_amount ?? 0)}\nEncargos de atraso: ${money(installment.late_fee ?? 0)}\n*Saldo atualizado: ${money(amount)}*`);
+        if(hasPix) {
+          const emv=buildPixEmv({key:profile.pix_key!,amount,merchantName:profile.name||empresa,merchantCity:'SAO PAULO',txid:`P${installment.id.replace(/[^a-zA-Z0-9]/g,'').slice(0,24)}`});
+          await botSay(`*PIX da parcela #${installment.installment_number} · contrato ${String(installment.contract_id).slice(0,8)}*\n*Favorecido:* ${profile.name||empresa}\n*Chave PIX:* ${profile.pix_key}\n*PIX Copia e Cola:*\n\`${emv}\``);
+        } else {
+          if(convoId)await escalateToHuman(supabase,convoId,'Parcela consultada sem chave PIX cadastrada');
+          await checkedBotQuery(supabase.from('notifications').insert({user_id:userId,type:'warning',message:`Cliente ${client.name}: chave PIX não cadastrada; orientar pagamento.`}));
+          await botSay('A chave PIX ainda não foi cadastrada. Encaminhei seu atendimento para a equipe.');
+        }
+        return new Response(JSON.stringify({status:'installment_selected',installment_id:installment.id}),{headers:corsHeaders});
+      };
 
       if (/status.*comprovante|comprovante.*(?:status|aprov|analis|rejeit)|foi aprovado/i.test(txtLow)) {
         const { data: review } = await checkedBotQuery<{data:{status:string}|null;error?:unknown}>((supabase as any).from("whatsapp_receipt_reviews")
@@ -1330,6 +1379,10 @@ serve(async (req) => {
         return new Response(JSON.stringify({ status: changingPromise ? "promise_changed" : "promise_registered", promise_date: newPromiseDate }), { headers: corsHeaders });
       }
 
+      // Selection is deterministic, ahead of greeting, FAQ, cooldown and AI.
+      const installmentReference=hasTextRequest&&!matchesAny(txtRaw,HUMAN_WORDS)?parseInstallmentReference(txtRaw,mem,now):null;
+      if(installmentReference)return await respondInstallment(installmentReference);
+
       // Menu principal fixo da CredMais Digital Pay.
       type MenuItem = { id: string; label: string; short: string };
       const menuItems: MenuItem[] = [
@@ -1343,6 +1396,7 @@ serve(async (req) => {
       const menuBody = `${SERVICE_MENU}\n\n_Você também pode escrever a opção. Digite *menu* para voltar._`;
 
       const showMenu = async (prefix?: string) => {
+        Object.assign(mem,clearPaymentContext);
         const header = prefix ? `${prefix}\n\n` : "";
         await botSay(`${header}📋 *Menu — ${empresa}*\n${menuBody}`);
         await checkedBotQuery(supabase.from("clients").update({
@@ -1350,7 +1404,7 @@ serve(async (req) => {
         }).eq("id", client.id).eq("user_id", userId));
       };
 
-      if (mem.service_menu_stage === "documents" && messageType !== "text" && apiUrl && apiKey) {
+      if (mem.service_menu_stage === "documents" && !hasTextRequest && apiUrl && apiKey) {
         const mediaResponse = await evolutionFetch(apiUrl, apiKey, `/chat/getBase64FromMediaMessage/${instanceName}`, { message: { key, message: msgContent }, convertToMp4: false });
         const b64 = mediaResponse?.ok ? (await mediaResponse.json()).base64 as string | undefined : undefined;
         if (!b64) {
@@ -1393,9 +1447,9 @@ serve(async (req) => {
         return new Response(JSON.stringify({ status: "document_reviewed", review, missing }), { headers: corsHeaders });
       }
 
-      // A primeira resposta sempre apresenta o menu. Se o cliente já escolheu
-      // pedir um empréstimo, a próxima mensagem é interpretada como modalidade.
-      if (!mem.service_menu_started && messageType === "text" && !/comprovante|paguei|transferi/i.test(incomingText)) {
+      // Requests for a specific debt are handled above. Other first text
+      // messages introduce the menu and loan choices preserve their stage.
+      if (!mem.service_menu_started && hasTextRequest && !/comprovante|paguei|transferi/i.test(incomingText)) {
         await showMenu(`Olá ${firstName}! Você está falando com o atendimento virtual da *${empresa}*.`);
         await checkedBotQuery(supabase.from("clients").update({
           bot_memory: serializeMemory({ ...mem, service_menu_started: true, service_menu_stage: "main", last_menu_at: now }),
@@ -1461,8 +1515,8 @@ serve(async (req) => {
         return null;
       };
 
-      const isMenuTrigger = /^(menu|opc[oõ]es|opcoes|ajuda|op[cç][aã]o|comandos)$/i.test(txtLow);
-      const route = naturalRoute();
+      const isMenuTrigger = hasTextRequest&&/^(menu|opc[oõ]es|opcoes|ajuda|op[cç][aã]o|comandos)$/i.test(txtLow);
+      const route = hasTextRequest&&!/comprovante|paguei|transferi/i.test(txtRaw)?naturalRoute():null;
 
       // Idempotência: se cliente repetir a mesma opção em <30s, silencia
       const cooldown = 30_000;
@@ -1478,6 +1532,7 @@ serve(async (req) => {
           await checkedBotQuery(supabase.from("clients").update({
             bot_memory: serializeMemory({
               ...mem,
+              ...clearPaymentContext,
               service_menu_started: true,
               service_menu_stage: "loan_type",
               request_kind: choice === "4" ? "existing_customer" : "loan_request",
@@ -1516,65 +1571,7 @@ serve(async (req) => {
           return new Response(JSON.stringify({ status: "human_handoff", choice }), { headers: corsHeaders });
         }
 
-        if (choice === "2") {
-          const overdue = openInstQuick.filter((i: any) => {
-            const due = typeof i.due_date === "string" ? i.due_date.split("T")[0] : i.due_date;
-            return due < nowBrDay;
-          });
-          const amountDue = (i: any) => Math.max(0, Number(i.amount || 0) + Number(i.late_fee || 0) - Number(i.paid_amount || 0));
-          const formatDue = (i: any) => {
-            const due = typeof i.due_date === "string" ? i.due_date.split("T")[0] : i.due_date;
-            const [year, month, day] = String(due).split("-");
-            return `${day}/${month}/${year}`;
-          };
-
-          const requested = route.parcelHint
-            ? openInstQuick.find((i: any) => Number(i.installment_number) === route.parcelHint)
-            : null;
-          if (route.parcelHint && !requested) {
-            await botSay(`Não encontrei a parcela #${route.parcelHint} em aberto. Posso listar as parcelas disponíveis se você quiser.`);
-          } else if (requested) {
-            const requestedAmount = amountDue(requested);
-            const requestedDue = formatDue(requested);
-            await botSay(`A parcela #${requested.installment_number} está em aberto, vence em ${requestedDue} e possui saldo atualizado de *${money(requestedAmount)}*.`);
-            if (hasPix && requestedAmount > 0) {
-              const emv = buildPixEmv({ key: profile.pix_key!, amount: requestedAmount, merchantName: profile.name || empresa, merchantCity: "SAO PAULO", txid: `PARC${requested.installment_number}` });
-              await botSay(`*Chave PIX:* ${profile.pix_key}\n*PIX Copia e Cola:*\n\`${emv}\``);
-
-            }
-          } else if (overdue.length > 0) {
-            const lines = overdue.slice(0, 10).map((i: any) =>
-              `*Parcela #${i.installment_number}* — vencimento ${formatDue(i)} — ${money(amountDue(i))}`
-            ).join("\n");
-            const totalOverdue = overdue.reduce((sum: number, i: any) => sum + amountDue(i), 0);
-            await botSay(`Você possui ${overdue.length} parcela${overdue.length > 1 ? "s" : ""} em atraso:\n\n${lines}\n\n*Total atualizado em atraso: ${money(totalOverdue)}*`);
-
-            if (hasPix && totalOverdue > 0) {
-              const emv = buildPixEmv({ key: profile.pix_key!, amount: totalOverdue, merchantName: profile.name || empresa, merchantCity: "SAO PAULO", txid: "ATRASADAS" });
-              await botSay(`*Chave PIX:* ${profile.pix_key}\n*Favorecido:* ${profile.name || empresa}\n\n*PIX Copia e Cola:*\n\`${emv}\``);
-
-            }
-          } else {
-            const next = openInstQuick
-              .filter((i: any) => amountDue(i) > 0)
-              .sort((a: any, b: any) => String(a.due_date).localeCompare(String(b.due_date)))[0];
-
-            if (!next) {
-              await botSay(`Você está em dia, ${firstName}. Não há parcelas pendentes no momento.`);
-            } else {
-              const nextAmount = amountDue(next);
-              await botSay(`Você está em dia, ${firstName}.\n\nSua próxima parcela é a *#${next.installment_number}*, no valor de *${money(nextAmount)}*, com vencimento em *${formatDue(next)}*.`);
-              if (hasPix && nextAmount > 0) {
-                const emv = buildPixEmv({ key: profile.pix_key!, amount: nextAmount, merchantName: profile.name || empresa, merchantCity: "SAO PAULO", txid: `PARC${next.installment_number || 1}` });
-                await botSay(`*Chave PIX:* ${profile.pix_key}\n*Favorecido:* ${profile.name || empresa}\n\n*PIX Copia e Cola:*\n\`${emv}\``);
-
-              } else {
-                await botSay("A chave PIX do responsável pela conta ainda não foi cadastrada. Encaminhei a situação para atendimento humano.");
-                if (convoId) await supabase.from("whatsapp_conversations").update({ needs_human: true, bot_paused: true, bot_status: "handoff", human_takeover_reason: "Consulta de parcela sem PIX cadastrado" }).eq("id", convoId);
-              }
-            }
-          }
-        }
+        if (choice === "2") return await respondInstallment({list:true});
 
         else if (choice === "portal") {
           const link = await buildPortalDeepLink();
@@ -1878,6 +1875,8 @@ serve(async (req) => {
 
     // Memória de longo prazo — JSON estruturado (com fallback p/ texto legado)
     const memoryObj = parseMemory(client.bot_memory);
+    const quotedInstallment = openWithBalance.find(i => i.id === memoryObj.pending_payment_installment_id);
+    const pendingPaymentFresh = freshPaymentContext(memoryObj.pending_payment_set_at) && !!quotedInstallment;
     const memoryPretty = JSON.stringify(memoryObj, null, 2);
     const intentSummary = summarizeIntents(memoryObj, 6);
     const priorApproach = lastApproach(memoryObj);
@@ -1899,12 +1898,12 @@ serve(async (req) => {
     const overdueDetail = overdue.map(i => {
       const d = typeof i.due_date === 'string' ? i.due_date.split('T')[0] : i.due_date;
       const days = daysBetween(d, todayStr);
-      return `- [Contrato ${contractShort(i.contract_id)}] Parcela #${i.installment_number}: R$ ${Number(i.amount).toFixed(2)} (${days}d em atraso, desde ${d}${i.late_fee ? `, multa R$ ${Number(i.late_fee).toFixed(2)}` : ''})`;
+      return `- [Contrato ${contractShort(i.contract_id)}] Parcela #${i.installment_number}: saldo R$ ${botBalance(i).toFixed(2)} (${days}d em atraso, desde ${d}; original R$ ${Number(i.amount).toFixed(2)}; recebido R$ ${Number(i.paid_amount||0).toFixed(2)}; encargos totais R$ ${Number(i.late_fee||0).toFixed(2)})`;
     }).join('\n');
 
     const upcomingDetail = upcoming.map(i => {
       const d = typeof i.due_date === 'string' ? i.due_date.split('T')[0] : i.due_date;
-      return `- [Contrato ${contractShort(i.contract_id)}] Parcela #${i.installment_number}: R$ ${Number(i.amount).toFixed(2)} (vence em ${d})`;
+      return `- [Contrato ${contractShort(i.contract_id)}] Parcela #${i.installment_number}: saldo R$ ${botBalance(i).toFixed(2)} (vence em ${d})`;
     }).join('\n');
 
     const addr: any = client.address || {};
@@ -2016,7 +2015,13 @@ Detalhe ATRASADAS (fonte de verdade — copie os valores LITERAL):
 ${overdueDetail || '(sem atrasos)'}
 
 Detalhe VENCE HOJE:
-${dueToday.map(i => `- [Contrato ${contractShort(i.contract_id)}] Parcela #${i.installment_number}: R$ ${Number(i.amount).toFixed(2)}`).join('\n') || '(nenhuma)'}
+${dueToday.map(i => `- [Contrato ${contractShort(i.contract_id)}] Parcela #${i.installment_number}: saldo R$ ${botBalance(i).toFixed(2)}`).join('\n') || '(nenhuma)'}
+
+Próximas parcelas:
+${upcomingDetail || '(nenhuma)'}
+
+Contexto de pagamento verificado:
+${pendingPaymentFresh?`Cliente selecionou parcela #${quotedInstallment.installment_number}, contrato ${contractShort(quotedInstallment.contract_id)}, id ${quotedInstallment.id}, vence ${quotedInstallment.due_date}, saldo atual R$ ${botBalance(quotedInstallment).toFixed(2)}. Use esta parcela nas perguntas curtas; não substitua por outra. O valor da cotação não comprova recebimento.`:'Sem seleção ativa. Peça a referência se houver mais de uma parcela; não escolha pela ordem dos registros.'}
 
 ═══ ✅ ÚLTIMOS PAGAMENTOS ═══
 ${recentPaidText || '(nenhum pagamento ainda)'}
@@ -2207,15 +2212,6 @@ Ex6 — "queria mais 3 mil emprestado":
     }
     const result: any = sanitizeAiResult(parsed);
 
-    const pendingPaymentAge = Date.now() - new Date(memoryObj.pending_payment_set_at || '').getTime();
-    const quotedInstallment = openWithBalance.find(i => i.id === memoryObj.pending_payment_installment_id);
-    const pendingPaymentFresh = pendingPaymentAge >= 0 && pendingPaymentAge < 48 * 3600_000 && !!quotedInstallment;
-    if (result.is_receipt && pendingPaymentFresh) {
-      if (memoryObj.pending_payment_kind === "interest_only") result.is_rollover = true;
-      if (Number(result.receipt_value || 0) <= 0 && Number(memoryObj.pending_payment_amount || 0) > 0) {
-        result.receipt_value = Number(memoryObj.pending_payment_amount);
-      }
-    }
 
     // Preserva campos novos que o sanitizer estrito descarta (backward-compat).
     const sentiment = ["positivo", "neutro", "frustrado", "hostil"].includes(parsed.sentiment) ? parsed.sentiment : "neutro";
@@ -2301,6 +2297,8 @@ Ex6 — "queria mais 3 mil emprestado":
           if (Number.isFinite(v) && v > 0) amountsBase.push(v);
         };
         for (const i of ((installments || []) as any[])) {
+          pushAmt(botBalance(i));
+          pushAmt(i.late_fee);
           pushAmt(i.amount);
           pushAmt(i.paid_amount);
           pushAmt(Number(i.amount || 0) - Number(i.paid_amount || 0));
@@ -2346,7 +2344,8 @@ Ex6 — "queria mais 3 mil emprestado":
               system: `Você é o atendente virtual de cobrança da empresa. Cliente confirmado: ${client.name} (id=${client.id}). Converse em PT-BR natural, como um bom atendente no WhatsApp: entenda erros e mensagens curtas pelo histórico, responda primeiro ao que foi perguntado, não repita apresentação nem bordões e faça uma pergunta por vez. Use SEMPRE as tools para obter valores/parcelas — nunca invente. Se o cliente pedir desconto/parcelamento/negociação, chame escalar_para_humano. Seja breve, respeitoso e sem emojis em cobrança.`,
               userMessage: incomingText || "",
               history: (conversationHistory || []).slice(-6).map(m => ({ role: m.role as "user" | "assistant", content: typeof m.content === "string" ? m.content : "" })),
-              ctx: { supabase, siteUrl:siteUrl || "https://credmaisapp.com.br", today: todayStr,billingDay:new Date().toISOString().slice(0,10), ownerId:userId, verifiedClientId:client.id },
+              ctx: { supabase, siteUrl:siteUrl || "https://credmaisapp.com.br", today: todayStr,billingDay:new Date().toISOString().slice(0,10), ownerId:userId, verifiedClientId:client.id,
+                selectedInstallmentId:pendingPaymentFresh?quotedInstallment?.id:undefined },
               maxSteps: 4,
             });
             await supabase.from("bot_actions_log").insert({
@@ -2634,7 +2633,12 @@ Ex6 — "queria mais 3 mil emprestado":
     }
 
     if (result.is_receipt && mediaData && !trustedReceipt) {
-      const reviewInstallmentId = receiptCheck?.matchedInstallmentId || (pendingPaymentFresh ? quotedInstallment?.id : null) || openWithBalance[0]?.id || null;
+      const receiptReference=parseInstallmentReference(incomingText.replace(/comprovante|paguei|transferi/gi,''));
+      const explicitReceiptReference=receiptReference&&(receiptReference.number!==undefined||receiptReference.contract||receiptReference.date||receiptReference.day!==undefined||receiptReference.order);
+      const explicitReceiptMatches=explicitReceiptReference?resolveInstallmentReference(openWithBalance,receiptReference!,{},todayStr):[];
+      const reviewInstallmentId=explicitReceiptReference
+        ? (explicitReceiptMatches.length===1?explicitReceiptMatches[0].id:null)
+        : (pendingPaymentFresh?quotedInstallment!.id:receiptCheck?.matchedInstallmentId||null);
       const { error: reviewInsertError } = await supabase.from("whatsapp_receipt_reviews").insert({
         user_id: userId,
         client_id: client.id,
@@ -2649,7 +2653,8 @@ Ex6 — "queria mais 3 mil emprestado":
           reasons: receiptCheck?.reasons || [],
           message_type: messageType,
           storage_path: inboundAttachmentPath,
-          payment_kind: pendingPaymentFresh && reviewInstallmentId === quotedInstallment?.id ? memoryObj.pending_payment_kind || "payment" : "payment",
+          quoted_amount:pendingPaymentFresh && reviewInstallmentId === quotedInstallment?.id?Number(memoryObj.pending_payment_amount)||null:null,
+          payment_kind: "payment",
         },
       });
       if (reviewInsertError && reviewInsertError.code !== "23505") {

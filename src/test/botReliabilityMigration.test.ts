@@ -2,7 +2,7 @@
 import { PGlite } from '@electric-sql/pglite';
 import { beforeAll,beforeEach,afterAll,it,expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { botRenewalQuote } from '../../supabase/functions/_shared/bot_finance';
+import { botRenewalQuote,botBalance,botLateFee } from '../../supabase/functions/_shared/bot_finance';
 const owner='00000000-0000-0000-0000-000000000001', other='00000000-0000-0000-0000-000000000002';
 const id=(n:number)=>`00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
 const migration=(name:string)=>readFileSync(`supabase/migrations/${name}`,'utf8');
@@ -43,6 +43,38 @@ async function seed(paid=0,fee=0){
   await db.query('INSERT INTO whatsapp_receipt_reviews(id,user_id,client_id,installment_id,amount) VALUES($1,$2,$2,$3,20)',[id(12),owner,id(11)]);
 }
 const confirm=(amount:number,date:string|null=null)=>scalar('SELECT confirm_whatsapp_receipt($1::uuid,$2::numeric,$3::date)',[id(12),amount,date]);
+
+it.each([
+ {days:-10,rate:0.1,penalty:0,type:'percentage',cap:0,paid:0,stored:0,amount:100,snapshot:false},
+ {days:0,rate:4,penalty:5,type:'fixed',cap:0,paid:40,stored:0,amount:100,snapshot:false},
+ {days:1,rate:0.1,penalty:0,type:'percentage',cap:0,paid:0,stored:0,amount:100,snapshot:false},
+ {days:3,rate:0.1,penalty:2,type:'percentage',cap:0,paid:40,stored:0,amount:100,snapshot:false},
+ {days:2,rate:0.1,penalty:5,type:'fixed',cap:0,paid:40,stored:0,amount:100,snapshot:false},
+ {days:30,rate:4,penalty:2,type:'percentage',cap:10,paid:40,stored:0,amount:100,snapshot:false},
+ {days:2,rate:0.1,penalty:0,type:'percentage',cap:10,paid:110,stored:20,amount:100,snapshot:false},
+ {days:2,rate:0,penalty:0,type:'percentage',cap:0,paid:40,stored:0,amount:100,snapshot:false},
+ {days:3,rate:4,penalty:10,type:'fixed',cap:0,paid:0,stored:0,amount:0,snapshot:false},
+ {days:3,rate:4,penalty:10,type:'fixed',cap:0,paid:40,stored:5,amount:100,snapshot:true},
+])('bot balance matches SQL payment: delay $days, $type penalty $penalty, received $paid',async(c)=>{
+ await seed(c.paid,c.stored);
+ await db.query('UPDATE contracts SET daily_interest_percent=$1,daily_penalty_value=$2,daily_penalty_type=$3,max_interest_cap_percent=$4',[c.rate,c.penalty,c.type,c.cap]);
+ await db.query('UPDATE contract_installments SET amount=$1,due_date=current_date-$2::integer,pre_settlement_snapshot=$3::jsonb',[c.amount,c.days,c.snapshot?'{}':null]);
+ const inst=(await db.query<Record<string,any>>('SELECT *,due_date::text AS due_day FROM contract_installments')).rows[0];
+ const contract=(await db.query<Record<string,any>>('SELECT * FROM contracts')).rows[0];
+ const today=String(await scalar('SELECT current_date::text'));
+ const row={...inst,due_date:inst.due_day,contracts:contract};
+ const quote=botBalance(row,today),fee=botLateFee(row,today);
+ if(quote===0){
+   expect(fee).toBe(0);
+   await expect(scalar('SELECT pay_installment($1::uuid,$2::numeric,true)',[id(11),c.paid])).rejects.toThrow(/payment_below_installment_balance/);
+   expect(Number(await scalar('SELECT count(*) FROM transactions'))).toBe(0);
+   return;
+ }
+ const result=await scalar('SELECT pay_installment($1::uuid,$2::numeric,true)',[id(11),c.paid+quote]) as {status:string};
+ expect(result.status).toBe('paid');
+ expect(Number(await scalar('SELECT late_fee FROM contract_installments'))).toBe(fee);
+ expect(Number(await scalar('SELECT coalesce(sum(amount),0) FROM transactions'))).toBe(quote);
+});
 
 it.each([
   {mode:'fixed',scheduled:43.21,number:2,n:3,payment:450,grace:0},

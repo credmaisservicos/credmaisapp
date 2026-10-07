@@ -32,7 +32,7 @@ export const AGENT_TOOLS: ToolDef[] = [
   {
     name: "listar_parcelas_em_aberto",
     description:
-      "Retorna as parcelas em aberto (não pagas) de um cliente confirmado. Inclui saldo devedor, multa e juros diários calculados no servidor.",
+      "Retorna as parcelas em aberto do cliente confirmado. Inclui valor original, recebido, saldo e encargos totais de atraso. Não presume separação entre multa e juros.",
     input_schema: {
       type: "object",
       properties: {
@@ -101,6 +101,7 @@ export interface ToolContext {
   ownerId: string;
   billingDay?: string;
   verifiedClientId: string;
+  selectedInstallmentId?: string;
 }
 
 export type ToolResult =
@@ -181,7 +182,7 @@ export async function executeTool(
           // inteira falhava: a IA nunca conseguia listar as parcelas em aberto de
           // ninguém. Aqui eles vêm pelo contrato.
           .select(
-            "id, installment_number, amount, paid_amount, late_fee, due_date, status, pre_settlement_snapshot, contracts:contract_id ( status, daily_interest_percent, daily_penalty_type, daily_penalty_value, max_interest_cap_percent )",
+            "id, contract_id, installment_number, amount, paid_amount, late_fee, due_date, status, pre_settlement_snapshot, contracts:contract_id ( status, daily_interest_percent, daily_penalty_type, daily_penalty_value, max_interest_cap_percent )",
           )
           .eq("client_id", clientId)
           .eq("user_id", ctx.ownerId)
@@ -191,7 +192,7 @@ export async function executeTool(
         return q; };
         const data = await botRows(build);
         const rows = data.filter(activeDebt).map((r: any) => {
-          const ct = r.contracts || {};
+          const ct = (Array.isArray(r.contracts)?r.contracts[0]:r.contracts) || {};
           const charge = calculateAgentOverdueCharge({
             amount: r.amount, paidAmount: r.paid_amount, lateFee: botLateFee(r,ctx.billingDay ?? ctx.today), dueDate: r.due_date,
             today: ctx.today, dailyPercent: ct.daily_interest_percent,
@@ -199,12 +200,14 @@ export async function executeTool(
           });
           return {
             installment_id: r.id,
+            contract_id:r.contract_id,
             numero: r.installment_number,
             due_date: r.due_date,
             saldo_devedor: charge.saldo,
             dias_atraso: charge.daysLate,
-            multa: 0,
-            juros_diarios: charge.interest,
+            valor_original:Number(r.amount)||0,
+            valor_recebido:Number(r.paid_amount)||0,
+            encargos_totais:botLateFee(r,ctx.billingDay ?? ctx.today),
             taxa_diaria_percentual: charge.dailyPct,
             total_com_encargos: charge.total,
           };
@@ -216,6 +219,7 @@ export async function executeTool(
       case "gerar_link_pix": {
         const instId = String(input.installment_id || "");
         if (!instId) return { ok: false, error: "installment_id obrigatório" };
+        if (ctx.selectedInstallmentId && ctx.selectedInstallmentId !== instId) return { ok:false,error:'parcela_diferente_da_selecionada' };
         const { data: inst, error } = await ctx.supabase
           .from("contract_installments")
           .select("id, client_id, amount, paid_amount, late_fee, installment_number, user_id, status, due_date, pre_settlement_snapshot, contracts:contract_id ( status, daily_interest_percent, daily_penalty_type, daily_penalty_value, max_interest_cap_percent )")
@@ -224,7 +228,7 @@ export async function executeTool(
           .maybeSingle();
         if (error || !inst) return { ok: false, error: "parcela_nao_encontrada" };
         if (["paid", "cancelled"].includes(inst.status)) return { ok: false, error: "parcela_sem_saldo" };
-        const ct = (inst as any).contracts || {};
+        const ct = (Array.isArray(inst.contracts)?inst.contracts[0]:inst.contracts) || {};
         if (!["active", "overdue"].includes(String(ct.status || "").toLowerCase())) {
           return { ok: false, error: "contrato_inativo_ou_inexistente" };
         }
@@ -244,7 +248,8 @@ export async function executeTool(
             installment_id: inst.id,
             valor: charge.total,
             saldo_base: charge.saldo,
-            juros_atraso: charge.interest,
+            encargos_restantes: charge.interest,
+            encargos_totais: botLateFee(inst,ctx.billingDay ?? ctx.today),
             dias_atraso: charge.daysLate,
             numero: inst.installment_number,
             owner_id: inst.user_id,
