@@ -12,6 +12,8 @@ import { usePlan } from "@/hooks/usePlan";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import ErrorState from "@/components/feedback/ErrorState";
+import OfflineDataUnavailable from "@/components/feedback/OfflineDataUnavailable";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useMultiTableRealtime } from "@/hooks/useRealtimeSubscription";
@@ -33,6 +35,7 @@ const safeNumber = (value: unknown) => {
 
 const Dashboard = () => {
   const { user, profile } = useAuth();
+  const online = useOnlineStatus();
   const navigate = useNavigate();
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -46,7 +49,7 @@ const Dashboard = () => {
     [["dashboard-data", user?.id || ""]],
   );
 
-  const { data, isLoading, isFetching, dataUpdatedAt, error: dashError, refetch: refetchDash } = useQuery({
+  const { data, isLoading, isPending, isFetching, dataUpdatedAt, error: dashError, refetch: refetchDash } = useQuery({
     queryKey: ["dashboard-data", user?.id],
     queryFn: async () => {
       // Só as colunas que as métricas usam. Antes vinha `select("*")` das ~1.700
@@ -101,6 +104,8 @@ const Dashboard = () => {
   // anterior e derrubava a tela (erro #310, "Algo deu errado"). O painel é a
   // primeira tela de todo mundo depois do login.
   const { hasAutomations } = usePlan();
+
+  if (isPending && !online) return <OfflineDataUnavailable />;
 
   if (dashError && !data) {
     return (

@@ -1,8 +1,12 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { canReloadForAppUpdate } from "@/lib/appUpdateReload";
 
-afterEach(() => { document.body.innerHTML = ""; });
+afterEach(() => { document.body.innerHTML = ""; vi.restoreAllMocks(); });
 describe("atualização web preserva operações do usuário", () => {
+  it("aguarda a conexão antes de recarregar as rotas de uma nova versão", () => {
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    expect(canReloadForAppUpdate(document, new WeakSet())).toBe(false);
+  });
   it("aguarda um formulário editado até sair da tela", () => {
     document.body.innerHTML = '<form><input name="valor"></form>';
     const changed = new WeakSet<HTMLFormElement>();

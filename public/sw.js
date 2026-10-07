@@ -1,6 +1,6 @@
 // CredMais App Service Worker — offline-aware
 // - NetworkFirst para navegações HTML, com fallback para o shell do app
-// - Precache de todos os chunks gerados pelo Vite (inclusive rotas lazy)
+// - Shell offline primeiro; outras rotas são preparadas com baixa concorrência
 // - CacheFirst para assets com hash, que são imutáveis
 // - Nunca cacheia Supabase, APIs ou rotas internas (~oauth)
 const VERSION = "credmais-v24-release-__BUILD_ID__";
@@ -8,11 +8,24 @@ const STATIC_CACHE = `${VERSION}-static`;
 const RUNTIME_CACHE = `${VERSION}-runtime`;
 const HTML_CACHE = `${VERSION}-html`;
 const OFFLINE_URL = "/offline.html";
+const CACHE_CONCURRENCY = 2;
+let warming;
+
+function validResponse(path, response) {
+  if (!response?.ok) return false;
+  const type = response.headers.get("content-type") || "";
+  const pathname = new URL(path, location.origin).pathname;
+  // Um CDN pode responder HTML para um chunk ausente; isso não é código cacheável.
+  if (/\.(?:js|mjs)$/.test(pathname)) return type.includes("javascript");
+  if (/\.css$/.test(pathname)) return type.includes("text/css");
+  if (/\.(?:png|jpg|jpeg|webp|svg|gif|ico)$/.test(pathname)) return type.startsWith("image/");
+  return true;
+}
 
 const PRECACHE = [
-  "/mascots/credinho-v2/loading.png",
-  "/mascots/credinho-v2/thinking.png",
-  "/mascots/credinho-v2/chat.png",
+  "/mascots/credinho-v2/loading.webp",
+  "/mascots/credinho-v2/thinking.webp",
+  "/mascots/credinho-v2/chat.webp",
   OFFLINE_URL,
   "/",
   "/dashboard",
@@ -28,24 +41,59 @@ const PRECACHE = [
   "/apple-touch-icon.png",
 ];
 
+async function cacheFiles(cache, files) {
+  const queue = [...files];
+  await Promise.all(Array.from({ length: CACHE_CONCURRENCY }, async () => {
+    while (queue.length) {
+      const url = queue.shift();
+      try {
+        if (validResponse(url, await cache.match(url))) continue;
+        // Chunks com hash não mudam. Reutilizá-los evita baixá-los a cada deploy.
+        const previous = url.startsWith("/assets/") && await caches.match(url);
+        if (validResponse(url, previous)) await cache.put(url, previous);
+        else {
+          const fresh = await fetch(url);
+          if (validResponse(url, fresh)) await cache.put(url, fresh);
+        }
+      } catch { /* A rota será tentada novamente quando for aberta. */ }
+    }
+  }));
+}
+
+async function readManifest() {
+  const response = await fetch("/vite-manifest.json", { cache: "no-store" });
+  if (!response.ok) throw new Error("Manifest indisponível");
+  return response.json();
+}
+
+function manifestFiles(manifest, roots) {
+  const files = new Set();
+  const visited = new Set();
+  function visit(key) {
+    if (visited.has(key)) return;
+    visited.add(key);
+    const entry = manifest[key];
+    if (!entry) return;
+    if (entry.file) files.add(`/${entry.file}`);
+    for (const type of ["css", "assets"]) {
+      for (const file of entry[type] || []) files.add(`/${file}`);
+    }
+    for (const imported of entry.imports || []) visit(imported);
+  }
+  roots.forEach(visit);
+  return files;
+}
+
 async function precacheApplication() {
   const cache = await caches.open(STATIC_CACHE);
-  await Promise.allSettled(PRECACHE.map((url) => cache.add(url)));
+  await cacheFiles(cache, PRECACHE);
 
   try {
-    const response = await fetch("/vite-manifest.json", { cache: "no-store" });
-    if (!response.ok) return;
-    const manifest = await response.json();
-    const files = new Set(["/vite-manifest.json"]);
-
-    for (const entry of Object.values(manifest)) {
-      if (entry?.file) files.add(`/${entry.file}`);
-      for (const key of ["css", "assets"]) {
-        for (const file of entry?.[key] || []) files.add(`/${file}`);
-      }
-    }
-
-    await Promise.allSettled([...files].map((url) => cache.add(url)));
+    const manifest = await readManifest();
+    // Não importa gráficos, PDF ou todas as telas durante a primeira abertura.
+    const roots = Object.keys(manifest).filter(key => manifest[key].isEntry ||
+      key === "src/App.tsx" || key === "src/pages/Dashboard.tsx");
+    await cacheFiles(cache, manifestFiles(manifest, roots));
   } catch {
     // Uma instalação parcial ainda mantém a página offline de contingência.
   }
@@ -55,6 +103,13 @@ self.addEventListener("install", (e) => {
   e.waitUntil(precacheApplication());
 });
 
+async function warmOfflineRoutes() {
+  try {
+    const manifest = await readManifest();
+    await cacheFiles(await caches.open(STATIC_CACHE), manifestFiles(manifest, Object.keys(manifest)));
+  } catch { /* Conexões instáveis não impedem a utilização do app. */ }
+}
+
 self.addEventListener("activate", (e) => {
   e.waitUntil(
     caches.keys().then((keys) => {
@@ -62,14 +117,21 @@ self.addEventListener("activate", (e) => {
       // Os nomes com hash permitem reutilizar seus chunks sem misturar versões.
       const previousVersions = [...new Set(keys.filter((key) => key.startsWith("credmais-") && !key.startsWith(VERSION)).map((key) => key.replace(/-(static|runtime|html)$/, "")))];
       const previous = previousVersions[previousVersions.length - 1];
-      return Promise.all(keys.filter((key) => !key.startsWith(VERSION) && !(previous && key.startsWith(previous + "-"))).map((key) => caches.delete(key)));
+      return Promise.all(keys.filter((key) => key.startsWith("credmais-") && !key.startsWith(VERSION) && !(previous && key.startsWith(previous + "-"))).map((key) => caches.delete(key)));
     }).then(() => self.clients.claim())
   );
 });
 
 self.addEventListener("message", (e) => {
+  if (e.data?.type === "WARM_OFFLINE_ROUTES") {
+    // O cliente só solicita isso depois de carregar, em conexões rápidas.
+    warming ||= warmOfflineRoutes().finally(() => { warming = undefined; });
+    e.waitUntil(warming);
+    return;
+  }
   if (e.data?.type !== "CHECK_UPDATE" && e.data?.type !== "SKIP_WAITING") return;
   e.waitUntil((async () => {
+    if (self.navigator?.onLine === false) return;
     const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
     const readiness = await Promise.all(clients.map((client) => new Promise((resolve) => {
       const channel = new MessageChannel();
@@ -106,10 +168,23 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       (async () => {
         try {
-          const fresh = await fetch(request, { cache: "no-store" });
-          const cache = await caches.open(HTML_CACHE);
-          cache.put(request, fresh.clone());
-          return fresh;
+          const fallback = (await caches.match(request, { ignoreSearch: true })) ||
+            (await caches.match("/dashboard")) || (await caches.match("/"));
+          const network = fetch(request, { cache: "no-store" }).then(async fresh => {
+            if (!fresh.ok) throw new Error("Navegação indisponível");
+            const cache = await caches.open(HTML_CACHE);
+            await cache.put(request, fresh.clone()).catch(() => {});
+            return fresh;
+          });
+          // O shell já salvo abre mesmo quando a rede está conectada mas não responde.
+          if (!fallback) return await network;
+          event.waitUntil(network.catch(() => {}));
+          let timer;
+          try {
+            return await Promise.race([network, new Promise(resolve => {
+              timer = setTimeout(() => resolve(fallback), 3000);
+            })]);
+          } finally { clearTimeout(timer); }
         } catch {
           const cached = await caches.match(request, { ignoreSearch: true });
           if (cached) return cached;
@@ -126,11 +201,12 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       (async () => {
         const cache = await caches.open(RUNTIME_CACHE);
-        const cached = await caches.match(request);
-        if (cached) return cached;
+        const cached = (await cache.match(request)) || (await caches.match(request));
+        if (validResponse(request.url, cached)) return cached;
         try {
           const fresh = await fetch(request, { cache: "no-store" });
-          if (fresh && fresh.status === 200 && fresh.type === "basic") cache.put(request, fresh.clone());
+          if (!validResponse(request.url, fresh)) return Response.error();
+          if (fresh.type === "basic") event.waitUntil(cache.put(request, fresh.clone()).catch(() => {}));
           return fresh;
         } catch {
           return Response.error();

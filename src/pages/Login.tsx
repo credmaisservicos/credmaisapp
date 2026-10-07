@@ -273,7 +273,7 @@ const Login = () => {
       className="credinho-auth relative min-h-dvh flex flex-col overflow-x-hidden font-body bg-[#0c0b09] bg-cover bg-center bg-no-repeat px-5 py-6 sm:px-8 lg:px-12"
       style={{
         backgroundImage:
-          "url('/mascots/credinho-v2/login-background.png')",
+          "url('/mascots/credinho-v2/login-background.webp')",
       }}
     >
       <div className="credinho-auth-shade absolute inset-0 z-0" />

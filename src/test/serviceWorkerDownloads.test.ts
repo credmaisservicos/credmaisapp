@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 function worker(keys: string[] = [], readiness: (boolean | undefined)[] = []) {
   const handlers = new Map();
-  const cache = { put: vi.fn(), match: vi.fn().mockResolvedValue(undefined) };
+  const cache = { put: vi.fn().mockResolvedValue(undefined), match: vi.fn().mockResolvedValue(undefined) };
   const fetch = vi.fn().mockResolvedValue(new Response("<!doctype html><title>CredMais</title>"));
   const deleted = vi.fn().mockResolvedValue(true);
   const skipWaiting = vi.fn().mockResolvedValue(undefined);
@@ -49,7 +49,7 @@ describe("downloads fora do cache de navegação do PWA", () => {
   it("preserva navegação HTML e o cache de contingência do app", async () => {
     const { handle, fetch, cache } = worker();
     const respondWith = vi.fn();
-    handle({ request: { method: "GET", url: "https://credmais.example.com/baixar", mode: "navigate", headers: new Headers({ accept: "text/html" }) }, respondWith });
+    handle({ request: { method: "GET", url: "https://credmais.example.com/baixar", mode: "navigate", headers: new Headers({ accept: "text/html" }) }, respondWith, waitUntil: vi.fn() });
     const response = await respondWith.mock.calls[0][0];
     expect(response.status).toBe(200);
     expect(fetch).toHaveBeenCalledOnce();

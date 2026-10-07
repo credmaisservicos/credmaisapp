@@ -24,6 +24,8 @@ import { formatBR, parseLocalDate, todayLocalISO, toDateInputValue } from "@/lib
 import EmptyState from "@/components/EmptyState";
 import { SkeletonList } from "@/components/feedback/Skeletons";
 import ErrorState from "@/components/feedback/ErrorState";
+import OfflineDataUnavailable from "@/components/feedback/OfflineDataUnavailable";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import CollectionMetrics from "@/components/cobrancas/CollectionMetrics";
 import { fetchAll } from "@/lib/fetchAll";
 import { formatPhoneBR, getPreferredPhone } from "@/lib/phone";
@@ -153,7 +155,8 @@ const Cobrancas = () => {
     [["cobrancas-installments", user?.id || ""]],
   );
 
-  const { data: installments = [], isLoading: loading, error: loadError, refetch: refetchInstallments } = useQuery({
+  const online = useOnlineStatus();
+  const { data: installments = [], isLoading: loading, isPending, error: loadError, refetch: refetchInstallments } = useQuery({
     queryKey: ["cobrancas-installments", user?.id],
     queryFn: async () => {
       const data = await fetchAll((f, t) => supabase
@@ -875,6 +878,8 @@ const Cobrancas = () => {
       return next;
     });
   };
+
+  if (isPending && !online) return <OfflineDataUnavailable />;
 
   return (
     <div className="collections-page space-y-5 pb-24">

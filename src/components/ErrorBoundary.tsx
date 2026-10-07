@@ -51,16 +51,6 @@ class ErrorBoundaryInner extends Component<Props, State> {
       componente: info.componentStack?.slice(0, 1000),
     }));
 
-    // Stale-deploy recovery: if a code-split chunk hash 404s after a redeploy,
-    // force a one-time hard reload so the browser picks up the new index.html.
-    if (isChunkLoadError(error)) {
-      const KEY = "__chunk_reload_at";
-      const last = Number(sessionStorage.getItem(KEY) || "0");
-      if (Date.now() - last > 10_000) {
-        sessionStorage.setItem(KEY, String(Date.now()));
-        window.location.reload();
-      }
-    }
   }
 
   reset = () => this.setState({ error: null });
@@ -97,7 +87,7 @@ class ErrorBoundaryInner extends Component<Props, State> {
           </div>
           <div className="flex gap-2 justify-center">
             <button
-              onClick={this.reset}
+              onClick={isChunkLoadError(error) ? () => window.location.reload() : this.reset}
               className="px-3 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-bold flex items-center gap-1.5 hover:opacity-90"
             >
               <RotateCcw size={12} /> Tentar de novo

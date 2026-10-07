@@ -1,6 +1,26 @@
 # QA Report — CredMais
 
-## Preparação de entrega — 2026-10-07
+## Revisão de desempenho em celulares — 2026-10-07
+
+As ilustrações usadas pelas telas passaram de 43,58 MB para 0,83 MB; os PNGs
+anteriores permanecem em resolução menor para compatibilidade. No cenário
+medido, os arquivos solicitados na abertura caíram de aproximadamente 10 MB
+para 1 MB. O shell offline instala primeiro, com até dois downloads simultâneos;
+as rotas adicionais são preparadas depois, conforme a conexão.
+
+Foram corrigidas a apresentação inicial que sumia antes de montar o app, as
+recargas disparadas somente pelo tempo de espera e a sobreposição do título
+do painel. Menus permanecem visíveis durante a troca de telas. Painel, clientes
+e cobranças avisam quando não têm dados disponíveis offline, evitando totais
+zerados ou espera infinita. Consultas paginadas têm limite de espera por página.
+
+Validação: 408 testes Vitest, 111 testes de funções, 206 testes de interface,
+tipos, lint, regras de hooks, build, 1 teste do catálogo e 9 testes do publicador.
+Backend simulado na interface; os testes do publicador usam arquivos temporários.
+Não houve alteração de dados de clientes nesta revisão. A medição e os limites
+do cenário estão em [docs/mobile-performance.md](docs/mobile-performance.md).
+
+## Preparação inicial de entrega — 2026-10-07
 
 Limpeza de 50 módulos sem uso, 31 dependências e exemplos de teste do template.
 Os fluxos ativos, projetos Android/iOS e arquivos de usuários foram preservados.

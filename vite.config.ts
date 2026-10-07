@@ -27,9 +27,8 @@ export default defineConfig({
   },
   build: {
     target: "es2020",
-    // O service worker lê este mapa e pré-armazena também os chunks das rotas
-    // lazy. Assim uma tela não precisa ter sido aberta antes para funcionar
-    // quando o aparelho ficar sem internet.
+    // O service worker lê este mapa para instalar o shell primeiro e preparar
+    // as rotas lazy depois, sem saturar a rede na primeira abertura.
     manifest: "vite-manifest.json",
     cssCodeSplit: true,
     chunkSizeWarningLimit: 1200,

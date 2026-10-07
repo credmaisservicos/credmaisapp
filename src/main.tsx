@@ -42,6 +42,13 @@ const appModule = !isNativeApp() && MARKETING_PATHS.has(window.location.pathname
 
 void appModule.then(({ default: RootApp }) => {
   createRoot(rootElement).render(<RootApp />);
+  // Espera o primeiro conteúdo montado; importar este arquivo ainda não significa
+  // que App/MarketingApp já terminou de baixar em uma conexão lenta.
+  const hideWhenMounted = () => {
+    if (rootElement.childElementCount > 0) hideSplash();
+    else requestAnimationFrame(hideWhenMounted);
+  };
+  requestAnimationFrame(hideWhenMounted);
 
   // Splash nativo sai agora que existe interface montada por baixo dele.
   void iniciarShellNativo();
@@ -56,6 +63,9 @@ void appModule.then(({ default: RootApp }) => {
   } else {
     globalThis.setTimeout(installGlobalCapture, 1_000);
   }
+}).catch((error: unknown) => {
+  console.error("Não foi possível iniciar o CredMais", error);
+  (window as any).__SJ_SHOW_BOOT_ERROR__?.();
 });
 
 // Splash hide: remove o splash do index.html após o React montar
@@ -71,8 +81,6 @@ const hideSplash = () => {
     setTimeout(() => splash.remove(), 350);
   }
 };
-
-requestAnimationFrame(hideSplash);
 
 // Service Worker: NUNCA registra em iframes ou hosts de preview Lovable
 const isInIframe = (() => {
@@ -121,6 +129,19 @@ if (isInIframe || isPreviewHost || isNativeApp()) {
     });
 
     navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }).then((registration) => {
+      const warmOfflineRoutes = () => {
+        const connection = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
+        if (!navigator.onLine || document.visibilityState !== "visible" || connection?.saveData ||
+          ["slow-2g", "2g", "3g"].includes(connection?.effectiveType ?? "")) return;
+        navigator.serviceWorker.controller?.postMessage({ type: "WARM_OFFLINE_ROUTES" });
+      };
+      // As telas extras não concorrem com a primeira abertura ou redes limitadas.
+      void navigator.serviceWorker.ready.then(() => {
+        window.setTimeout(() => {
+          if ("requestIdleCallback" in window) window.requestIdleCallback(warmOfflineRoutes, { timeout: 30_000 });
+          else warmOfflineRoutes();
+        }, 30_000);
+      });
       const checkForUpdate = () => {
         if (!navigator.onLine || document.visibilityState !== "visible") return;
         // A browser pode rejeitar update durante troca/instalação do worker.
@@ -147,7 +168,8 @@ if (isInIframe || isPreviewHost || isNativeApp()) {
   });
 }
 
-// Auto-recover de chunks antigos após novo deploy
+// Um erro real de importação apresenta recuperação. Tempo de espera, sozinho,
+// não é motivo para apagar o modo offline nem reiniciar formulários.
 const CHUNK_ERROR_PATTERNS = [
   "Failed to fetch dynamically imported module",
   "Importing a module script failed",
@@ -160,19 +182,7 @@ const recoverFromStaleChunk = (msg: string) => {
   if (!msg) return;
   if (!CHUNK_ERROR_PATTERNS.some((p) => msg.includes(p))) return;
 
-  const last = Number(sessionStorage.getItem("__chunk_reloaded_at") || 0);
-  // Janela de 30s para evitar loop infinito, mas permite nova recuperação depois
-  if (Date.now() - last < 30_000) return;
-  sessionStorage.setItem("__chunk_reloaded_at", String(Date.now()));
-
-  // Limpa caches + service workers e recarrega forçadamente
-  Promise.all([
-    caches?.keys?.().then((keys) => Promise.all(keys.map((k) => caches.delete(k).catch(() => false)))).catch(() => []) ?? Promise.resolve(),
-    navigator.serviceWorker?.getRegistrations().then((regs) => Promise.all(regs.map((r) => r.unregister().catch(() => false)))).catch(() => []) ?? Promise.resolve(),
-  ]).finally(() => {
-    // bypass cache
-    location.reload();
-  });
+  if (!rootElement.childElementCount) (window as any).__SJ_SHOW_BOOT_ERROR__?.();
 };
 
 window.addEventListener("error", (e) => {

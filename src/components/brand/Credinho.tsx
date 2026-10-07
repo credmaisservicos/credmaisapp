@@ -4,14 +4,14 @@ import { ArrowUpRight } from "lucide-react";
 export type CredinhoPose = "welcome" | "organize" | "results" | "thinking" | "chat" | "loading" | "story" | "final";
 const assetRoot = "/mascots/credinho-v2";
 const assets: Record<CredinhoPose, { src: string; width: number; height: number }> = {
-  welcome: { src: `${assetRoot}/welcome.png`, width: 1024, height: 1536 },
-  organize: { src: `${assetRoot}/organize.png`, width: 1254, height: 1254 },
-  results: { src: `${assetRoot}/results.png`, width: 1254, height: 1254 },
-  thinking: { src: `${assetRoot}/thinking.png`, width: 1254, height: 1254 },
-  chat: { src: `${assetRoot}/chat.png`, width: 1254, height: 1254 },
-  loading: { src: `${assetRoot}/loading.png`, width: 1254, height: 1254 },
-  story: { src: `${assetRoot}/story.png`, width: 1254, height: 1254 },
-  final: { src: `${assetRoot}/final.png`, width: 1254, height: 1254 },
+  welcome: { src: `${assetRoot}/welcome.webp`, width: 1024, height: 1536 },
+  organize: { src: `${assetRoot}/organize.webp`, width: 1254, height: 1254 },
+  results: { src: `${assetRoot}/results.webp`, width: 1254, height: 1254 },
+  thinking: { src: `${assetRoot}/thinking.webp`, width: 1254, height: 1254 },
+  chat: { src: `${assetRoot}/chat.webp`, width: 1254, height: 1254 },
+  loading: { src: `${assetRoot}/loading.webp`, width: 1254, height: 1254 },
+  story: { src: `${assetRoot}/story.webp`, width: 1254, height: 1254 },
+  final: { src: `${assetRoot}/final.webp`, width: 1254, height: 1254 },
 };
 
 /** Each illustration is a separately generated composition, rendered at its natural ratio. */
@@ -34,7 +34,7 @@ export function CredinhoAvatar({ size = 32, className = "" }: { size?: number; c
 /** The wide scene has its own composition; narrow screens use a separately drawn portrait. */
 export function CredinhoBannerArt({ scene, className = "", priority = false }: { scene?: string; className?: string; priority?: boolean }) {
   return <picture className={`credinho-banner-art ${className}`} data-wide="true" aria-hidden="true">
-    <img src={`${assetRoot}/${scene ? `banner-${scene}` : "banner"}.png`} alt=""
+    <img src={`${assetRoot}/${scene ? `banner-${scene}` : "banner"}.webp`} alt=""
       width={2172} height={724}
       loading={priority ? "eager" : "lazy"} decoding="async" />
   </picture>;

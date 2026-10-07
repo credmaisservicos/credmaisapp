@@ -98,3 +98,17 @@ html.keyboard-open .mobile-more-sheet { bottom: .5rem !important; }
 /* Sem a barra na tela, o respiro reservado para ela viraria espaço morto
    entre o último campo e o teclado. */
 html.keyboard-open .app-content { padding-bottom: 1rem !important; }
+
+/* Evita recalcular desfoque de dezenas de cartões a cada rolagem no celular.
+   Os fundos e as cores continuam definidos pelo tema. */
+@media (max-width: 767px) {
+  .app-workspace { transition: none; }
+  .app-content :where(.glass-card, .surface-card, .premium-card, .client-profile-panel, .client-profile-metrics, .client-profile-followup, .client-profile-contract, .client-profile-button, [class*="backdrop-blur"], [class*="bg-card"][class*="rounded"], [class*="bg-white/"][class*="rounded"]) {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+  .app-content :where(.glass-card, .surface-card, .premium-card, [class*="bg-card"][class*="rounded"])::after {
+    filter: none !important;
+  }
+  .app-content :where(.animate-fade-in, .animate-slide-up) { animation: none; }
+}

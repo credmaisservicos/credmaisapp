@@ -1,4 +1,5 @@
-import { CredinhoBanner } from "@/components/brand/Credinho";
+import { CredinhoBanner, CredinhoLoader } from "@/components/brand/Credinho";
+import SuspenseWatchdog from "@/components/SuspenseWatchdog";
 import { useState, useEffect, lazy, Suspense, useCallback } from "react";
 
 import Sidebar from "@/components/Sidebar";
@@ -112,10 +113,10 @@ const DashboardLayout = () => {
        *
        * `fixed` + `overflow-hidden` faz o enfeite não somar largura para ninguém.
        */}
-      <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+      {!isMobile && <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
         <div className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-primary/4 rounded-full blur-[80px]" />
         <div className="absolute bottom-0 right-0 w-[480px] h-[480px] bg-stone-200/2.5 rounded-full blur-[70px]" />
-      </div>
+      </div>}
 
       {/* Desktop: sidebar */}
       {!isMobile && (
@@ -137,7 +138,9 @@ const DashboardLayout = () => {
           }`}
         >
           <CredinhoBanner />
-          <Outlet />
+          <Suspense key={location.pathname} fallback={<SuspenseWatchdog><CredinhoLoader label="Carregando página" /></SuspenseWatchdog>}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
 
@@ -149,7 +152,7 @@ const DashboardLayout = () => {
       <Suspense fallback={null}>
         {searchOpen && <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />}
         {payOpen && <QuickPaymentModal open={payOpen} onClose={() => setPayOpen(false)} />}
-        <KeyboardShortcutsHelp />
+        {!isMobile && <KeyboardShortcutsHelp />}
         <OnboardingTourAuto />
       </Suspense>
     </div>

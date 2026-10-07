@@ -121,19 +121,19 @@ html:not(.dark) { --background: 40 30% 97%; --foreground: 30 12% 12%; --muted-fo
   .credinho-story { gap: 24px; padding: 24px; }
 }
 @media (max-width: 639px) {
-  .credinho-banner-copy { width: 100%; padding: 175px 22px 24px; }
-  .credinho-context-banner { min-height: 360px; }
-  .credinho-banner-art,.credinho-banner-art[data-wide="true"],.credinho-dashboard-banner > .credinho-banner-art { inset: 0; width: 100%; height: 220px; }
+  .credinho-banner-copy { width: 100%; padding: 105px 20px 20px; }
+  .credinho-context-banner { min-height: 0; }
+  .credinho-banner-art,.credinho-banner-art[data-wide="true"],.credinho-dashboard-banner > .credinho-banner-art { inset: 0; width: 100%; height: 130px; }
   .credinho-banner-art[data-wide="true"]::after { background: linear-gradient(0deg,#101010,transparent 50%); }
   .credinho-banner-art img,.credinho-banner-art[data-wide="true"] img { object-fit: cover; object-position: right center; }
-  .credinho-dashboard-copy { width: 100%; }
-  .credinho-dashboard-copy > .space-y-2 { padding-top: 155px; }
+  .credinho-dashboard-copy { width: 100%; z-index: 2; }
+  .credinho-dashboard-copy > .space-y-2 { padding-top: 85px; }
   .credinho-chat-intro { width: 68px; }
   .credinho-page-cover { align-items: flex-start; min-height: 880px; padding: 40px 24px 350px; }
   .credinho-page-cover > div { width: 100%; }
   .credinho-site-hero-background { object-position: 85% bottom; height: 420px; top: auto; }
   .credinho-site-hero-shade { background: linear-gradient(180deg,#0c0b09 48%,transparent 75%); }
-  .credinho-auth { background-position: 28% top; background-size: cover; padding-top: 330px; }
+  .credinho-auth { background-position: 28% top; background-size: cover; padding-top: 180px; }
   .credinho-auth-shade { background: linear-gradient(180deg,transparent 100px,#0c0b0980 300px,#0c0b09 750px); }
   .credinho-hero-grid { align-items: flex-start; min-height: 980px; padding: 38px 20px 450px; }
   .credinho-hero-copy { width: 100%; max-width: none; }

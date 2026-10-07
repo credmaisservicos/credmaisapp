@@ -1,3 +1,5 @@
+import { withTimeout } from "./withTimeout";
+
 // Helper para buscar TODAS as linhas do Supabase contornando o limite default de 1000.
 // Uso: const rows = await fetchAll((from, to) => supabase.from("x").select("*").range(from, to));
 export async function fetchAll<T = any>(
@@ -9,7 +11,9 @@ export async function fetchAll<T = any>(
   // limite de segurança: 100k linhas
   for (let i = 0; i < 100; i++) {
     const to = from + pageSize - 1;
-    const { data, error } = await build(from, to);
+    // Cada página é uma consulta de leitura. Uma conexão pendurada precisa
+    // chegar ao estado de erro/repetição da tela em vez de manter o spinner.
+    const { data, error } = await withTimeout<{ data: T[] | null; error: unknown }>(build(from, to), 20_000);
     if (error) throw error;
     if (!data || data.length === 0) break;
     out.push(...(data as T[]));

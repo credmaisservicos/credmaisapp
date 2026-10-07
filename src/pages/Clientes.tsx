@@ -11,6 +11,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { SkeletonCards } from "@/components/feedback/Skeletons";
 import ErrorState from "@/components/feedback/ErrorState";
+import OfflineDataUnavailable from "@/components/feedback/OfflineDataUnavailable";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 
 import { Badge } from "@/components/ui/badge";
 import { useMultiTableRealtime } from "@/hooks/useRealtimeSubscription";
@@ -120,7 +122,8 @@ const Clientes = () => {
     [["clients", user?.id || ""]],
   );
 
-  const { data: clients = [], isLoading, error: clientsError, refetch: refetchClients } = useQuery({
+  const online = useOnlineStatus();
+  const { data: clients = [], isLoading, isPending, error: clientsError, refetch: refetchClients } = useQuery({
     queryKey: ["clients", user?.id],
     queryFn: async () => {
       const data = await fetchAll((f, t) => supabase.from("clients").select("*").eq("user_id", user!.id).order("name", { ascending: true }).range(f, t));
@@ -377,6 +380,8 @@ const Clientes = () => {
     const a = document.createElement("a"); a.href = url; a.download = "modelo-clientes.csv"; a.click();
     URL.revokeObjectURL(url);
   };
+
+  if (isPending && !online) return <OfflineDataUnavailable />;
 
   return (
     <div className="mx-auto max-w-[1600px] space-y-5 pb-24 animate-fade-in md:space-y-6">

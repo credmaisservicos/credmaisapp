@@ -19,8 +19,8 @@ export default function Index() {
     <main>
       <section className="credinho-hero">
         <picture className="credinho-hero-background" aria-hidden="true">
-          <source media="(max-width: 639px)" srcSet="/mascots/credinho-v2/hero-mobile.png" />
-          <img src="/mascots/credinho-v2/hero-wide.png" alt="" width={1774} height={887} loading="eager" decoding="async" />
+          <source media="(max-width: 639px)" srcSet="/mascots/credinho-v2/hero-mobile.webp" />
+          <img src="/mascots/credinho-v2/hero-wide.webp" alt="" width={1774} height={887} loading="eager" decoding="async" />
         </picture>
         <div className="credinho-hero-shade" aria-hidden="true" />
         <div className="credinho-hero-grid">

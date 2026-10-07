@@ -52,7 +52,7 @@ for (const width of [390, 1366]) {
       return result;
     });
     expect(styles.color).toBe("rgb(0, 128, 0)");
-    expect(styles.backdrop).toBe("blur(16px) saturate(1.2)");
+    expect(styles.backdrop).toBe(width < 768 ? "none" : "blur(16px) saturate(1.2)");
     expect(styles.margins).toEqual([["0px", "0px"], [width >= 640 ? "8px" : "0px", "0px"]]);
   });
 }

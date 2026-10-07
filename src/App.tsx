@@ -1,7 +1,7 @@
 import { CredinhoLoader } from "@/components/brand/Credinho";
 import { MotionConfig } from "framer-motion";
 import { lazy, Suspense } from "react";
-import { QueryClient } from "@tanstack/react-query";
+import { QueryClient, onlineManager } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { createIDBPersister } from "@/lib/offlineCache";
 import { I18nProvider } from "@/lib/i18n";
@@ -24,7 +24,7 @@ import { ConfirmProvider } from "./components/ConfirmProvider";
 import PortalSessionGuard from "./components/PortalSessionGuard";
 import NativeShell from "./components/NativeShell";
 
-import Index from "./pages/Index";
+const Index = lazy(() => import("./pages/Index"));
 const SiteInteligencia = lazy(() => import("./pages/site/Inteligencia"));
 const SiteSobre = lazy(() => import("./pages/site/SobreCredmais"));
 const SiteMissao = lazy(() => import("./pages/site/Missao"));
@@ -92,6 +92,10 @@ const Estoque = lazy(() => import("./pages/Estoque"));
 const VendasCelulares = lazy(() => import("./pages/VendasCelulares"));
 const Locacoes = lazy(() => import("./pages/Locacoes"));
 const Garantias = lazy(() => import("./pages/Garantias"));
+
+// O Query usa estado otimista online por padrão. Uma abertura já sem rede
+// precisa pausar leituras antes do primeiro evento offline do navegador.
+onlineManager.setOnline(typeof navigator === "undefined" || navigator.onLine);
 
 const queryClient = new QueryClient({
   defaultOptions: {
