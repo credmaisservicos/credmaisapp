@@ -1,3 +1,4 @@
+import {requestsHumanNegotiation, HUMAN_NEGOTIATION_REPLY} from './human_negotiation.ts';
 // SDR (Sales Development Representative) — Agente completo de qualificação
 // de leads via WhatsApp. Combina uma máquina de estados determinística
 // (para não perder contexto entre mensagens) com uma camada de IA opcional
@@ -247,6 +248,10 @@ export function decide(ctx: SdrContext): SdrDecision {
   const updates: Partial<Lead> = {};
   const lastIntent: string = (lead.notes as any)?.last_intent || "";
   const hasHistory = (ctx.history || []).length > 0;
+  if(requestsHumanNegotiation(text))return {
+    reply:HUMAN_NEGOTIATION_REPLY, updates:{stage:'handoff'}, stage:'handoff', needsHuman:true,
+    handoffReason:'Pedido de negociação: atendimento exclusivamente humano', intent:'handoff',
+  };
 
   // stop / desqualifica
   if (/(parar|para de|cancela|remove|não\s*quero|nao\s*quero)/i.test(low) && /(mensagem|contato|falar|voc[eê])/i.test(low)) {
@@ -367,7 +372,7 @@ export function decide(ctx: SdrContext): SdrDecision {
 
   if (!merged.income_monthly) {
     return {
-      reply: `Anotado: *${merged.purpose}*. 👍\nQual é sua *renda mensal* aproximada? Isso me ajuda a montar a melhor condição pra você.`,
+      reply: `Anotado: *${merged.purpose}*. 👍\nQual é sua *renda mensal* aproximada? A equipe usará essa informação na análise.`,
       updates: { ...updates, stage: "qualifying" },
       stage: "qualifying",
       needsHuman: false,
@@ -377,7 +382,7 @@ export function decide(ctx: SdrContext): SdrDecision {
 
   if (!merged.cpf) {
     return {
-      reply: `Perfeito. Pra deixar sua proposta pronta, me passa seu *CPF* (só números). 🔒 Uso apenas pra análise interna.`,
+      reply: `Perfeito. Para completar seu cadastro, me passa seu *CPF* (só números). 🔒 Uso apenas pra análise interna.`,
       updates: { ...updates, stage: "qualifying" },
       stage: "qualifying",
       needsHuman: false,
@@ -385,39 +390,11 @@ export function decide(ctx: SdrContext): SdrDecision {
     };
   }
 
-  // Simulação
-  const rate = Number(ctx.settings?.default_interest_rate || ctx.profile?.default_interest_rate || 15);
-  const term = merged.term_months || Number(ctx.settings?.default_term_months || 6);
-  const sim = simulate(merged.amount_requested, term, rate);
-
-  const proposalTag = mergeTags(merged.tags, ["simulado"]);
-  const score = scoreLead(merged, ctx.settings);
-
+  // The bot collects the request; only humans offer or change credit terms.
   return {
-    reply:
-      `Aqui está sua simulação, ${firstName}: ✨\n\n` +
-      `• Valor: *${money(merged.amount_requested)}*\n` +
-      `• Parcelas: *${sim.n}x de ${money(sim.parcela)}*\n` +
-      `• Total: *${money(sim.total)}*\n` +
-      `• Finalidade: ${merged.purpose}\n\n` +
-      `O que prefere fazer agora?\n` +
-      `1️⃣ *OK* — aprovo e quero fechar\n` +
-      `2️⃣ *Mudar prazo* (ex.: "quero em 10x" ou "em 12 parcelas")\n` +
-      `3️⃣ *Mudar valor* (ex.: "quero R$ 4.000")\n` +
-      `4️⃣ *Falar com atendente*`,
-    updates: {
-      ...updates,
-      stage: "simulated",
-      score,
-      tags: proposalTag,
-      notes: {
-        ...(merged.notes || {}),
-        last_simulation: { parcela: sim.parcela, n: sim.n, total: sim.total, rate, at: new Date().toISOString() },
-      },
-    },
-    stage: "simulated",
-    needsHuman: false,
-    intent: "simulation",
+    reply: 'Recebi os dados da sua solicitação. Uma pessoa da equipe avaliará valores, prazos e condições e continuará o atendimento por aqui.',
+    updates: {...updates, stage:'handoff', score:scoreLead(merged,ctx.settings), tags:mergeTags(merged.tags,['aguardando_analise_humana'])},
+    stage:'handoff', needsHuman:true, handoffReason:'Solicitação pronta para análise e condições pela equipe humana', intent:'handoff',
   };
 }
 
@@ -425,68 +402,9 @@ export function decide(ctx: SdrContext): SdrDecision {
  * Após a simulação, detecta aceite / recusa / alteração.
  */
 export function handleSimulatedReply(ctx: SdrContext): SdrDecision {
-  const t = (ctx.incomingText || "").toLowerCase();
-  const lead = ctx.lead;
-  const empresa = ctx.companyName;
-  const firstName = (lead.name || "").split(/\s+/)[0] || "";
-
-  if (/(ok|aprovo|fechado|topo|aceito|pode fechar|bora|quero sim|sim, quero|beleza)/i.test(t)) {
-    const firstDoc = REQUIRED_DOCS[0];
-    const link = portalUrl();
-    const linkLine = link ? `\n\n🔗 Acompanhe pelo portal: ${link}` : "";
-    return {
-      reply:
-`Fechou, ${firstName}! 🎉 Pra liberar o crédito da *${empresa}* preciso de 5 documentos rapidinhos.
-
-📎 Comece me enviando o *${firstDoc.label}* aqui pelo WhatsApp (foto ou PDF).${linkLine}`,
-      updates: {
-        stage: "awaiting_docs",
-        tags: mergeTags(lead.tags, ["aceite_simulacao"]),
-        score: 90,
-        notes: { ...(lead.notes || {}), docs: { received: [], started_at: new Date().toISOString() } },
-      },
-      stage: "awaiting_docs",
-      needsHuman: false,
-      intent: "accept",
-    };
-  }
-
-
-  if (/(n[aã]o|nao quero|caro|muito|abusivo|desisti|deixa pra l[aá])/i.test(t)) {
-    return {
-      reply: `Sem stress, ${firstName}. Consegue me dizer o que ficou fora do combinado? Posso simular outro valor ou prazo pra ver se encaixa melhor. 🤔`,
-      updates: { tags: mergeTags(lead.tags, ["objecao"]) },
-      stage: "simulated",
-      needsHuman: false,
-      intent: "objection",
-    };
-  }
-
-  // Novo prazo? (ex.: "em 10x", "12 parcelas", "quero em 8 vezes")
-  const termMatch = t.match(/(\d{1,2})\s*(x|parcelas?|vezes|meses|m[eê]s)/);
-  if (termMatch) {
-    const newTerm = Math.max(1, Math.min(60, parseInt(termMatch[1], 10)));
-    return decide({
-      ...ctx,
-      lead: { ...lead, term_months: newTerm, stage: "qualifying", notes: lead.notes || {} },
-    });
-  }
-
-  // Novo valor?
-  const newAmount = parseMoney(ctx.incomingText);
-  if (newAmount) {
-    return decide({
-      ...ctx,
-      lead: { ...lead, amount_requested: newAmount, stage: "qualifying", notes: lead.notes || {} },
-    });
-  }
-
   return {
-    reply: `${firstName ? firstName + ", " : ""}me diz o que prefere: responder *ok* pra fechar, mudar *prazo* (ex.: "em 10x"), mudar *valor* (ex.: "R$ 4.000") ou *falar com atendente*. 🙂`,
-    updates: {},
-    stage: "simulated",
-    needsHuman: false,
-    intent: "await_answer",
+    reply:HUMAN_NEGOTIATION_REPLY, updates:{stage:'handoff'}, stage:'handoff', needsHuman:true,
+    handoffReason:'Simulação antiga: condições devem ser tratadas por uma pessoa da equipe', intent:'handoff',
   };
 }
 
@@ -589,7 +507,7 @@ export async function polishWithAI(
       `Você é um SDR (pré-vendas) da empresa ${ctx.companyName}, especializada em empréstimos pessoais. ` +
       `Reescreva a resposta abaixo mantendo TODAS as informações, valores e perguntas, ` +
       `com tom humano, brasileiro, cordial e curto (máx 4 linhas + emojis moderados). ` +
-      `Não invente valores, não prometa aprovação, não peça dados diferentes dos que já estão na resposta. ` +
+      `Não negocie valores ou condições; qualquer alteração depende da equipe humana. Não invente valores, não prometa aprovação, não peça dados diferentes dos que já estão na resposta. ` +
       `Se houver histórico, personalize levemente sem repetir cumprimentos já feitos.`;
     const hist = (history || []).slice(-6).map(h => `${h.role === "bot" ? "Assistente" : "Cliente"}: ${h.text}`).join("\n");
     const user =
@@ -787,19 +705,19 @@ export function faqAnswer(topic: Understood["topic"], ctx: SdrContext): string {
     case "rate":
       return `Nossa taxa padrão é de *${rate}% ao mês* (juros simples). A taxa final pode variar conforme o valor, prazo e sua análise. 📊`;
     case "term":
-      return `Trabalhamos com prazos de *1 a 60 parcelas*. O padrão é *${term}x*, mas você escolhe o que couber no seu bolso.`;
+      return `Trabalhamos com prazos de *1 a 60 parcelas*. O padrão é *${term}x*; valores e prazos da sua solicitação são definidos pela equipe humana.`;
     case "grace":
-      return `Sim, temos opção de *carência* (você começa a pagar depois de alguns meses). Posso incluir isso na sua simulação — quer?`;
+      return `A equipe humana verifica se existe carência aplicável ao seu contrato ou solicitação.`;
     case "early_pay":
-      return `Claro! Você pode *antecipar parcelas* a qualquer momento e ainda ganha desconto proporcional sobre os juros que não vencerem. 💚`;
+      return `Para antecipar pagamentos, solicite a conferência do saldo à equipe humana. O bot não define descontos ou condições.`;
     case "late_fee":
-      return `Em caso de atraso: multa de *${lateFee}%* sobre a parcela + juros de *${dailyFee}% ao dia*. Mas se avisar antes, a gente sempre tenta ajustar. 🤝`;
+      return `Em caso de atraso: multa de *${lateFee}%* sobre a parcela + juros de *${dailyFee}% ao dia*. Alterações de prazo ou encargos dependem exclusivamente da equipe humana.`;
     case "min_max":
       return `Emprestamos de *R$ ${min.toLocaleString("pt-BR")}* até *R$ ${max.toLocaleString("pt-BR")}* por contrato.`;
     case "requirements":
       return `Precisamos só de: *CPF*, *nome completo*, *comprovante de renda* (opcional) e um *contato de referência*. Sem consulta ao SPC/Serasa na maioria dos casos. ✅`;
     case "how_it_works":
-      return `Funciona assim: 1) você me passa valor, finalidade e renda; 2) faço a simulação; 3) se aprovar, um consultor da *${company}* fecha o contrato por aqui mesmo; 4) o dinheiro cai no seu Pix. 🚀`;
+      return `Funciona assim: 1) você me passa valor, finalidade e renda; 2) a equipe analisa a solicitação; 3) um consultor apresenta e confirma as condições antes de contratar.`;
     case "safety":
       return `Somos a *${company}* e trabalhamos com contrato assinado digitalmente. Seus dados ficam protegidos e só uso o CPF pra análise interna. 🔒`;
     case "company":

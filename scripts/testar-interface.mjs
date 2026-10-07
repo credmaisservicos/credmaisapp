@@ -50,7 +50,7 @@ try {
   }
   if (!ready) throw new Error("O preview local não respondeu.");
 
-  await run(playwright, ["test", "--workers=2", "--max-failures=1", "e2e/app-install.spec.ts", "e2e/login-recovery.spec.ts", "e2e/mobile-loading.spec.ts", "e2e/large-collections.spec.ts", "e2e/route-health.spec.ts", "e2e/public-routes.spec.ts", "e2e/responsive-accessibility.spec.ts", "e2e/tailwind-compat.spec.ts", "e2e/bot-module.spec.ts"]);
+  await run(playwright, ["test", "--workers=2", "--max-failures=1", "e2e/app-install.spec.ts", "e2e/login-recovery.spec.ts", "e2e/mobile-loading.spec.ts", "e2e/large-collections.spec.ts", "e2e/route-health.spec.ts", "e2e/public-routes.spec.ts", "e2e/responsive-accessibility.spec.ts", "e2e/tailwind-compat.spec.ts", "e2e/bot-module.spec.ts", "e2e/client-portal.spec.ts"]);
   await run(playwright, ["test", "--workers=2", "--max-failures=1", "e2e/authenticated-shell-responsive.spec.ts", "e2e/admin-shell-responsive.spec.ts",
     "--grep-invert", "(ultracompacto|celular compacto|mobile estreito|tablet|desktop amplo):"]);
 } finally {

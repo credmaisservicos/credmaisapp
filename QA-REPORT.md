@@ -1,5 +1,9 @@
 # QA Report — CredMais
 
+## 2026-10-07 — Portal monocromático e negociação exclusivamente humana
+
+Chat de negociação removido do portal, com modos claro e escuro sem brilho ou neon. Negociações, propostas parciais e renovações automáticas encaminhadas para a equipe, com pausa do bot. A função antiga responde HTTP 410 e as simulações de leads exigem análise humana. Validação: 457 testes de frontend, 157 compartilhados, 81 integrações HTTP e 224 de interface, totalizando 919 testes distintos. Tipos de 43 funções, tipos do app, lint e hooks aprovados. Publicação do servidor com backup e sem migração. [Detalhes e limites](docs/portal-cliente-humano-2026-10-07.md).
+
 ## 2026-10-07 — Gemini, destinatário de teste e portal
 
 Gemini integrado ao agente com escopo por conta e modo de testes restrito ao destinatário autorizado. Consulta de parcelas e portal podem interromper a seleção da modalidade; menu e respostas de ajuda usam comandos consistentes. Credenciais permanecem no servidor.

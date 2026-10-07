@@ -5,23 +5,28 @@ const backend='https://bot-backend.test.invalid',provider='https://bot-provider.
 for(const [k,v] of Object.entries({SUPABASE_URL:backend,SUPABASE_SERVICE_ROLE_KEY:'isolated-service',EVOLUTION_WEBHOOK_SECRET:secret,SITE_URL:'https://app.test.invalid'}))Deno.env.set(k,v);
 Deno.env.delete('ANTHROPIC_API_KEY');Deno.env.delete('LOVABLE_API_KEY');
 let calls:any[]=[],messages:any[]=[],reviews:any[]=[],jobs:any[]=[];
-let settings:any,conversation:any,knownClient=true,failSettings=false,ownsLease=true,eventCompleted=false;
+let settings:any,conversation:any,knownClient=true,failSettings=false,ownsLease=true,eventCompleted=false,failHandoff=false;
+let geminiReply:any;
+let testCase=0;
 let clientMemory:string,installment:any,contract:any,failPromise=false,failCancel=false,failContract=false,failReview=false,failMemory=false,geminiStatus=200,portalReceipt=false;
 const json=(v:any,status=200)=>new Response(JSON.stringify(v),{status,headers:{'Content-Type':'application/json'}});
 const rows=(v:any,req:Request)=>json(req.headers.get('Accept')?.includes('vnd.pgrst.object')?v:(v?[v]:[]));
 function reset(){
- calls=[];messages=[];reviews=[];jobs=[];knownClient=true;failSettings=false;ownsLease=true;eventCompleted=false;
+ calls=[];messages=[];reviews=[];jobs=[];knownClient=true;failSettings=false;ownsLease=true;eventCompleted=false;failHandoff=false;
+ geminiReply={reply:'Posso orientar sobre suas parcelas e encaminhar pedidos para a equipe.',intent:'duvida',needs_human:false};
  clientMemory=JSON.stringify({service_menu_started:true});failPromise=false;failCancel=false;failContract=false;failReview=false;failMemory=false;geminiStatus=200;portalReceipt=false;
  installment={id:'installment-test',user_id:owner,client_id:clientId,contract_id:'contract-test',amount:100,paid_amount:40,late_fee:0,scheduled_interest:10,status:'pending',due_date:'2099-01-01',installment_number:1,contracts:{status:'active',daily_interest_percent:4}};
  contract={id:'contract-test',status:'active',capital:90,total_amount:100,total_interest:10,interest_rate:10,num_installments:1,loan_mode:'fixed'};
  settings={user_id:owner,company_name:'Teste',bot_enabled:true,bot_auto_send:false,bot_auto_confirm_payment:true,bot_use_ai:false,bot_process_receipts:true,bot_process_audio:false,bot_work_days:['mon','tue','wed','thu','fri','sat','sun'],bot_business_start:'00:00',bot_business_end:'23:59',whatsapp_instance:'test',whatsapp_api_url:provider,whatsapp_api_key:'isolated-provider'};
  conversation={id:'conversation-test',user_id:owner,phone:'5511999999999',jid:'5511999999999@s.whatsapp.net',instance:'test',client_id:clientId,bot_paused:false,needs_human:false,blocked:false,unread_count:0};
+ // Each scenario has its own instance, including the production per-JID limiter.
+ settings.whatsapp_instance=`test-${++testCase}`;conversation.instance=settings.whatsapp_instance;
 }
 globalThis.fetch=async(input,init)=>{
  const req=new Request(input,init),u=new URL(req.url),raw=await req.clone().text();let body:any={};try{body=JSON.parse(raw||'{}');}catch{/* binary attachment */}
  calls.push({path:u.pathname,method:req.method,body,origin:u.origin,query:Object.fromEntries(u.searchParams)});
  if(u.origin==='https://generativelanguage.googleapis.com')return geminiStatus===200
-   ? json({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify({reply:'Posso orientar sobre suas parcelas e encaminhar pedidos para a equipe.',intent:'duvida',needs_human:false})}]}}]})
+   ? json({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify(geminiReply)}]}}]})
    : json({error:{message:'isolated-provider-error'}},geminiStatus);
  if(u.origin===provider){
    if(u.pathname.includes('getBase64FromMediaMessage'))return json({base64:btoa('isolated fictional receipt')});
@@ -44,7 +49,7 @@ globalThis.fetch=async(input,init)=>{
  if(table==='whatsapp_instances')return json([]);
  if(table==='whatsapp_event_claims')return rows({status:eventCompleted?'completed':'failed'},req);
  if(table==='whatsapp_conversations'){
-   if(req.method==='PATCH'){Object.assign(conversation,body);return new Response(null,{status:204});}
+   if(req.method==='PATCH'){if(failHandoff&&body.needs_human)return json({message:'Unavailable'},503);Object.assign(conversation,body);return new Response(null,{status:204});}
    return rows(conversation,req);
  }
  if(table==='clients'){if(req.method==='PATCH'&&body.bot_memory){if(failMemory)return json({message:'Unavailable'},503);clientMemory=body.bot_memory;}return rows({id:clientId,user_id:owner,name:'Cliente fictício',phone:'11999999999',bot_memory:clientMemory},req);}
@@ -69,7 +74,7 @@ globalThis.fetch=async(input,init)=>{
 };
 await import('../whatsapp-webhook/index.ts');const webhook=handlers.at(-1)!;
 async function invoke(message:any={conversation:'menu'},valid=true,id='event-test',remoteJid='5511999999999@s.whatsapp.net'){
- const response=await webhook(new Request('https://webhook.test.invalid/',{method:'POST',headers:{'Content-Type':'application/json','x-webhook-secret':valid?secret:'wrong'},body:JSON.stringify({event:'MESSAGES_UPSERT',instance:'test',data:{key:{id,remoteJid,fromMe:false},message}})}));
+ const response=await webhook(new Request('https://webhook.test.invalid/',{method:'POST',headers:{'Content-Type':'application/json','x-webhook-secret':valid?secret:'wrong'},body:JSON.stringify({event:'MESSAGES_UPSERT',instance:settings.whatsapp_instance,data:{key:{id,remoteJid,fromMe:false},message}})}));
  return {response,body:await response.json()};
 }
 Deno.test('webhook denies invalid secret without processing incoming data',async()=>{reset();const {response}=await invoke(undefined,false);assertEquals(response.status,401);assertEquals(messages.length,0);assertEquals(jobs.length,0);});
@@ -83,20 +88,22 @@ Deno.test('paused conversations preserve private attachment for the human team',
 Deno.test('disabled receipt recognition stores the file and routes it to humans',async()=>{reset();settings.bot_process_receipts=false;const {body}=await invoke({imageMessage:{mimetype:'image/png'}});assertEquals(body.status,'receipt_recognition_disabled');assert(conversation.needs_human);assertEquals(reviews.length,0);assert(messages[0].metadata.storage_path);});
 Deno.test('new contact audio is preserved without calling an AI provider',async()=>{reset();knownClient=false;conversation.client_id=null;settings.bot_process_audio=true;const {body}=await invoke({audioMessage:{mimetype:'audio/ogg'}});assertEquals(body.status,'lead_attachment_received');assert(conversation.needs_human);assert(messages[0].metadata.storage_path);});
 
-Deno.test('interest-only quote uses the saved installment interest rather than a flat rate',async()=>{
+Deno.test('interest-only requests require a human even when a renewal amount is calculable',async()=>{
  reset();installment.paid_amount=0;installment.scheduled_interest=23.45;contract.capital=1000;contract.loan_mode='price';
  const {response,body}=await invoke({conversation:'quero pagar só juros'});
- assertEquals(response.status,200);assertEquals(body.status,'interest_only_pix');assertEquals(body.amount,23.45);
- assert(jobs.some(j=>j.text.includes('conferir o recebimento')));assertEquals(JSON.parse(clientMemory).pending_payment_amount,23.45);
+ assertEquals(response.status,200);assertEquals(body.status,'human_handoff');assert(conversation.bot_paused);
+ assert(jobs.some(j=>j.text.includes('somente por uma pessoa')));assertEquals(JSON.parse(clientMemory).pending_payment_amount,undefined);
+ assertEquals(calls.filter(c=>c.path.endsWith('/contracts')).length,0);
 });
 Deno.test('partial installments route interest-only requests to a human without offering a renewal',async()=>{
- reset();const {body}=await invoke({conversation:'pagar só juros'});assertEquals(body.status,'interest_only_needs_human');assert(conversation.needs_human);assertEquals(JSON.parse(clientMemory).pending_payment_kind,undefined);
+ reset();const {body}=await invoke({conversation:'pagar só juros'});assertEquals(body.status,'human_handoff');assert(conversation.needs_human);assertEquals(JSON.parse(clientMemory).pending_payment_kind,undefined);
 });
-Deno.test('failed contract lookup retries instead of inventing an interest quote',async()=>{
- reset();failContract=true;const {response}=await invoke({conversation:'pagar só juros'});assertEquals(response.status,500);assertEquals(jobs.length,0);assertEquals(eventCompleted,false);
+Deno.test('failed negotiation handoff retries without pretending that a human was notified',async()=>{
+ reset();failHandoff=true;const {response}=await invoke({conversation:'pagar só juros'});assertEquals(response.status,500);assertEquals(jobs.length,0);assertEquals(eventCompleted,false);
 });
-Deno.test('partial PIX preserves decimal point in the promised amount',async()=>{
- reset();const {body}=await invoke({conversation:'consigo pagar 20.50'});assertEquals(body.status,'partial_pix');assertEquals(body.amount,20.5);assertEquals(body.remaining,39.5);
+Deno.test('partial payment proposals require a human without generating a negotiated PIX',async()=>{
+ reset();const {body}=await invoke({conversation:'consigo pagar 20.50'});assertEquals(body.status,'human_handoff');assert(conversation.bot_paused);
+ assert(jobs.every(j=>!j.text.includes('PIX')));assertEquals(JSON.parse(clientMemory).pending_payment_kind,undefined);
 });
 Deno.test('promise cancellation closes the owner-scoped operational promise before acknowledging',async()=>{
  reset();const {body}=await invoke({conversation:'cancelar promessa de pagamento'});assertEquals(body.status,'promise_cancelled');
@@ -155,6 +162,19 @@ for(const scenario of ['allowed','other-owner','quota'])Deno.test(`Gemini webhoo
   else assert(calls.some(c=>c.body.tool_name==='local_ai_fallback'));
  }finally{vars.forEach((k,i)=>previous[i]===undefined?Deno.env.delete(k):Deno.env.set(k,previous[i]!));}
 });
+for(const scenario of ['small-discount','negotiation-intent','unsolicited-offer'])Deno.test(`AI cannot negotiate even when the model returns ${scenario}`,async()=>{
+ reset();settings.bot_use_ai=true;
+ const keys=['GEMINI_API_KEY','GEMINI_ALLOWED_USER_IDS'],before=keys.map(k=>Deno.env.get(k));
+ Deno.env.set(keys[0],'isolated-gemini-key');Deno.env.set(keys[1],owner);
+ geminiReply={reply:scenario==='unsolicited-offer'?'Posso dividir em 3 parcelas.':'Condição especial aprovada.',intent:scenario==='negotiation-intent'?'negociacao':'duvida',desconto_pct:scenario==='small-discount'?1:0,needs_human:false};
+ try {
+  const {response}=await invoke({conversation:'Gostaria de entender melhor minha situação específica antes de decidir.'});
+  assertEquals(response.status,200);assert(conversation.needs_human);assert(conversation.bot_paused);
+  assert(jobs.some(j=>j.text.includes('somente por uma pessoa')));
+  assert(jobs.every(j=>!j.text.includes('Condição especial aprovada')&&!j.text.includes('dividir em 3')));
+  assertEquals(calls.filter(c=>/system_pay_installment|system_renew_installment_interest/.test(c.path)).length,0);
+ } finally {keys.forEach((k,i)=>before[i]===undefined?Deno.env.delete(k):Deno.env.set(k,before[i]!));}
+});
 Deno.test('test recipient restriction records other incoming messages without replying or generating an AI draft',async()=>{
  reset();const keys=['BOT_TEST_OWNER_ID','BOT_TEST_RECIPIENT'],before=keys.map(k=>Deno.env.get(k));
  Deno.env.set(keys[0],owner);Deno.env.set(keys[1],'5511999999999');
@@ -167,12 +187,24 @@ Deno.test('test recipient restriction records other incoming messages without re
 Deno.test('failed loan menu state remains retryable without pretending to advance',async()=>{
  reset();failMemory=true;const {response}=await invoke({conversation:'1'});assertEquals(response.status,500);assertEquals(jobs.length,0);assertEquals(eventCompleted,false);assertEquals(JSON.parse(clientMemory).service_menu_stage,undefined);
 });
-Deno.test('receipt after an interest quote preserves the selected installment and pending renewal',async()=>{
+Deno.test('receipt after negotiation handoff stays with humans without automated renewal',async()=>{
  reset();installment.paid_amount=0;installment.scheduled_interest=23.45;
  await invoke({conversation:'pagar só juros'});eventCompleted=false;
  const {response}=await invoke({imageMessage:{mimetype:'image/png',caption:'comprovante'}},true,'receipt-after-quote');
- assertEquals(response.status,200);assertEquals(reviews[0].installment_id,installment.id);assertEquals(reviews[0].amount,23.45);assertEquals(reviews[0].metadata.payment_kind,'interest_only');
+ assertEquals(response.status,200);assertEquals(reviews.length,0);assert(conversation.bot_paused);assert(messages.at(-1).metadata.storage_path);
+ assertEquals(calls.filter(c=>/system_pay_installment|system_renew_installment_interest/.test(c.path)).length,0);
 });
+for(const known of [true,false])for(const stage of ['main','loan_type','documents']) {
+ Deno.test(`negotiation before menus or AI: ${known?'client':'unknown contact'} at ${stage} goes to humans`,async()=>{
+  reset();knownClient=known;if(!known)conversation.client_id=null;
+  clientMemory=JSON.stringify({service_menu_started:true,service_menu_stage:stage});settings.bot_use_ai=true;
+  const {response,body}=await invoke({conversation:'quero 1% de desconto na parcela 1'});
+  assertEquals(response.status,200);assertEquals(body.status,'human_handoff');assertEquals(body.reason,'negotiation');assert(conversation.bot_paused&&conversation.needs_human);
+  assert(jobs.some(j=>j.text.includes('somente por uma pessoa')));
+  assertEquals(calls.filter(c=>c.origin==='https://generativelanguage.googleapis.com'||/system_pay_installment|system_renew_installment_interest/.test(c.path)).length,0);
+  assert(calls.some(c=>c.path.endsWith('/notifications')&&c.method==='POST'));
+ });
+}
 for(const scenario of ['expired','unrelated','future'])Deno.test(`receipt ignores ${scenario} payment context`,async()=>{
  reset();clientMemory=JSON.stringify({service_menu_started:true,pending_payment_kind:'interest_only',pending_payment_amount:23.45,pending_payment_installment_id:scenario==='unrelated'?'another-installment':installment.id,pending_payment_set_at:new Date(Date.now()+(scenario==='expired'?-72:scenario==='future'?24:-1)*3600_000).toISOString()});
  const {response}=await invoke({imageMessage:{mimetype:'image/png',caption:'comprovante'}});assertEquals(response.status,200);assertEquals(reviews[0].metadata.payment_kind,'payment');assertEquals(reviews[0].amount,0);

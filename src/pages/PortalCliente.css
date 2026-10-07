@@ -1,0 +1,147 @@
+/* Portal-only colors also reach dialogs rendered directly into document.body. */
+html[data-client-portal-theme] {
+  --background: 0 0% 97%;
+  --foreground: 0 0% 9%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 9%;
+  --muted: 0 0% 94%;
+  --muted-foreground: 0 0% 38%;
+  --border: 0 0% 85%;
+  --input: 0 0% 85%;
+  --primary: 0 0% 9% !important;
+  --primary-foreground: 0 0% 100% !important;
+  --secondary: 0 0% 94%;
+  --secondary-foreground: 0 0% 9%;
+  --accent: 0 0% 94%;
+  --accent-foreground: 0 0% 9%;
+  --ring: 0 0% 45%;
+  --portal-primary: #171717 !important;
+  color-scheme: light;
+  background: hsl(var(--background));
+}
+html[data-client-portal-theme='dark'] {
+  --background: 0 0% 6%;
+  --foreground: 0 0% 95%;
+  --card: 0 0% 10%;
+  --card-foreground: 0 0% 95%;
+  --popover: 0 0% 10%;
+  --popover-foreground: 0 0% 95%;
+  --muted: 0 0% 15%;
+  --muted-foreground: 0 0% 68%;
+  --border: 0 0% 23%;
+  --input: 0 0% 23%;
+  --primary: 0 0% 95% !important;
+  --primary-foreground: 0 0% 9% !important;
+  --secondary: 0 0% 15%;
+  --secondary-foreground: 0 0% 95%;
+  --accent: 0 0% 15%;
+  --accent-foreground: 0 0% 95%;
+  --portal-primary: #f2f2f2 !important;
+  color-scheme: dark;
+}
+html[data-client-portal-theme] {
+  --success: var(--foreground) !important;
+  --success-foreground: var(--background) !important;
+  --warning: var(--foreground) !important;
+  --warning-foreground: var(--foreground) !important;
+  --info: var(--foreground) !important;
+  --info-foreground: var(--background) !important;
+  --destructive: var(--foreground) !important;
+  --destructive-foreground: var(--background) !important;
+}
+html[data-client-portal-theme] body { background: hsl(var(--background)); }
+.portal-shell .portal-appearance-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 64px;
+  max-width: 1152px;
+  margin: auto;
+  padding: 12px 24px;
+  border-bottom: 1px solid hsl(var(--border));
+}
+html[data-client-portal-theme] .portal-shell {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+.portal-shell::before, .portal-shell::after,
+.portal-shell .portal-card::before,
+.portal-shell .bento-tile::after { display: none; }
+.portal-shell .portal-card, .portal-shell .bento-tile {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 16px;
+  box-shadow: none;
+  backdrop-filter: none;
+  transform: none;
+  transition: none;
+}
+.portal-shell .bento-tile:hover { border-color: hsl(var(--muted-foreground)); box-shadow: none; transform: none; }
+.portal-shell .portal-card img, .portal-shell .portal-toolbar img { filter: grayscale(1); box-shadow: none; }
+.portal-shell .portal-toolbar { border-color: hsl(var(--border)); padding-bottom: 20px; }
+.portal-shell .portal-toolbar > div:last-child { flex-wrap: wrap; }
+.portal-shell .portal-chip {
+  background: hsl(var(--muted));
+  border: 1px solid hsl(var(--border));
+  color: hsl(var(--foreground));
+  box-shadow: none;
+  letter-spacing: .025em;
+  white-space: nowrap;
+}
+.portal-shell .portal-chip:is(.ok, .warn) { background: hsl(var(--muted)); border-color: hsl(var(--border)); color: hsl(var(--foreground)); }
+.portal-shell .portal-btn-primary, .portal-shell .portal-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  background: hsl(var(--foreground));
+  color: hsl(var(--background));
+  box-shadow: none;
+  transform: none;
+  filter: none;
+  transition: none;
+  letter-spacing: normal;
+}
+.portal-shell .portal-btn-secondary { background: hsl(var(--card)); border: 1px solid hsl(var(--border)); color: hsl(var(--foreground)); }
+.portal-shell .portal-btn-primary:hover { background: hsl(var(--muted-foreground)); transform: none; filter: none; box-shadow: none; }
+.portal-shell .portal-btn-secondary:hover { background: hsl(var(--muted)); }
+.portal-shell .portal-input { background: hsl(var(--card)); color: hsl(var(--foreground)); border-color: hsl(var(--input)); }
+.portal-shell .portal-input:focus { background: hsl(var(--card)); border-color: hsl(var(--foreground)); box-shadow: none; }
+.portal-shell .portal-next-amount { font-size: clamp(2rem, 5vw, 3rem); line-height: 1.15; overflow-wrap: anywhere; }
+.portal-shell .portal-summary-card { min-height: 116px; gap: 12px; }
+.portal-shell .portal-summary-card .kpi-value { font-size: clamp(1.15rem, 3vw, 1.85rem); overflow-wrap: anywhere; }
+.portal-shell .portal-summary-card .portal-chip { padding: 4px 7px; font-size: 10px; }
+.portal-shell .portal-section-heading { border-color: hsl(var(--border)); }
+.portal-shell .portal-tabs { display: flex; gap: 6px; }
+.portal-shell .portal-tabs button { min-height: 44px; border-radius: 10px; font-size: 12px; padding: 8px 12px; gap: 5px; white-space: nowrap; box-shadow: none; }
+.portal-shell .portal-tabs button span { margin-left: 0; padding: 2px 5px; }
+.portal-shell .portal-installment { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 14px; align-items: center; padding: 18px; }
+.portal-shell .portal-human-contact { display: flex; align-items: center; gap: 16px; }
+.portal-shell :is(button, a, input):focus-visible { outline: 2px solid hsl(var(--foreground)); outline-offset: 3px; }
+@media (max-width: 639px) {
+  .portal-shell .portal-appearance-bar { padding-inline: 16px; }
+  .portal-shell .portal-content { padding-top: 24px; padding-inline: 16px; }
+  .portal-shell .portal-summary-card { padding: 14px; }
+  .portal-shell .portal-tabs { width: 100%; }
+  .portal-shell .portal-tabs button { flex: 1; padding-inline: 6px; justify-content: center; }
+  .portal-shell .portal-tabs button svg { display: none; }
+  .portal-shell .portal-installment { grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; padding: 14px; }
+  .portal-shell .portal-installment-chevron, .portal-shell .portal-frequency { display: none; }
+  .portal-shell .portal-human-contact { flex-wrap: wrap; gap: 12px; }
+  .portal-shell .portal-human-contact > button { width: 100%; }
+}
+@media (max-width: 319px) {
+  .portal-shell .portal-appearance-bar { padding-inline: 10px; gap: 6px; }
+  .portal-shell .portal-appearance-bar > span { font-size: 11px; gap: 4px; }
+  .portal-shell .portal-appearance-bar > button { padding-inline: 8px; font-size: 11px; }
+  .portal-shell .portal-installment { grid-template-columns: minmax(0, 1fr) auto; }
+  .portal-shell .portal-installment > div:first-child { display: none; }
+}

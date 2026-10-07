@@ -6,6 +6,7 @@ const result = createDenoRunner()([
   "supabase/functions/_integration/delivery_test.ts",
   "supabase/functions/_integration/bot_webhook_test.ts",
   "supabase/functions/_integration/collection_test.ts",
+  "supabase/functions/_integration/retired_negotiation_test.ts",
 ], { stdio: "inherit" });
 if (result.error) console.error(result.error.message);
 process.exit(result.status ?? 1);

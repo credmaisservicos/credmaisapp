@@ -165,27 +165,28 @@ export const PaymentModal = ({ isOpen, onOpenChange, installment, ownerProfile, 
 
   return createPortal(
     <div
-      className="fixed inset-0 z-100 flex items-center justify-center bg-black/70 p-3 backdrop-blur-xs"
+      className="fixed inset-0 z-100 flex items-center justify-center bg-black/70 p-3 "
       onClick={() => onOpenChange(false)}
       role="dialog"
+      aria-label={`Detalhes da parcela ${installment.installment_number}`}
       aria-modal="true"
     >
       <div
-        className="relative w-full max-w-md max-h-[92dvh] overflow-y-auto rounded-3xl bg-card shadow-2xl pb-[max(2rem,env(safe-area-inset-bottom))]"
+        className="relative w-full max-w-md max-h-[92dvh] overflow-y-auto rounded-3xl bg-card  pb-[max(2rem,env(safe-area-inset-bottom))]"
         onClick={(e) => e.stopPropagation()}
       >
         <button
           type="button"
           onClick={() => onOpenChange(false)}
-          className="absolute right-3 top-3 z-10 rounded-full p-2 text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+          className="absolute right-3 top-3 z-10 rounded-full p-2 text-background transition-colors hover:bg-white/10 hover:text-background"
           aria-label="Fechar"
         >
           <X size={18} />
         </button>
 
-        <div className={`p-6 text-white ${isPaid ? "bg-success" : isOverdue ? "bg-destructive" : "bg-primary"}`}>
+        <div className="p-6 bg-foreground text-background">
           <div className="flex items-center justify-between">
-            <Badge variant="outline" className="text-white border-white/30 bg-white/10 uppercase tracking-widest text-[9px]">
+            <Badge variant="outline" className="text-background border-white/30 bg-white/10 uppercase tracking-widest text-[9px]">
               Parcela #{installment.installment_number}
             </Badge>
             <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
@@ -194,15 +195,15 @@ export const PaymentModal = ({ isOpen, onOpenChange, installment, ownerProfile, 
           </div>
           <h2 className="text-2xl font-bold mt-2">R$ {fmt(totalDue)}</h2>
           {!isPaid && alreadyPaid > 0 ? (
-            <p className="text-white/90 text-xs">
+            <p className="text-background text-xs">
               Você já pagou R$ {fmt(alreadyPaid)} desta parcela — falta R$ {fmt(totalDue)}
             </p>
           ) : !isPaid && liveFee > 0 ? (
-            <p className="text-white/90 text-xs">
+            <p className="text-background text-xs">
               Parcela R$ {fmt(installment.amount)} + multa/juros R$ {fmt(liveFee)}
             </p>
           ) : null}
-          <p className="text-white/80 text-sm">
+          <p className="text-background text-sm">
             {isPaid
               ? `Pago em ${formatBR(installment.paid_at) || "data indisponível"}`
               : `Vencimento em ${formatBR(installment.due_date) || "data indisponível"}`}
@@ -214,7 +215,7 @@ export const PaymentModal = ({ isOpen, onOpenChange, installment, ownerProfile, 
             <div className="space-y-1 min-w-0">
               <p className="text-[10px] text-muted-foreground uppercase font-semibold">Status</p>
               <div className="flex items-center gap-1.5">
-                <div className={`w-2 h-2 rounded-full ${isPaid ? "bg-success" : isOverdue ? "bg-destructive" : "bg-amber-500"}`} />
+                <div className={`w-2 h-2 rounded-full ${isPaid ? "bg-success" : isOverdue ? "bg-destructive" : "bg-muted-foreground"}`} />
                 <span className="text-sm font-medium">{isPaid ? "Liquidado" : isOverdue ? "Em atraso" : "Aguardando"}</span>
               </div>
             </div>

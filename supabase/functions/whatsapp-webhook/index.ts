@@ -31,6 +31,7 @@ import { saveBotAttachment } from "../_shared/bot_media.ts";
 import {callGemini, geminiConfigured} from '../_shared/gemini.ts';
 import {testRecipientScope} from '../_shared/bot_test_scope.ts';
 import {pendingClientReceipt} from '../_shared/bot_collection.ts';
+import {requestsHumanNegotiation, HUMAN_NEGOTIATION_REPLY} from '../_shared/human_negotiation.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -867,6 +868,16 @@ serve(async (req) => {
     }
 
 
+    if (requestsHumanNegotiation(incomingText)) {
+      if (convoId) await escalateToHuman(supabase,convoId,'Pedido de negociação: atendimento exclusivamente humano');
+      await checkedBotQuery(supabase.from('notifications').insert({
+        user_id:userId, type:'warning',
+        message:`Pedido de negociação: ${client?.name || senderPhone}. A equipe deve assumir a conversa no Atendimento.`,
+      }));
+      await botSay(HUMAN_NEGOTIATION_REPLY);
+      return new Response(JSON.stringify({status:'human_handoff',reason:'negotiation'}),{headers:corsHeaders});
+    }
+
     if (sessionWasClosed && messageType==="text") {
       if (convoId) await supabase.from("whatsapp_conversations").update({
         bot_status: "active",
@@ -1329,47 +1340,6 @@ serve(async (req) => {
         return new Response(JSON.stringify({ status: changingPromise ? "promise_changed" : "promise_registered", promise_date: newPromiseDate }), { headers: corsHeaders });
       }
 
-      const asksInterestOnly = /(?:s[oó]|apenas|somente)\s+(?:os\s+)?juros|pagar juros|renovar.*juros/i.test(txtLow);
-      const partialRequested = /metade|pagamento parcial|pagar uma parte|consigo (?:pagar|dar)|pago r?\$?/i.test(txtLow);
-      if ((asksInterestOnly || partialRequested) && openInstQuick.length > 0) {
-        const target = openInstQuick[0];
-        const balance = Math.max(0, Number(target.amount || 0) + Number(target.late_fee || 0) - Number(target.paid_amount || 0));
-        let paymentAmount = extractPromisedAmount(txtRaw);
-        if (partialRequested && /metade/i.test(txtLow)) paymentAmount = Math.round(balance * 50) / 100;
-        if (asksInterestOnly) {
-          const { data: contract } = await checkedBotQuery(supabase.from("contracts").select("capital,interest_rate,status,loan_mode,total_interest,total_amount,num_installments,installment_amount,grace_periods")
-            .eq("id", target.contract_id).eq("user_id", userId).in("status", ["active", "overdue"]).maybeSingle());
-          paymentAmount = botRenewalQuote(target,contract);
-          if (paymentAmount==null) {
-            await escalateToHuman(supabase, convoId!, "Não foi possível calcular pagamento somente de juros");
-            await botSay("O pagamento somente dos juros precisa de conferência da equipe, especialmente quando já houve pagamento parcial. Encaminhei seu atendimento.");
-            return new Response(JSON.stringify({ status: "interest_only_needs_human" }), { headers: corsHeaders });
-          }
-        }
-        if (!paymentAmount || paymentAmount <= 0 || paymentAmount > balance + 0.01) {
-          await botSay(`O saldo atual da parcela #${target.installment_number} é ${money(balance)}. Informe quanto pretende pagar, por exemplo: “consigo pagar R$ 200”.`);
-          return new Response(JSON.stringify({ status: "partial_amount_needed" }), { headers: corsHeaders });
-        }
-        const remaining = Math.max(0, balance - paymentAmount);
-        await checkedBotQuery(supabase.from("clients").update({ bot_memory: serializeMemory({ ...mem,
-          pending_payment_kind: asksInterestOnly ? "interest_only" : "partial",
-          pending_payment_amount: paymentAmount, pending_payment_installment_id: target.id,
-          pending_payment_set_at: new Date().toISOString(),
-        }) }).eq("id", client.id).eq('user_id',userId));
-        if (!profile?.pix_key) {
-          await botSay("O valor foi calculado, mas a chave PIX ainda não está cadastrada. Encaminhei para uma pessoa da equipe.");
-          await escalateToHuman(supabase, convoId!, "Pagamento parcial/juros sem chave PIX cadastrada");
-          return new Response(JSON.stringify({ status: "payment_pix_missing" }), { headers: corsHeaders });
-        }
-        const emv = buildPixEmv({ key: profile.pix_key, amount: paymentAmount, merchantName: profile.name || empresa, merchantCity: "SAO PAULO", txid: `PARC${target.installment_number || 1}` });
-        const description = asksInterestOnly
-          ? `Valor calculado para pagamento somente dos juros: *${money(paymentAmount)}*. A equipe precisa conferir o recebimento e confirmar o novo vencimento. A renovação fica pendente até essa conferência.`
-          : `Pagamento parcial: *${money(paymentAmount)}*. Depois da confirmação, restará aproximadamente *${money(remaining)}* nesta parcela.`;
-        await botSay(`${description}\n\n*Chave PIX:* ${profile.pix_key}\n*PIX Copia e Cola:*\n\`${emv}\``);
-
-        return new Response(JSON.stringify({ status: asksInterestOnly ? "interest_only_pix" : "partial_pix", amount: paymentAmount, remaining }), { headers: corsHeaders });
-      }
-
       // Menu principal fixo da CredMais Digital Pay.
       type MenuItem = { id: string; label: string; short: string };
       const menuItems: MenuItem[] = [
@@ -1556,40 +1526,7 @@ serve(async (req) => {
           return new Response(JSON.stringify({ status: "human_handoff", choice }), { headers: corsHeaders });
         }
 
-        // Confirmação inteligente do handoff (#4): pergunta o assunto antes
-        if (choice === "4") {
-          const askedBefore = mem.human_reason_asked_at && (now - Number(mem.human_reason_asked_at) < 10 * 60_000);
-          if (!askedBefore) {
-            await botSay(
-              `👤 Claro, ${firstName}! Antes de eu chamar um atendente, me diz *em uma linha o que você precisa* — assim ele já entra ciente do assunto. 😉\n\n` +
-              `_(Se preferir seguir direto, é só responder "quero atendente")._`
-            );
-            await checkedBotQuery(supabase.from("clients").update({
-              bot_memory: serializeMemory({ ...mem, human_reason_asked_at: now, last_menu_choice: "4_waiting" }),
-            }).eq("id", client.id).eq("user_id", userId));
-            await scheduleFollowUp(`Oi ${firstName}, ainda precisa falar com um atendente? Se sim, me responde qualquer mensagem e eu chamo já. Se resolveu, digite *menu*.`);
-            return new Response(JSON.stringify({ status: "human_reason_pending" }), { headers: corsHeaders });
-          }
-          if (convoId) {
-            await supabase.from("whatsapp_conversations").update({
-              needs_human: true, bot_paused: true,
-              human_takeover_reason: txtRaw.slice(0, 300) || "Cliente solicitou atendimento humano via menu",
-              updated_at: new Date().toISOString(),
-            }).eq("id", convoId);
-          }
-          await supabase.from("notifications").insert({
-            user_id: userId,
-            
-            message: ["Cliente pediu atendimento humano", `${client.name || senderPhone}: ${txtRaw.slice(0, 180) || "sem detalhes"}`].filter(Boolean).join(" — "),
-            type: "warning",
-          });
-          await botSay(
-            `👤 Perfeito, ${firstName}! Já avisei um atendente e *pausei o robô* aqui.\n\n` +
-            `Em breve alguém do time da *${empresa}* te responde por aqui mesmo. 🙏`
-          );
-        }
-
-        else if (choice === "2") {
+        if (choice === "2") {
           const overdue = openInstQuick.filter((i: any) => {
             const due = typeof i.due_date === "string" ? i.due_date.split("T")[0] : i.due_date;
             return due < nowBrDay;
@@ -1658,110 +1595,9 @@ serve(async (req) => {
             `Lá você pode:\n` +
             `• Ver todas as parcelas e comprovantes 📄\n` +
             `• Baixar recibos em PDF 📥\n` +
-            `• Renegociar direto no app 🤝\n` +
+            `• Consultar os contatos da equipe\n` +
             `• Acompanhar em tempo real ⚡\n\n` +
             `Digite *menu* pra voltar.`
-          );
-        }
-
-        else if (choice === "3") {
-          const inst = openInstQuick;
-          if (inst.length === 0) {
-            await botSay(`Tudo em dia por aqui, ${firstName}! ✅ Sem parcelas a quitar. Digite *menu* se precisar de algo.`);
-          } else if (!hasPix) {
-            if (convoId) {
-              await supabase.from("whatsapp_conversations").update({
-                needs_human: true, bot_paused: true, bot_status: "handoff",
-                human_takeover_reason: "Cliente pediu PIX mas chave não configurada",
-                updated_at: new Date().toISOString(),
-              }).eq("id", convoId);
-            }
-            await botSay(`⚠️ A chave PIX ainda não foi configurada aqui. Já chamei um atendente pra te passar os dados. 🙏`);
-          } else {
-            // Escolha da parcela específica
-            let target: any = inst[0];
-            if (route.parcelHint) {
-              const found = inst.find((i: any) => Number(i.installment_number) === route.parcelHint);
-              if (found) target = found;
-            }
-            // Pagamento parcial
-            const partialAmount = route.amountHint && route.amountHint > 0 ? route.amountHint : null;
-            const fullAmount = Number(target.amount) + (Number(target.late_fee) || 0);
-            const amountToCharge = partialAmount ? Math.min(partialAmount, fullAmount) : fullAmount;
-
-            // Desconto pra quitação à vista de tudo
-            const discountPct = Number((settings as any).early_payment_discount_percent || 0);
-            const totalAll = inst.reduce((s: number, i: any) => s + Number(i.amount) + (Number(i.late_fee) || 0) - Number(i.paid_amount || 0), 0);
-            const isFullQuit = !partialAmount && inst.length > 1 && /(tudo|quitar tudo|à ?vista|a ?vista|total|todas)/i.test(txtRaw);
-            let finalAmount = amountToCharge;
-            let discountLine = "";
-            if (isFullQuit && discountPct > 0) {
-              finalAmount = totalAll * (1 - discountPct / 100);
-              discountLine = `\n💥 *Desconto à vista ${discountPct}%:* -${money(totalAll - finalAmount)}`;
-            } else if (isFullQuit) {
-              finalAmount = totalAll;
-            }
-
-            // PIX Copia e Cola
-            const emv = buildPixEmv({
-              key: profile.pix_key!,
-              amount: finalAmount,
-              merchantName: profile.name || empresa,
-              merchantCity: "SAO PAULO",
-              txid: `PARC${target.installment_number || 1}`,
-            });
-            const pixTypeLabel = (profile.pix_key_type || "chave").toString().toUpperCase();
-
-            const label = isFullQuit
-              ? `*Quitação total* (${inst.length} parcelas)`
-              : partialAmount
-              ? `*Pagamento parcial — parcela #${target.installment_number}*\n_Valor total: ${money(fullAmount)}_`
-              : `*Parcela #${target.installment_number}*`;
-
-            await botSay(
-              `💸 ${label}\n\n` +
-              `Valor a pagar: *${money(finalAmount)}*${discountLine}\n\n` +
-              `💠 *Chave PIX (${pixTypeLabel}):*\n\`${profile.pix_key}\`\n` +
-              `👤 *Favorecido:* ${profile.name || empresa}\n\n` +
-              `📋 *PIX Copia e Cola:*\n\`\`\`${emv}\`\`\`\n\n` +
-              `Depois de pagar, *envie o comprovante* aqui (imagem ou PDF). A equipe confere o recebimento antes de registrar a baixa. 📎`
-            );
-            if (partialAmount) {
-              // Registra promessa/pagamento parcial na memória
-              const mem2 = parseMemory(client.bot_memory);
-              const promessas = Array.isArray(mem2.promessas) ? mem2.promessas : [];
-              promessas.push({ data: nowBrDay, valor: partialAmount, parcela: target.installment_number, tipo: "parcial" });
-              await checkedBotQuery(supabase.from("clients").update({
-                bot_memory: serializeMemory({ ...mem2, promessas }),
-              }).eq("id", client.id).eq("user_id", userId));
-            }
-            // Follow-up: se em 24h não veio comprovante, pergunta
-            await scheduleFollowUp(`Oi ${firstName}! Já conseguiu concluir o pagamento da parcela #${target.installment_number}? Se sim, envie o comprovante para conferência da equipe.`);
-          }
-        }
-
-        else if (choice === "5") {
-          if (convoId) {
-            await supabase.from("whatsapp_conversations").update({
-              needs_human: true, bot_paused: true, bot_status: "handoff",
-              human_takeover_reason: "Cliente pediu renegociação via menu",
-              updated_at: new Date().toISOString(),
-            }).eq("id", convoId);
-          }
-          await supabase.from("notifications").insert({
-            user_id: userId,
-            
-            message: ["Cliente quer renegociar", `${client.name || senderPhone} pediu renegociação via menu WhatsApp.`].filter(Boolean).join(" — "),
-            type: "info",
-          });
-          const link = await buildPortalDeepLink();
-          await botSay(
-            `🤝 *Renegociação — ${empresa}*\n\n` +
-            `Que ótimo que você quer regularizar! Você tem *duas opções*:\n\n` +
-            `1️⃣ *Simular no portal* (mais rápido): ${link}\n` +
-            `      Lá você escolhe: parcelamento novo, prazo maior ou entrada + saldo.\n\n` +
-            `2️⃣ *Aguardar atendente* — já chamei um consultor, ele vai te propor um acordo personalizado.\n\n` +
-            `Enquanto isso, se quiser me dizer *quanto consegue pagar hoje* ou *quantas parcelas cabem no bolso*, eu já adianto pro consultor. 😉`
           );
         }
 
@@ -2408,9 +2244,12 @@ Ex6 — "queria mais 3 mil emprestado":
       });
     }
 
-    // Se o modelo pedir desconto > 15% (regra de escopo), força revisão humana
-    if (descontoPct > 15 && !result.needs_human) {
+    // No discount, revised terms or renewal may be proposed by the model.
+    if (descontoPct > 0 || result.intent === 'negociacao' || requestsHumanNegotiation(result.reply)) {
       result.needs_human = true;
+      result.reply = HUMAN_NEGOTIATION_REPLY;
+      result.is_rollover = false;
+      result.is_promise = false;
     }
 
 
@@ -2530,7 +2369,7 @@ Ex6 — "queria mais 3 mil emprestado":
               tool_input: { motivo: "tool_recovery", trigger: "guardrail_block", reasons: g.reasons.slice(0, 5) },
               tool_output: { tools_used: toolRun.tools_used.map(t => ({ name: t.name, ok: (t.output as any).ok })), handoff: toolRun.handoff, motivo: toolRun.handoff_motivo, reply_len: toolRun.reply.length },
             });
-            if (toolRun.reply && !toolRun.handoff) {
+            if (toolRun.reply && !toolRun.handoff && !requestsHumanNegotiation(toolRun.reply)) {
               // Reaplicar guardrail no reply recuperado
               const g2 = assertReplySafe({
                 reply: toolRun.reply,
@@ -2597,6 +2436,12 @@ Ex6 — "queria mais 3 mil emprestado":
         result.promise_date = null;
         result.reply = 'Informe a data em que pretende pagar, por exemplo: “pago amanhã” ou “pago dia 15”. A previsão precisa ser para hoje ou uma data futura.';
       }
+    }
+
+    if (result.needs_human && !result.is_receipt && convoId) {
+      await escalateToHuman(supabase,convoId,'Resposta automática exige atendimento humano');
+      await checkedBotQuery(supabase.from('notifications').insert({user_id:userId,type:'warning',
+        message:`Atendimento humano solicitado: ${client.name || senderPhone}. Assuma a conversa no Atendimento.`}));
     }
 
     // Comprovantes recebem resposta depois da triagem, sem confirmar baixa.

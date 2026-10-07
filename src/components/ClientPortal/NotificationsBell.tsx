@@ -100,23 +100,23 @@ export const NotificationsBell = ({ token }: Props) => {
       <button
         type="button"
         onClick={openDropdown}
-        className="portal-chip relative hover:brightness-125"
+        className="portal-chip relative"
         aria-label="Notificações"
       >
         <Bell size={12} /> Notificações
         {unread > 0 && (
-          <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white ring-2 ring-black/40">
+          <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-foreground px-1 text-[10px] font-bold text-background">
             {unread > 99 ? "99+" : unread}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="absolute right-0 z-50 mt-2 w-[min(92vw,380px)] overflow-hidden rounded-2xl border border-white/10 bg-[#0b1220] shadow-2xl shadow-black/50">
-          <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+        <div className="absolute right-0 z-50 mt-2 w-[min(92vw,380px)] overflow-hidden rounded-2xl border border-border bg-popover">
+          <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <div>
-              <p className="text-sm font-bold text-white">Notificações</p>
-              <p className="text-[11px] text-white/50">
+              <p className="text-sm font-bold text-foreground">Notificações</p>
+              <p className="text-[11px] text-muted-foreground">
                 {unread > 0 ? `${unread} não lida(s)` : "Tudo em dia"}
               </p>
             </div>
@@ -125,7 +125,7 @@ export const NotificationsBell = ({ token }: Props) => {
                 <button
                   type="button"
                   onClick={markAllRead}
-                  className="rounded-lg px-2 py-1 text-[11px] text-white/70 hover:bg-white/5 hover:text-white"
+                  className="rounded-lg px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
                   title="Marcar todas como lidas"
                 >
                   <CheckCheck size={14} />
@@ -134,7 +134,7 @@ export const NotificationsBell = ({ token }: Props) => {
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="rounded-lg p-1 text-white/60 hover:bg-white/5 hover:text-white"
+                className="rounded-lg p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
               >
                 <X size={14} />
               </button>
@@ -143,10 +143,10 @@ export const NotificationsBell = ({ token }: Props) => {
 
           <div className="max-h-[70vh] overflow-y-auto">
             {loading && items.length === 0 ? (
-              <div className="p-8 text-center text-sm text-white/50">Carregando…</div>
+              <div className="p-8 text-center text-sm text-muted-foreground">Carregando…</div>
             ) : items.length === 0 ? (
-              <div className="flex flex-col items-center gap-2 p-8 text-center text-sm text-white/50">
-                <Bell size={28} className="text-white/30" />
+              <div className="flex flex-col items-center gap-2 p-8 text-center text-sm text-muted-foreground">
+                <Bell size={28} className="text-muted-foreground" />
                 Nenhuma notificação
               </div>
             ) : (
@@ -157,31 +157,31 @@ export const NotificationsBell = ({ token }: Props) => {
                 return (
                   <div
                     key={n.id}
-                    className={`flex gap-3 border-b border-white/5 px-4 py-3 transition-colors hover:bg-white/3 ${
+                    className={`flex gap-3 border-b border-border px-4 py-3 transition-colors hover:bg-muted ${
                       n.is_read ? "opacity-60" : ""
                     }`}
                   >
                     <div
                       className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
                         isOverdue
-                          ? "bg-red-500/15 text-red-400"
-                          : "bg-amber-500/15 text-amber-400"
+                          ? "bg-muted text-foreground"
+                          : "bg-muted text-foreground"
                       }`}
                     >
                       <Icon size={16} />
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-2">
-                        <p className="text-sm font-semibold text-white">{n.title}</p>
+                        <p className="text-sm font-semibold text-foreground">{n.title}</p>
                         {!n.is_read && (
                           <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-primary" />
                         )}
                       </div>
-                      <p className="mt-1 text-xs leading-relaxed text-white/70">{n.message}</p>
-                      <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-white/40">
+                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{n.message}</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
                         <span>{timeAgo(n.created_at)}</span>
                         {typeof meta.days_overdue === "number" && (
-                          <span className="rounded-full bg-white/5 px-2 py-0.5">
+                          <span className="rounded-full bg-muted px-2 py-0.5">
                             {meta.days_overdue} dia(s) atraso
                           </span>
                         )}

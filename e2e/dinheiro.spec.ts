@@ -101,7 +101,7 @@ test.describe("funções privadas recusam visitante", () => {
 });
 
 test.describe("dados de cliente não vazam sem sessão", () => {
-  test("negociação do portal exige token válido e vinculado ao cliente", async ({ request }) => {
+  test("negociação automática do portal está encerrada", async ({ request }) => {
     const res = await request.post(`${SUPABASE}/functions/v1/client-negotiation`, {
       headers: { apikey: ANON, Authorization: `Bearer ${ANON}` },
       data: {
@@ -111,7 +111,8 @@ test.describe("dados de cliente não vazam sem sessão", () => {
       },
       failOnStatusCode: false,
     });
-    expect(res.status()).toBe(401);
+    expect(res.status()).toBe(410);
+    expect((await res.json()).code).toBe('human_negotiation_required');
   });
 
   for (const tabela of ["clients", "contracts", "contract_installments", "profiles", "settings"]) {
@@ -160,7 +161,7 @@ test.describe("configuração da plataforma", () => {
 });
 
 test.describe("portal do cliente", () => {
-  test("negociação exige sessão válida do portal", async ({ request }) => {
+  test("portal não negocia mesmo quando o cliente chama o endpoint antigo", async ({ request }) => {
     const res = await request.post(`${SUPABASE}/functions/v1/client-negotiation`, {
       headers: { apikey: ANON, Authorization: `Bearer ${ANON}` },
       data: {
@@ -170,9 +171,8 @@ test.describe("portal do cliente", () => {
       },
       failOnStatusCode: false,
     });
-    // 400 remains accepted while production is on the legacy CPF contract.
-    // The hardened endpoint returns 401/404 and never exposes negotiation data.
-    expect([400, 401, 404]).toContain(res.status());
+    expect(res.status()).toBe(410);
+    expect((await res.json()).code).toBe('human_negotiation_required');
   });
 
   test("token inválido não abre dossiê nenhum", async ({ request }) => {
