@@ -21,3 +21,5 @@ Tipos, lint, regras de hooks, 43 funções e build aprovados. A conferência de 
 Publicação de cinco arquivos de funções com backup privado prévio do banco e dos arquivos substituídos. Não há nova migração nesta etapa. O site e o APK seguem os fluxos automáticos existentes.
 
 O envio pelo WhatsApp depende do pareamento do número. Respostas de IA e transcrição dependem das credenciais privadas no servidor; os fluxos locais e a revisão humana permanecem disponíveis sem essas credenciais.
+
+A verificação no endereço público detectou uma resposta HTML para o chunk do ícone `trash-2`, que interrompia a importação inicial do app. O build gera uma identificação nova apenas para esse arquivo e seus imports dependentes, preservando o cache das demais bibliotecas. A validação pública deve verificar também o tipo MIME dos módulos no navegador, além do conteúdo baixado pelo catálogo.

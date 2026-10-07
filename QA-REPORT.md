@@ -2,6 +2,8 @@
 
 ## 2026-10-07 — Valores, promessas e continuidade do agente
 
+A checagem pública detectou uma resposta HTML para o chunk `trash-2` em parte da entrega de assets. O arquivo e seus imports dependentes recebem identificação nova, preservando os demais caches. A conferência no navegador público integra a validação de publicação.
+
 Cotação de juros alinhada à função financeira por parcela, com encaminhamento humano para pagamentos já parciais. Conferência aceita formato brasileiro e ponto decimal, recusando campo apagado. Promessas são persistidas antes da confirmação, e o cancelamento encerra o registro usado pelas cobranças. Datas seguem São Paulo; memória mantém a etapa do atendimento e o contexto de comprovantes, com prazo e vínculo de parcela verificados.
 
 Validação: 457 testes Vitest, 140 testes compartilhados sem rede, 54 testes HTTP sem rede e 218 testes de interface com backend fictício: 869 testes distintos. Tipos, lint, hooks, 43 funções e build aprovados. Comparação com a renovação SQL, ciclo de vida de promessas e conferência de valores pelo navegador. Publicação das funções com backup e sem novas migrações. Detalhes em [agente-pagamentos-promessas-2026-10-07.md](docs/agente-pagamentos-promessas-2026-10-07.md).

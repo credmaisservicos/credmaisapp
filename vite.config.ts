@@ -37,9 +37,14 @@ export default defineConfig({
         // Altera os nomes de todos os chunks nesta publicação. Isso evita que
         // o CDN reutilize respostas HTML que ficaram associadas a assets de um
         // deploy incompleto anterior.
+        // Uma resposta HTML ficou associada a este ícone em parte do CDN.
+        // Muda só seu nome e os imports dependentes para uma URL nova;
+        // bibliotecas e outros ícones continuam aproveitando o cache existente.
         banner: "/* credmais-release: 2026-10-07-desktop-install */",
         entryFileNames: "assets/[name]-release20261007-[hash].js",
-        chunkFileNames: "assets/[name]-release20261007-[hash].js",
+        chunkFileNames: (chunk) => chunk.name === "trash-2"
+          ? "assets/[name]-cachefix20261007-[hash].js"
+          : "assets/[name]-release20261007-[hash].js",
         // O bundle de entrada juntava React, framer-motion, o cliente do
         // Supabase e o Radix inteiro no MESMO arquivo do código do app. Duas
         // consequências ruins para quem abre no celular: baixa tudo de uma vez
