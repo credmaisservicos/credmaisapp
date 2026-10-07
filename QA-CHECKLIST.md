@@ -15,6 +15,7 @@ As verificações automáticas são `npm run check` e `npm run test:e2e:local`.
 | Acesso e recuperação | SDK real com armazenamento bloqueado e navegador com quota excedida; login, painel e clientes carregam; senha recusada permite correção; confirmação física e entrega real de e-mail pendentes |
 | Logout e portais | Dois acessos temporários no servidor confirmam logout local; navegador verifica cliente/cobrador com armazenamento bloqueado, isolamento de rotas e proteção contra respostas atrasadas |
 | Inicialização nativa e erro de conexão | Preferência bloqueada não impede liberar o splash; mensagens distinguem rede, servidor, sessão e permissão; abertura pública em três contextos novos do Chromium, sem comprovação física |
+| Saldos e documentos do portal | PostgreSQL isolado compara quatro cotações com baixa SQL; cancelamentos não cobram, recebimentos parciais somam, PDF inclui saldo e exige pagamento confirmado para recibo |
 
 Execute `npm run test:integrations` para os 220 testes dos handlers. Eles usam
 apenas credenciais e dados fictícios, interceptam as chamadas HTTP e rodam sem

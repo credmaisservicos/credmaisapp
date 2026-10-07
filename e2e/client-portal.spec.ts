@@ -1,5 +1,5 @@
 import {expect,test} from '@playwright/test';
-test.use({serviceWorkers:'block'});
+test.use({serviceWorkers:'block',timezoneId:'America/Sao_Paulo'});
 
 const client={id:'client-test',name:'Maria Teste'};
 const portal={client,session_token:'550e8400-e29b-41d4-a716-446655440000',owner:{name:'Empresa teste'},branding:{company_name:'Empresa teste',portal_contact_email:'atendimento@example.invalid'},contracts:[{
@@ -7,6 +7,54 @@ const portal={client,session_token:'550e8400-e29b-41d4-a716-446655440000',owner:
   installments:[{id:'open-test',installment_number:2,amount:110,paid_amount:10,status:'pending',due_date:'2099-01-01'},
     {id:'paid-test',installment_number:1,amount:110,paid_amount:110,status:'paid',due_date:'2026-01-01',paid_at:'2026-01-01'}],
 }]};
+
+test('valores do portal, PIX e PDFs respeitam parciais, encargos e cancelamentos',async({page},testInfo)=>{
+ await page.setViewportSize({width:390,height:900});await page.clock.setFixedTime(new Date('2026-08-23T16:00:00-03:00'));
+ await page.routeWebSocket('**',socket=>socket.close());
+ const data={...portal,owner:{name:'Empresa fictícia',pix_key:'fictional@example.invalid'},contracts:[{
+  ...portal.contracts[0],daily_interest_percent:1,daily_penalty_type:'fixed',daily_penalty_value:3,
+  installments:[{id:'partial',installment_number:2,amount:100,paid_amount:40,status:'pending',due_date:'2026-08-21'},
+   {id:'paid',installment_number:1,amount:110,paid_amount:110,status:'paid',due_date:'2026-08-01',paid_at:'2026-08-01'},
+   {id:'cancelled',installment_number:3,amount:500,paid_amount:10,status:'cancelled',due_date:'2026-08-01'}],
+ },{...portal.contracts[0],id:'cancelled-contract',status:'cancelled',installments:[{id:'cancelled-contract-row',installment_number:8,amount:900,paid_amount:20,status:'pending',due_date:'2026-08-01'}]}]};
+ await page.route('https://credmais-e2e.supabase.co/**',route=>route.fulfill({status:200,json:new URL(route.request().url()).pathname.endsWith('/portal_login_by_token')?data:[]}));
+ await page.goto('/portal-cliente?t=22222222-2222-4222-8222-222222222222');
+ await expect(page.getByRole('tab',{name:/Em aberto/})).toContainText('1');
+ await expect(page.getByRole('tabpanel').getByRole('button')).toHaveCount(1);
+ await expect(page.locator('.portal-summary')).toContainText('R$ 180,00');
+ await expect(page.getByText('R$ 68,01',{exact:true}).first()).toBeVisible();
+ await expect(page.locator('.bento-hero')).toContainText('Vencida há 2 dia(s)');
+ const statementPromise=page.waitForEvent('download');await page.getByRole('button',{name:'Extrato PDF'}).click();
+ const statement=await statementPromise;await statement.saveAs(testInfo.outputPath('financial-statement.pdf'));
+ await page.getByRole('button',{name:/Abrir detalhes e pagar a parcela 2/}).click();
+ await expect(page.getByRole('dialog')).toContainText('Você já pagou R$ 40,00');
+ await expect(page.getByRole('dialog').getByText('R$ 68,01',{exact:true})).toBeVisible();
+ await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:()=>Promise.reject(new DOMException('Denied','NotAllowedError'))}}));
+ await page.getByRole('button',{name:'Copiar código PIX',exact:true}).click();
+ await expect(page.getByText('Não foi possível copiar',{exact:true})).toBeVisible();
+ await expect(page.getByText('Código copiado!',{exact:true})).toHaveCount(0);
+ await expect(page.getByRole('button',{name:/avisar credor no WhatsApp/})).toHaveCount(0);
+ await page.getByRole('button',{name:'Fechar',exact:true}).click();await page.getByRole('tab',{name:/Pagas/}).click();
+ await page.getByRole('button',{name:/Ver pagamento a parcela 1/}).click();
+ const receiptPromise=page.waitForEvent('download');await page.getByRole('button',{name:'Baixar recibo em PDF'}).click();
+ const receipt=await receiptPromise;await receipt.saveAs(testInfo.outputPath('financial-receipt.pdf'));
+});
+
+test('parcelas do dia permanecem fora do atraso no portal do cobrador',async({page})=>{
+ await page.clock.setFixedTime(new Date('2026-08-23T22:00:00-03:00'));await page.routeWebSocket('**',socket=>socket.close());
+ // O teste exerce o fuso brasileiro onde YYYY-MM-DD era interpretado como o dia anterior.
+ await page.emulateMedia({reducedMotion:'reduce'});
+ await page.route('https://credmais-e2e.supabase.co/**',route=>route.fulfill({status:200,json:new URL(route.request().url()).pathname.endsWith('/collector_login_by_token')?{
+  collector:{id:'collector-test',name:'Cobrador teste'},owner_id:'owner-test',owner:{name:'Empresa teste'},clients:[{id:'client-test',name:'Cliente fictício',installments:[
+   {id:'today',installment_number:1,amount:100,paid_amount:40,status:'pending',due_date:'2026-08-23'},
+   {id:'cancelled',installment_number:2,amount:900,paid_amount:0,status:'cancelled',due_date:'2026-08-01'},
+  ]}],
+ }:[]}));
+ await page.goto('/cobrador-externo');await page.getByLabel(/token/i).fill('fictional-collector');await page.getByRole('button',{name:'Acessar Portal',exact:true}).click();
+ await expect(page.getByText('Cobrador teste',{exact:true})).toBeVisible();
+ await expect(page.getByText('R$ 40,00',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:/Atrasadas/}).click();await expect(page.getByText('Cliente fictício',{exact:true})).toHaveCount(0);
+});
 
 for(const width of [320,390,1366])for(const theme of ['light','dark'] as const) {
   test(`portal ${width}px ${theme}: readable payments and human contact without negotiation bot`,async({page},testInfo)=>{

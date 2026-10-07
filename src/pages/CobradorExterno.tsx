@@ -1,5 +1,5 @@
 import { Credinho } from "@/components/brand/Credinho";
-import { isEmAtraso, isEmAberto } from "@/lib/dashboardMetrics";
+import { isPortalInstallmentOpen as isEmAberto, isPortalInstallmentOverdue as isEmAtraso, portalReceivedAmount } from "@/lib/portalAmounts";
 import { useEffect, useMemo, useState,useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
-import { formatBR, parseLocalDate } from "@/lib/dateUtils";
+import { formatBR } from "@/lib/dateUtils";
 import { renderMessage } from "@/lib/messageTemplate";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,15 +21,13 @@ import defaultLogo from "@/assets/credmais-mark.svg";
 import { formatFrequency } from "@/components/cliente-detalhe/constants";
 import {tabSessionStorage} from '@/lib/tabSessionStorage';
 import {withAbortTimeout} from '@/lib/withTimeout';
+import { daysLateOf } from '@/lib/lateFee';
 
 const TOKEN_KEY = "cobrador-token";
 
 const safeNumber = (value: unknown) => {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;
-};
-const safeTime = (value: unknown) => {
-  return parseLocalDate(typeof value === "string" || value instanceof Date ? value : null)?.getTime() ?? null;
 };
 
 type PayMethod = "pix" | "dinheiro" | "transferencia";
@@ -161,6 +159,7 @@ const CobradorExterno = () => {
   };
 
   const openPaymentModal = (inst: any) => {
+    if (!isEmAberto(inst) || portalInstallmentAmount(inst) <= 0) return;
     setPayInstallment(inst);
     setPayAmount(String(portalInstallmentAmount(inst).toFixed(2)));
     setPayMethod("pix");
@@ -294,7 +293,7 @@ const CobradorExterno = () => {
   const allPaid = installments.filter((i: any) => i.status === "paid");
   const totalPending = allPending.reduce((s: number, i: any) => s + portalInstallmentAmount(i, now), 0);
   const totalOverdue = allOverdue.reduce((s: number, i: any) => s + portalInstallmentAmount(i, now), 0);
-  const totalPaid = allPaid.reduce((s: number, i: any) => s + safeNumber(i.paid_amount ?? i.amount), 0);
+  const totalPaid = installments.reduce((s: number, i: any) => s + portalReceivedAmount(i), 0);
 
   return (
     <div
@@ -478,10 +477,7 @@ const CobradorExterno = () => {
 
               const isExpanded = expandedClient === a.client_id;
               const clientTotalPending = clientAll.filter((i: any) => isEmAberto(i));
-              const clientTotalOverdue = clientTotalPending.filter((i: any) => {
-                const due = parseLocalDate(i.due_date);
-                return !!due && due < now;
-              });
+              const clientTotalOverdue = clientTotalPending.filter((i: any) => isEmAtraso(i, now));
               const clientPendingAmount = clientTotalPending.reduce((s: number, i: any) => s + portalInstallmentAmount(i, now), 0);
 
               return (
@@ -554,8 +550,7 @@ const CobradorExterno = () => {
                       <div className="divide-y divide-border/30">
                         {clientFiltered.map((inst: any) => {
                           const isOverdue = isEmAtraso(inst, now);
-                              const dueTime = safeTime(inst.due_date);
-                              const daysLate = isOverdue && dueTime !== null ? Math.floor((now.getTime() - dueTime) / 86400000) : 0;
+                          const daysLate = isOverdue ? daysLateOf(inst, now) : 0;
                           const isPaid = inst.status === "paid";
 
                           return (
@@ -568,7 +563,7 @@ const CobradorExterno = () => {
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
                                   <p className="text-sm font-semibold text-foreground">
-                                    R$ {fmt(isPaid ? Number(inst.paid_amount || inst.amount) : portalInstallmentAmount(inst, now))}
+                                    R$ {fmt(portalInstallmentAmount(inst, now))}
                                   </p>
                                   {inst.contracts?.frequency && (
                                     <span className="text-[10px] text-muted-foreground bg-accent/30 px-1.5 py-0.5 rounded">

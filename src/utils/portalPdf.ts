@@ -1,9 +1,10 @@
 import { loadPdfLib } from "@/utils/pdfLib";
 import { formatBR, todayLocalISO } from "@/lib/dateUtils";
-import { portalInstallmentAmount } from "@/lib/portalAmounts";
+import { portalFinancialSummary, portalReceivedAmount, portalOutstandingAmount, withPortalContract, isPortalInstallmentOpen, isPortalInstallmentOverdue } from "@/lib/portalAmounts";
 import { formatFrequency } from "@/components/cliente-detalhe/constants";
 
 export const generatePortalReceiptPdf = async (client: any, installment: any, company: any) => {
+  if (installment?.status !== 'paid') throw new Error('O recibo de quitação exige pagamento confirmado.');
   const { jsPDF, autoTable } = await loadPdfLib();
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -43,12 +44,11 @@ export const generatePortalReceiptPdf = async (client: any, installment: any, co
   doc.text("DETALHES DO PAGAMENTO", 20, 110);
   doc.line(20, 112, 80, 112);
 
-  const amountValue = Number(installment.paid_amount ?? installment.amount ?? 0);
-  const amount = Number.isFinite(amountValue) ? amountValue : 0;
+  const amount = portalReceivedAmount(installment);
   const data = [
     ["Descrição", "Parcela #" + installment.installment_number],
     ["Vencimento Original", formatBR(installment.due_date)],
-    ["Data do Pagamento", installment.paid_at ? formatBR(installment.paid_at) : "Confirmado via Portal"],
+    ["Data do Pagamento", installment.paid_at ? formatBR(installment.paid_at) : "Não informada"],
     ["Valor Pago", `R$ ${amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`],
     ["Status", "LIQUIDADO / PAGO"]
   ];
@@ -108,26 +108,14 @@ export const generatePortalStatementPdf = async (client: any, contracts: any[], 
   if (company?.pix_key) doc.text(`PIX: ${company.pix_key}`, pageWidth - 20, 63, { align: "right" });
 
   // Totais consolidados
-  let totalCap = 0, totalDivida = 0, totalPago = 0, totalOverdue = 0;
-  contracts.forEach((c: any) => {
-    totalCap += Number.isFinite(Number(c.capital)) ? Number(c.capital) : 0;
-    totalDivida += Number.isFinite(Number(c.total_amount)) ? Number(c.total_amount) : 0;
-    (c.installments || []).forEach((i: any) => {
-      if (i.status === "paid") totalPago += Number.isFinite(Number(i.paid_amount ?? i.amount)) ? Number(i.paid_amount ?? i.amount) : 0;
-      if (i.status === "overdue") {
-        totalOverdue += portalInstallmentAmount({
-          ...i,
-          daily_interest_percent: c.daily_interest_percent,
-          max_interest_cap_percent: c.max_interest_cap_percent,
-        });
-      }
-    });
-  });
+  const now = new Date();
+  const totals = portalFinancialSummary(contracts, now);
+  const totalCap = contracts.reduce((sum, c) => sum + (Number.isFinite(Number(c.capital)) ? Math.max(0, Number(c.capital)) : 0), 0);
 
   autoTable(doc, {
     startY: 72,
-    head: [["Capital emprestado", "Total do débito", "Já pago", "Em atraso"]],
-    body: [[fmt(totalCap), fmt(totalDivida), fmt(totalPago), fmt(totalOverdue)]],
+    head: [["Capital dos contratos", "Saldo em aberto", "Recebimentos registrados", "Em atraso"]],
+    body: [[fmt(totalCap), fmt(totals.openAmount), fmt(totals.paidAmount), fmt(totals.overdueAmount)]],
     theme: "grid",
     headStyles: { fillColor: [15, 23, 42], textColor: 255, fontSize: 9 },
     bodyStyles: { fontSize: 10, fontStyle: "bold" },
@@ -141,21 +129,26 @@ export const generatePortalStatementPdf = async (client: any, contracts: any[], 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
     doc.setTextColor(15, 23, 42);
-    doc.text(`Contrato ${idx + 1}  ·  ${fmt(Number(c.capital))}  ·  ${c.num_installments}x  ·  ${formatFrequency(c.frequency)}`, 20, cursorY);
+    doc.text(`Contrato ${idx + 1}  ·  ${fmt(Number(c.capital))}  ·  ${c.num_installments}x  ·  ${formatFrequency(c.frequency)}${c.status === 'cancelled' ? '  ·  CANCELADO' : c.status === 'completed' ? '  ·  CONCLUIDO' : ''}`, 20, cursorY);
     cursorY += 3;
 
-    const rows = (c.installments || []).map((i: any) => [
+    const rows = (c.installments || []).map((i: any) => {
+      const input = withPortalContract(i, c);
+      const received = portalReceivedAmount(i);
+      const status = i.status === 'paid' ? 'PAGO' : !isPortalInstallmentOpen(input) ? 'CANCELADO' : isPortalInstallmentOverdue(input, now) ? 'ATRASO' : 'PENDENTE';
+      return [
       `#${i.installment_number}`,
       formatBR(i.due_date),
       fmt(Number(i.amount || 0)),
-      i.status === "paid" ? "PAGO" : i.status === "overdue" ? "ATRASO" : "PENDENTE",
+      status,
       i.paid_at ? formatBR(i.paid_at) : "—",
-      i.status === "paid" ? fmt(Number(i.paid_amount || i.amount)) : "—",
-    ]);
+      received > 0 || i.status === 'paid' ? fmt(received) : "—",
+      fmt(portalOutstandingAmount(input, now)),
+    ]; });
 
     autoTable(doc, {
       startY: cursorY + 2,
-      head: [["#", "Venc.", "Valor", "Status", "Pago em", "Valor pago"]],
+      head: [["#", "Venc.", "Valor original", "Status", "Pago em", "Recebido", "Saldo"]],
       body: rows,
       theme: "striped",
       headStyles: { fillColor: [30, 41, 59], textColor: 255, fontSize: 8 },

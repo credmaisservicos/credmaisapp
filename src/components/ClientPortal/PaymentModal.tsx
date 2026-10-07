@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,9 +12,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { generatePortalReceiptPdf } from "@/utils/portalPdf";
 import { QRCodeSVG } from "qrcode.react";
 import { generatePixPayload } from "@/utils/pixGenerator";
-import { formatBR, isOverdue as isDateOverdue } from "@/lib/dateUtils";
+import { formatBR } from "@/lib/dateUtils";
 import { computeLateFee } from "@/lib/lateFee";
-import { portalInstallmentAmount } from "@/lib/portalAmounts";
+import { portalInstallmentAmount, portalReceivedAmount, isPortalInstallmentOpen, isPortalInstallmentOverdue } from "@/lib/portalAmounts";
 
 interface PaymentModalProps {
   isOpen: boolean;
@@ -34,15 +34,22 @@ export const PaymentModal = ({ isOpen, onOpenChange, installment, ownerProfile, 
   const [isDownloading, setIsDownloading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadedUrl, setUploadedUrl] = useState<string | null>(installment?.receipt_url || null);
+  const generation = useRef(0);
+  useEffect(() => {
+    ++generation.current;
+    setUploadedUrl(installment?.receipt_url || null);
+    setCopied(false); setIsUploading(false); setIsDownloading(false);
+    return () => { ++generation.current; };
+  }, [installment?.id, installment?.receipt_url, sessionToken, isOpen]);
 
   const fmt = (v: number) => {
     const number = Number(v);
     return (Number.isFinite(number) ? number : 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
   };
-  const isOverdue = installment?.status === "overdue" ||
-    (installment && installment.status !== "paid" && isDateOverdue(installment.due_date));
+  const isOverdue = installment && isPortalInstallmentOverdue(installment);
   const isPaid = installment?.status === "paid";
-  const alreadyPaid = Math.max(0, Number(installment?.paid_amount) || 0);
+  const alreadyPaid = installment ? portalReceivedAmount(installment) : 0;
+  const canPay = installment && isPortalInstallmentOpen(installment);
 
   const liveFee = useMemo(() => {
     if (!installment) return 0;
@@ -55,35 +62,41 @@ export const PaymentModal = ({ isOpen, onOpenChange, installment, ownerProfile, 
   }, [installment, isPaid, liveFee]);
 
   const pixPayload = useMemo(() => {
-    if (!installment || !ownerProfile?.pix_key || isPaid) return "";
+    if (!canPay || totalDue <= 0 || !ownerProfile?.pix_key) return "";
     try {
       return generatePixPayload(
         ownerProfile.pix_key,
         totalDue,
         "SAO PAULO",
-        ownerProfile.full_name || "CREDOR",
+        ownerProfile.name || ownerProfile.full_name || "CREDOR",
         `PARCELA ${installment.installment_number}`
       );
     } catch (e) {
       console.error("Erro ao gerar PIX", e);
       return "";
     }
-  }, [ownerProfile, installment, isPaid, totalDue]);
+  }, [ownerProfile, installment, canPay, totalDue]);
 
-  if (!installment) return null;
+  if (!installment || (!isPaid && (!canPay || totalDue <= 0))) return null;
 
 
-  const handleCopyPix = () => {
+  const handleCopyPix = async () => {
+    const request = generation.current;
     const textToCopy = pixPayload || ownerProfile?.pix_key;
     if (!textToCopy) return;
     
-    navigator.clipboard.writeText(textToCopy);
+    try { await navigator.clipboard.writeText(textToCopy); } catch {
+      if (request !== generation.current) return;
+      toast({ title: 'Não foi possível copiar', description: 'Selecione o código PIX e copie manualmente.', variant: 'destructive' });
+      return;
+    }
+    if (request !== generation.current) return;
     setCopied(true);
     toast({ 
       title: pixPayload ? "PIX Copia e Cola!" : "Chave PIX copiada!", 
       description: "Agora basta colar no seu banco para pagar." 
     });
-    setTimeout(() => setCopied(false), 2000);
+    setTimeout(() => { if (request === generation.current) setCopied(false); }, 2000);
   };
 
   const handleNotifyPaid = () => {
@@ -103,24 +116,28 @@ export const PaymentModal = ({ isOpen, onOpenChange, installment, ownerProfile, 
   };
 
   const handleDownloadReceipt = async () => {
+    const request = generation.current;
     setIsDownloading(true);
     try {
       const client = {
         name: clientData?.name || "Cliente",
-        cpf_cnpj: clientData?.cpf_cnpj || "000.000.000-00"
+        cpf_cnpj: clientData?.cpf_cnpj || "Não informado"
       };
       // await: a biblioteca de PDF agora é baixada sob demanda, então o aviso de
       // sucesso (e o `finally` que desliga o spinner) precisa esperar de verdade.
       await generatePortalReceiptPdf(client, installment, ownerProfile);
+      if (request !== generation.current) return;
       toast({ title: "Recibo gerado!", description: "O download do PDF foi iniciado." });
     } catch (err) {
+      if (request !== generation.current) return;
       toast({ title: "Erro", description: "Não foi possível gerar o recibo agora.", variant: "destructive" });
     } finally {
-      setIsDownloading(false);
+      if (request === generation.current) setIsDownloading(false);
     }
   };
 
   const handleUploadReceipt = async (file: File) => {
+    const request = generation.current;
     if (!file) return;
     if (file.size > 6 * 1024 * 1024) {
       toast({ title: "Arquivo muito grande", description: "O limite é 6MB.", variant: "destructive" });
@@ -134,6 +151,7 @@ export const PaymentModal = ({ isOpen, onOpenChange, installment, ownerProfile, 
     setIsUploading(true);
     try {
       const buf = await file.arrayBuffer();
+      if (request !== generation.current) return;
       const bytes = new Uint8Array(buf);
       const chunks: string[] = [];
       const chunkSize = 0x8000;
@@ -150,13 +168,15 @@ export const PaymentModal = ({ isOpen, onOpenChange, installment, ownerProfile, 
           file_base64: base64,
         },
       });
+      if (request !== generation.current) return;
       if (error || (data as any)?.error) throw new Error((data as any)?.error || error?.message);
       setUploadedUrl((data as any).url);
       toast({ title: "Comprovante enviado!", description: "O credor foi notificado e fará a conferência." });
     } catch (e: any) {
+      if (request !== generation.current) return;
       toast({ title: "Erro ao enviar", description: e.message, variant: "destructive" });
     } finally {
-      setIsUploading(false);
+      if (request === generation.current) setIsUploading(false);
     }
   };
 

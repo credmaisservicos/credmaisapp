@@ -108,6 +108,13 @@ describe("dailyRateOf", () => {
 });
 
 describe("computeLateFee — juros composto diário", () => {
+  it('preserva encargos registrados acima do cálculo atual, como a baixa no servidor', () => {
+    expect(computeLateFee({ amount: 100, due_date: '2026-08-21', status: 'pending', late_fee: 15, daily_interest_percent: 1 }, new Date(2026, 7, 23))).toBe(15);
+    expect(computeLateFee({ amount: 100, due_date: '2099-01-01', status: 'pending', late_fee: 15 })).toBe(15);
+  });
+  it.each([{ has_active_settlement: true }, { pre_settlement_snapshot: {} }])('congela encargos em uma quitação com snapshot ativo: %o', marker => {
+    expect(computeLateFee({ amount: 100, due_date: '2026-08-01', status: 'pending', late_fee: 15, ...marker }, new Date(2026, 7, 23))).toBe(15);
+  });
   const parcela = (dias: number, extras = {}) => ({
     amount: 100,
     due_date: venceEm(-dias),

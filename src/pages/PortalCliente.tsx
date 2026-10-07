@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button";
 import { PaymentModal } from "@/components/ClientPortal/PaymentModal";
 import "./PortalCliente.css";
 import { NotificationsBell } from "@/components/ClientPortal/NotificationsBell";
-import { computeLateFee } from "@/lib/lateFee";
-import { portalInstallmentAmount } from "@/lib/portalAmounts";
+import { computeLateFee, daysLateOf } from "@/lib/lateFee";
+import { portalInstallmentAmount, portalFinancialSummary, withPortalContract, isPortalInstallmentOpen, isPortalInstallmentOverdue } from "@/lib/portalAmounts";
 import { generatePortalStatementPdf } from "@/utils/portalPdf";
 import { isPortalLoginBlocked, recordPortalLoginAttempt, performFullPortalLogout,getPortalToken,savePortalToken,clearPortalSession,isPortalToken,endCreditorSessionForPortal } from "@/lib/portalSession";
 import {withAbortTimeout} from '@/lib/withTimeout';
@@ -30,6 +30,11 @@ type PortalInstallment = {
   late_fee_percent?: number | string | null;
   daily_interest_percent?: number | string | null;
   max_interest_cap_percent?: number | string | null;
+  daily_penalty_type?: string | null;
+  daily_penalty_value?: number | string | null;
+  has_active_settlement?: boolean;
+  contracts?: PortalContract;
+  contract_status?: string | null;
 };
 
 type PortalContract = {
@@ -47,6 +52,8 @@ type PortalContract = {
   late_fee_percent?: number | string | null;
   daily_interest_percent?: number | string | null;
   max_interest_cap_percent?: number | string | null;
+  daily_penalty_type?: string | null;
+  daily_penalty_value?: number | string | null;
   installments: PortalInstallment[];
 };
 
@@ -282,35 +289,7 @@ const PortalCliente = () => {
     );
   };
 
-  const summary = useMemo(() => {
-    const contracts = portalData?.contracts || [];
-    const now = new Date();
-    const rows = contracts.flatMap((contract) =>
-      (contract.installments || []).map((i) => ({ contract, i }))
-    );
-    const paid = rows.filter(({ i }) => i.status === "paid");
-    const open = rows.filter(({ i }) => i.status !== "paid");
-    const overdue = open.filter(({ i }) => isDateOverdue(i.due_date, now));
-
-    return {
-      activeContracts: contracts.filter((contract) => contract.status === "active").length,
-      openAmount: open.reduce((sum, { contract, i }) => {
-        return sum + portalInstallmentAmount({
-          amount: i.amount,
-          due_date: i.due_date,
-          status: i.status,
-          late_fee: i.late_fee,
-          daily_interest_percent: contract.daily_interest_percent,
-          max_interest_cap_percent: contract.max_interest_cap_percent,
-          paid_amount: i.paid_amount,
-        }, now);
-      }, 0),
-      paidAmount: paid.reduce((sum, { i }) => sum + safeNumber(i.paid_amount ?? i.amount), 0),
-      overdueCount: overdue.length,
-      openCount: open.length,
-      paidCount: paid.length,
-    };
-  }, [portalData]);
+  const summary = useMemo(() => portalFinancialSummary(portalData?.contracts || []), [portalData]);
 
   const doLogin = async (cleanCpf: string, silent = false) => {
     if (!silent) {
@@ -431,6 +410,7 @@ const PortalCliente = () => {
 
 
   const openPayment = (inst: PortalInstallment) => {
+    if (inst.status !== "paid" && (!isPortalInstallmentOpen(inst) || portalInstallmentAmount(inst) <= 0)) return;
     setSelectedInstallment(inst);
     setPaymentOpen(true);
   };
@@ -446,9 +426,10 @@ const PortalCliente = () => {
     const rows: Array<{ contract: PortalContract; installment: PortalInstallment; isOverdue: boolean }> = [];
     for (const c of portalData?.contracts || []) {
       for (const i of c.installments || []) {
-        const isOverdue = i.status !== "paid" && isDateOverdue(i.due_date);
+        const input = withPortalContract(i, c);
+        const isOverdue = isPortalInstallmentOverdue(input);
         if (tab === "paid" && i.status !== "paid") continue;
-        if (tab === "open" && i.status === "paid") continue;
+        if (tab === "open" && !isPortalInstallmentOpen(input)) continue;
         if (tab === "overdue" && !isOverdue) continue;
         rows.push({ contract: c, installment: i, isOverdue });
       }
@@ -462,9 +443,10 @@ const PortalCliente = () => {
     const pending: Array<{ contract: PortalContract; installment: PortalInstallment; isOverdue: boolean; daysDiff: number }> = [];
     for (const c of portalData?.contracts || []) {
       for (const i of c.installments || []) {
-        if (i.status === "paid") continue;
+        if (!isPortalInstallmentOpen(withPortalContract(i, c))) continue;
         const due = parseLocalDate(i.due_date);
-        const daysDiff = due ? Math.floor((due.getTime() - now.getTime()) / 86400000) : 0;
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const daysDiff = due ? Math.round((new Date(due.getFullYear(), due.getMonth(), due.getDate()).getTime() - today.getTime()) / 86400000) : 0;
         pending.push({ contract: c, installment: i, isOverdue: isDateOverdue(i.due_date, now), daysDiff });
       }
     }
@@ -472,11 +454,7 @@ const PortalCliente = () => {
     return pending[0] || null;
   }, [portalData]);
 
-  const progressPct = useMemo(() => {
-    const rows = (portalData?.contracts || []).flatMap((c) => c.installments || []);
-    if (!rows.length) return 0;
-    return Math.round((rows.filter((i) => i.status === "paid").length / rows.length) * 100);
-  }, [portalData]);
+  const progressPct = summary.progressPct;
 
   return (
     <main className="portal-shell text-foreground">
@@ -703,25 +681,9 @@ const PortalCliente = () => {
                 </div>
 
                 {nextInstallment ? (() => {
-                  const fee = computeLateFee({
-                    amount: nextInstallment.installment.amount,
-                    due_date: nextInstallment.installment.due_date,
-                    status: nextInstallment.installment.status,
-                    late_fee: nextInstallment.installment.late_fee,
-                    late_fee_percent: nextInstallment.contract.late_fee_percent,
-                    daily_interest_percent: nextInstallment.contract.daily_interest_percent,
-                    max_interest_cap_percent: nextInstallment.contract.max_interest_cap_percent,
-                    paid_amount: nextInstallment.installment.paid_amount,
-                  });
-                  const total = portalInstallmentAmount({
-                    amount: nextInstallment.installment.amount,
-                    due_date: nextInstallment.installment.due_date,
-                    status: nextInstallment.installment.status,
-                    late_fee: nextInstallment.installment.late_fee,
-                    daily_interest_percent: nextInstallment.contract.daily_interest_percent,
-                    max_interest_cap_percent: nextInstallment.contract.max_interest_cap_percent,
-                    paid_amount: nextInstallment.installment.paid_amount,
-                  });
+                  const input = withPortalContract(nextInstallment.installment, nextInstallment.contract);
+                  const fee = computeLateFee(input);
+                  const total = portalInstallmentAmount(input);
                   return (
                     <div className="mt-6 space-y-4">
                       <div>
@@ -733,12 +695,8 @@ const PortalCliente = () => {
                         )}
                       </div>
                       <button
-                        onClick={() => openPayment({
-                          ...nextInstallment.installment,
-                          late_fee_percent: nextInstallment.contract.late_fee_percent,
-                          daily_interest_percent: nextInstallment.contract.daily_interest_percent,
-                          max_interest_cap_percent: nextInstallment.contract.max_interest_cap_percent,
-                        } as PortalInstallment)}
+                        onClick={() => openPayment(withPortalContract(nextInstallment.installment, nextInstallment.contract))}
+                        disabled={total <= 0}
                         className="portal-btn-primary inline-flex items-center gap-2 px-6 py-3 text-sm"
                       >
                         <CreditCard size={16} /> Pagar agora <ChevronRight size={16} />
@@ -858,38 +816,15 @@ const PortalCliente = () => {
                 </div>
               ) : (
                 filtered.map(({ contract, installment, isOverdue }) => {
-                  const dueDate = parseLocalDate(installment.due_date);
-                  const overdueDays = dueDate ? Math.max(0, Math.floor((Date.now() - dueDate.getTime()) / 86400000)) : 0;
-                  const fee = computeLateFee({
-                    amount: installment.amount,
-                    due_date: installment.due_date,
-                    status: installment.status,
-                    late_fee: installment.late_fee,
-                    late_fee_percent: contract.late_fee_percent,
-                    daily_interest_percent: contract.daily_interest_percent,
-                    max_interest_cap_percent: contract.max_interest_cap_percent,
-                    paid_amount: installment.paid_amount,
-                  });
-                  const total = installment.status === "paid"
-                    ? portalInstallmentAmount(installment)
-                    : portalInstallmentAmount({
-                        amount: installment.amount,
-                        due_date: installment.due_date,
-                        status: installment.status,
-                        late_fee: installment.late_fee,
-                        daily_interest_percent: contract.daily_interest_percent,
-                        max_interest_cap_percent: contract.max_interest_cap_percent,
-                        paid_amount: installment.paid_amount,
-                      });
+                  const input = withPortalContract(installment, contract);
+                  const overdueDays = daysLateOf(input);
+                  const fee = computeLateFee(input);
+                  const total = portalInstallmentAmount(input);
                   return (
                     <button
                       key={installment.id}
-                      onClick={() => openPayment({
-                        ...installment,
-                        late_fee_percent: contract.late_fee_percent,
-                        daily_interest_percent: contract.daily_interest_percent,
-                        max_interest_cap_percent: contract.max_interest_cap_percent,
-                      } as PortalInstallment)}
+                      onClick={() => openPayment(withPortalContract(installment, contract))}
+                      disabled={installment.status !== "paid" && total <= 0}
                       aria-label={`${installment.status === "paid" ? "Ver pagamento" : "Abrir detalhes e pagar"} a parcela ${installment.installment_number} do contrato ${String(contract.id || "").slice(0, 8).toUpperCase()}`}
                       className="bento-tile portal-installment group w-full text-left"
                     >
@@ -1013,7 +948,7 @@ const PortalCliente = () => {
         installment={selectedInstallment}
         ownerProfile={portalData?.owner || {}}
         clientData={portalData?.client || {}}
-        contactPhone={portalData?.branding?.portal_contact_phone || portalData?.client?.whatsapp || portalData?.client?.phone || null}
+        contactPhone={portalData?.branding?.portal_contact_phone || null}
         sessionToken={portalData?.session_token || null}
       />
 

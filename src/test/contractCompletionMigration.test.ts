@@ -3,6 +3,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { portalInstallmentAmount, accumulatedPaymentTotal } from '@/lib/portalAmounts';
 
 const sql = (name: string) => readFileSync(resolve(process.cwd(), "supabase/migrations", name), "utf8");
 const owner = "00000000-0000-0000-0000-000000000001";
@@ -75,6 +76,22 @@ beforeEach(async () => {
 afterAll(async () => { await db?.close(); });
 
 describe("conclusão do contrato no banco", () => {
+  it.each([
+    { penalty: 'fixed', value: 3, stored: 0, cap: 0, snapshot: false },
+    { penalty: 'percentage', value: 2, stored: 0, cap: 0, snapshot: false },
+    { penalty: 'fixed', value: 3, stored: 15, cap: 5, snapshot: false },
+    { penalty: 'fixed', value: 3, stored: 15, cap: 0, snapshot: true },
+  ])('o saldo exibido quita exatamente o saldo da função SQL: %o', async ({ penalty, value, stored, cap, snapshot }) => {
+    await seed([{ status: 'pending', paid: 40, fee: stored }]);
+    await db.query('UPDATE contracts SET daily_interest_percent=1, daily_penalty_type=$1, daily_penalty_value=$2, max_interest_cap_percent=$3', [penalty, value, cap]);
+    await db.query("UPDATE contract_installments SET due_date=current_date-2, pre_settlement_snapshot=$1::jsonb", [snapshot ? '{}' : null]);
+    const { rows: [row] } = await db.query<{ due_date: string; today: string }>('SELECT due_date::text, current_date::text AS today FROM contract_installments');
+    const [year, month, day] = row.today.split('-').map(Number);
+    const input = { amount: 100, paid_amount: 40, late_fee: stored, due_date: row.due_date, status: 'pending', daily_interest_percent: 1, daily_penalty_type: penalty, daily_penalty_value: value, max_interest_cap_percent: cap, has_active_settlement: snapshot };
+    const due = portalInstallmentAmount(input, new Date(year, month-1, day, 16));
+    const result = await db.query<{ result: { remaining: number; received: number; status: string } }>('SELECT pay_installment($1::uuid,$2::numeric) AS result', [installmentId(0), accumulatedPaymentTotal(input, due)]);
+    expect(result.rows[0].result).toMatchObject({ remaining: 0, received: due, status: 'paid' });
+  });
   it.each(["pending", "overdue"])("pagar a última parcela não conclui com outra parcela %s", async (status) => {
     await seed([{ status }, { status: "pending" }]);
     await pay(1);

@@ -1,7 +1,7 @@
 // Política única de atraso: JUROS DIÁRIO COMPOSTO de 4% ao dia (padrão),
 // aplicado sobre o valor acumulado (parcela + juros já acumulados).
 // Ex.: parcela 100 → 1 dia = 104 → 2 dias = 108,16 → 3 dias = 112,49...
-// Não existe mais "multa mensal/fixa": apenas o percentual diário.
+// A multa diária configurada (fixa ou percentual) e o teto acompanham o contrato.
 import { parseLocalDate } from "@/lib/dateUtils";
 
 export const DEFAULT_DAILY_LATE_RATE = 4; // % ao dia
@@ -17,6 +17,8 @@ export interface LateFeeInput {
   daily_penalty_type?: "percentage" | "fixed" | string | null;
   daily_penalty_value?: number | string | null;
   paid_at?: string | null;
+  pre_settlement_snapshot?: unknown;
+  has_active_settlement?: boolean;
   /**
    * Teto de juros de atraso, em % sobre o valor da parcela.
    * Vem de `contracts.max_interest_cap_percent`. Ex.: 100 = os juros nunca
@@ -75,7 +77,7 @@ export function daysLateOf(inst: LateFeeInput, now: Date = new Date()): number {
 /** Taxa diária efetiva do contrato (fallback 4% a.d.). */
 export function dailyRateOf(inst: LateFeeInput): number {
   const pct = finiteNumber(doContrato(inst, "daily_interest_percent"));
-  return pct > 0 ? pct : DEFAULT_DAILY_LATE_RATE;
+  return pct === 0 ? DEFAULT_DAILY_LATE_RATE : Math.max(0, pct);
 }
 
 /** Juros de atraso acumulados (composto diário). */
@@ -85,12 +87,13 @@ export function computeLateFee(inst: LateFeeInput, now: Date = new Date()): numb
 
   // Já paga/cancelada: mostra o valor que foi efetivamente cobrado.
   if (inst.status === "paid" || inst.status === "cancelled") return stored;
+  if (inst.has_active_settlement === true || inst.pre_settlement_snapshot != null) return stored;
 
   const base = Math.max(0, finiteNumber(inst.amount));
   if (!base) return stored;
 
   const days = daysLateOf(inst, now);
-  if (days <= 0) return 0;
+  if (days <= 0) return stored;
 
   const rate = dailyRateOf(inst) / 100;
   const interest = base * (Math.pow(1 + rate, days) - 1);
@@ -102,7 +105,8 @@ export function computeLateFee(inst: LateFeeInput, now: Date = new Date()): numb
 
   // Respeita o teto do contrato, quando houver.
   const teto = interestCapOf(inst);
-  return teto !== null ? Math.min(total, teto) : total;
+  // O RPC de baixa preserva o encargo já registrado, inclusive após alterar a regra.
+  return Math.max(stored, teto !== null ? Math.min(total, teto) : total);
 }
 
 export function totalDue(inst: LateFeeInput, now?: Date): number {
@@ -117,10 +121,10 @@ export function outstandingDue(inst: LateFeeInput, now?: Date): number {
 export interface LateFeeBreakdown {
   daysLate: number;
   base: number;
-  multaPct: number;   // mantido por compatibilidade (sempre 0)
+  multaPct: number;   // percentual diário; zero quando a multa é fixa
   jurosPct: number;   // % ao dia
-  multa: number;      // sempre 0 — não há mais multa fixa
-  juros: number;      // = total
+  multa: number;      // parcela da multa diária contida no encargo total
+  juros: number;      // restante do encargo, sem duplicar a multa
   total: number;
   withFees: number;
 }

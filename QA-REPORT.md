@@ -1,5 +1,9 @@
 # QA Report — CredMais
 
+## 2026-10-07 — Saldos do portal, comprovantes e extrato
+
+Cancelamentos deixam de aparecer como cobrança ou próxima parcela. Recebimentos parciais entram no total registrado; zero explícito não vira valor original. Cotação inclui multa fixa/percentual, teto, encargos registrados e snapshot ativo conforme a baixa SQL. Cliente, cobrador e extrato usam os mesmos critérios de pendência e atraso; o PDF mostra recebido e saldo por parcela, com histórico cancelado separado da cobrança. Recibo de quitação exige status pago. Troca de parcela ou saída descarta confirmações atrasadas de comprovante; falha da área de transferência não anuncia cópia. Contato do credor usa somente seu número configurado. Validação: 608 testes unitários, incluindo PostgreSQL isolado e equivalência de quatro cotações com a baixa; 12 cenários de portal, tipos, lint, hooks e build aprovados. Extrato e recibo fictícios renderizados e inspecionados. Duas funções públicas de leitura atualizadas com backup completo de banco e sem DML financeiro. Demais validações de entrega e reprodução física do acesso permanecem pendentes.
+
 ## 2026-10-07 — Inicialização nativa e diagnóstico em outros aparelhos
 
 Leitura de preferência bloqueada não interrompe mais a inicialização do shell nativo. Erros gerais distinguem conexão com o servidor, indisponibilidade HTTP, sessão, permissão e internet offline. Validação: 580 testes unitários, oito cenários de login com backend fictício, tipos, lint, hooks e build aprovados. A tela publicada de login abriu em três contextos novos do Chromium, incluindo simulações móveis. Autenticação e REST disponíveis; nenhuma das 14 contas está sem perfil. O domínio com `www` não possui DNS e permanece pendente de acesso à zona; o endereço sem `www` funciona. Não há confirmação de causa ou resolução no aparelho relatado. Sem alteração de dados de usuários ou backend. [Evidências e limites](docs/auth-session-recovery.md).
