@@ -211,7 +211,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signOut = async () => {
     const signedOutUserId = user?.id;
-    const { error } = await withTimeout(supabase.auth.signOut());
+    const { error } = await withTimeout(supabase.auth.signOut({scope:'local'}),20_000);
     if (error) throw error;
     // Também invalida consultas caso o SDK não emita SIGNED_OUT.
     ++profileRequest.current;

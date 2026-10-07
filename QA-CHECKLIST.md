@@ -13,6 +13,7 @@ As verificações automáticas são `npm run check` e `npm run test:e2e:local`.
 | Assinatura | Handler real de `mercadopago-webhook`; HMAC inválido, valor insuficiente, ativação, validade, evento duplicado e plano vitalício verificados |
 | Instalação | Android/iPhone e computadores em testes de navegador; critérios de instalação Chrome no site HTTPS verificados |
 | Acesso e recuperação | SDK real com armazenamento bloqueado e navegador com quota excedida; login, painel e clientes carregam; senha recusada permite correção; confirmação física e entrega real de e-mail pendentes |
+| Logout e portais | Dois acessos temporários no servidor confirmam logout local; navegador verifica cliente/cobrador com armazenamento bloqueado, isolamento de rotas e proteção contra respostas atrasadas |
 
 Execute `npm run test:integrations` para os 220 testes dos handlers. Eles usam
 apenas credenciais e dados fictícios, interceptam as chamadas HTTP e rodam sem
@@ -29,6 +30,7 @@ aparelhos físicos, banco de staging e contas sandbox dos provedores.
 - [ ] Aparelho que apresentou erro consegue entrar e carregar o próprio perfil
 - [ ] "Esqueceu a senha" envia e-mail e `/reset-password` atualiza senha
 - [ ] Logout limpa sessão e redireciona para `/login`
+- [ ] Sair ou abrir o portal em um aparelho mantém o acesso da mesma conta nos demais aparelhos
 
 ## 2. Proteção de Rotas
 - [ ] Acessar `/dashboard` sem login → `/login?next=/dashboard`
@@ -83,6 +85,7 @@ aparelhos físicos, banco de staging e contas sandbox dos provedores.
 - [ ] Login via token (`collector_tokens`)
 - [ ] Cobrador vê apenas clientes atribuídos (`collector_assignments`)
 - [ ] Pode registrar pagamento
+- [ ] Armazenamento bloqueado permite acesso nesta janela; sair impede restaurar dados por uma resposta atrasada
 
 ## 10. Pagamento de Assinatura (Mercado Pago)
 - [ ] Botão "Assinar" abre checkout Mercado Pago

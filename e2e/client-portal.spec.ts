@@ -1,7 +1,8 @@
 import {expect,test} from '@playwright/test';
+test.use({serviceWorkers:'block'});
 
 const client={id:'client-test',name:'Maria Teste'};
-const portal={client,session_token:'portal-session-test',owner:{name:'Empresa teste'},branding:{company_name:'Empresa teste',portal_contact_email:'atendimento@example.invalid'},contracts:[{
+const portal={client,session_token:'550e8400-e29b-41d4-a716-446655440000',owner:{name:'Empresa teste'},branding:{company_name:'Empresa teste',portal_contact_email:'atendimento@example.invalid'},contracts:[{
   id:'contract-test',capital:200,total_amount:220,total_interest:20,interest_rate:10,num_installments:2,installment_amount:110,status:'active',frequency:'monthly',start_date:'2026-01-01',daily_interest_percent:0,
   installments:[{id:'open-test',installment_number:2,amount:110,paid_amount:10,status:'pending',due_date:'2099-01-01'},
     {id:'paid-test',installment_number:1,amount:110,paid_amount:110,status:'paid',due_date:'2026-01-01',paid_at:'2026-01-01'}],
@@ -51,8 +52,47 @@ for(const width of [320,390,1366])for(const theme of ['light','dark'] as const) 
     await expect(page.getByRole('tab',{name:/Em aberto/})).toBeVisible();
     await expect(page.locator('html')).toHaveAttribute('data-client-portal-theme',theme==='dark'?'light':'dark');
     expect(negotiationCalls).toBe(0);
+    // A real UUID session must keep creditor routes inaccessible until logout.
+    await page.goto('/login');
+    await expect(page).toHaveURL(/\/portal-cliente$/);
+    await page.getByRole('button',{name:'Sair com segurança'}).click();
+    await expect(page).toHaveURL(/portal-cliente\?logout=1/);
     await page.goto('/login');
     await expect(page.getByLabel(/e-?mail/i)).toBeVisible();
     await expect(page.locator('html')).not.toHaveAttribute('data-client-portal-theme');
   });
+}
+
+for(const failure of ['quota','blocked']as const){
+ test(`portal cliente com armazenamento ${failure}: CPF, isolamento e logout`,async({page})=>{
+  const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));await page.routeWebSocket('**',socket=>socket.close());
+  await page.addInitScript(failure=>{
+   if(failure==='quota')Storage.prototype.setItem=function(){throw new DOMException('Full','QuotaExceededError');};
+   else for(const name of ['sessionStorage','localStorage'])Object.defineProperty(window,name,{configurable:true,get(){throw new DOMException('Blocked','SecurityError');}});
+  },failure);
+  await page.route('https://credmais-e2e.supabase.co/**',async route=>{
+   const path=new URL(route.request().url()).pathname;
+   await route.fulfill({status:200,json:/\/portal_(client_login|login_by_token)$/.test(path)?portal:[]});
+  });
+  await page.goto('/portal-cliente');await page.getByLabel('Seu CPF',{exact:true}).fill('11144477735');
+  await page.getByRole('button',{name:'Acessar o portal'}).click();await expect(page.getByRole('tab',{name:/Em aberto/})).toBeVisible();
+  await page.evaluate(()=>{history.pushState({},'', '/dashboard');dispatchEvent(new PopStateEvent('popstate'));});
+  await expect(page).toHaveURL(/\/portal-cliente$/);await expect(page.getByRole('tab',{name:/Em aberto/})).toBeVisible();
+  await page.getByRole('button',{name:'Sair com segurança'}).click();await expect(page).toHaveURL(/portal-cliente\?logout=1/);
+  await page.goto('/login');await expect(page.getByLabel(/e-?mail/i)).toBeVisible();expect(errors).toEqual([]);
+ });
+ test(`portal cobrador com armazenamento ${failure}: entrar e sair sem travar`,async({page})=>{
+  const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));await page.routeWebSocket('**',socket=>socket.close());
+  await page.addInitScript(failure=>{
+   if(failure==='quota')Storage.prototype.setItem=function(){throw new DOMException('Full','QuotaExceededError');};
+   else Object.defineProperty(window,'sessionStorage',{configurable:true,get(){throw new DOMException('Blocked','SecurityError');}});
+  },failure);
+  await page.route('https://credmais-e2e.supabase.co/**',async route=>{
+   const path=new URL(route.request().url()).pathname;
+   await route.fulfill({status:200,json:path.endsWith('/collector_login_by_token')?{collector:{id:'collector-test',name:'Cobrador teste'},owner_id:'owner-test',owner:{name:'Empresa teste'},clients:[]}:[]});
+  });
+  await page.goto('/cobrador-externo');await page.getByLabel(/token/i).fill('isolated-collector-token');
+  await page.getByRole('button',{name:'Acessar Portal',exact:true}).click();await expect(page.getByText('Cobrador teste',{exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Sair do portal'}).click();await expect(page.getByLabel(/token/i)).toBeVisible();expect(errors).toEqual([]);
+ });
 }

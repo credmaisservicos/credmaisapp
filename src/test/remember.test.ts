@@ -2,6 +2,19 @@ import { afterEach,beforeEach, describe, expect, it,vi } from "vitest";
 import {createRememberMeStorage} from "@/integrations/supabase/remember";
 
 describe("remember me storage", () => {
+  it('client portal suspension clears auth copies and refuses a late owner token',()=>{
+    localStorage.clear();sessionStorage.clear();const state=createRememberMeStorage();
+    state.rememberMeStorage.setItem('sb-isolated-auth-token','owner');sessionStorage.setItem('sb-isolated-auth-token','old-copy');
+    localStorage.setItem('unrelated-draft','keep');state.suspendAuthSession();
+    state.rememberMeStorage.setItem('sb-isolated-auth-token','late-owner-refresh');
+    expect(state.rememberMeStorage.getItem('sb-isolated-auth-token')).toBeNull();expect(localStorage.getItem('sb-isolated-auth-token')).toBeNull();expect(sessionStorage.getItem('sb-isolated-auth-token')).toBeNull();
+    expect(localStorage.getItem('unrelated-draft')).toBe('keep');
+  });
+  it('a suspended document cannot read an auth copy that the browser refused to remove',()=>{
+    const state=createRememberMeStorage();state.rememberMeStorage.setItem('sb-isolated-auth-token','owner');
+    const denied=vi.spyOn(Storage.prototype,'removeItem').mockImplementation(()=>{throw new DOMException('Blocked','SecurityError');});
+    state.suspendAuthSession();denied.mockRestore();expect(state.rememberMeStorage.getItem('sb-isolated-auth-token')).toBeNull();
+  });
   let rememberMeStorage:Storage,getRememberMe:()=>boolean,setRememberMe:(remember:boolean)=>void;
   afterEach(()=>vi.restoreAllMocks());
   beforeEach(() => {

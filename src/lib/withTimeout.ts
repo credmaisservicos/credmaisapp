@@ -16,3 +16,13 @@ export async function withTimeout<T>(
     clearTimeout(timer);
   }
 }
+
+/** Cancels a request's network work too; does not repeat the operation. */
+export async function withAbortTimeout<T>(
+  request:(signal:AbortSignal)=>PromiseLike<T>,timeoutMs=10_000,
+  message="O servidor demorou para responder. Tente novamente em instantes.",
+):Promise<T>{
+  const controller=new AbortController();
+  try{return await withTimeout(request(controller.signal),timeoutMs,message);}
+  finally{controller.abort();}
+}

@@ -1,6 +1,6 @@
 import { Credinho } from "@/components/brand/Credinho";
 import { isEmAtraso, isEmAberto } from "@/lib/dashboardMetrics";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState,useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -19,6 +19,8 @@ import { Input } from "@/components/ui/input";
 import { accumulatedPaymentTotal, portalInstallmentAmount } from "@/lib/portalAmounts";
 import defaultLogo from "@/assets/credmais-mark.svg";
 import { formatFrequency } from "@/components/cliente-detalhe/constants";
+import {tabSessionStorage} from '@/lib/tabSessionStorage';
+import {withAbortTimeout} from '@/lib/withTimeout';
 
 const TOKEN_KEY = "cobrador-token";
 
@@ -39,6 +41,8 @@ const CobradorExterno = () => {
   const [collectorData, setCollectorData] = useState<any>(null);
   /** Payload completo da RPC: cobrador, credor, marca e clientes com parcelas. */
   const [portal, setPortal] = useState<any>(null);
+  const loginGeneration=useRef(0);
+  const accessEpoch=useRef(0);
   const [userId, setUserId] = useState<string | null>(null);
   const [collectorId, setCollectorId] = useState<string | null>(null);
   const [expandedClient, setExpandedClient] = useState<string | null>(null);
@@ -57,12 +61,13 @@ const CobradorExterno = () => {
   // Mantém o token apenas durante a aba atual. Tokens de portal são credenciais:
   // persistir em localStorage os deixava disponíveis mesmo após fechar o navegador.
   useEffect(() => {
-    const saved = sessionStorage.getItem(TOKEN_KEY);
+    const saved = tabSessionStorage.getItem(TOKEN_KEY);
     if (saved) {
       setToken(saved);
       void loginWithToken(saved, true);
     }
 
+    return ()=>{++loginGeneration.current;++accessEpoch.current;};
   }, []);
 
   // Tudo vem do payload da RPC: clientes atribuídos, parcelas de cada um e os
@@ -92,7 +97,7 @@ const CobradorExterno = () => {
         "postgres_changes" as any,
         { event: "*", schema: "public", table: "contract_installments", filter: `user_id=eq.${userId}` },
         () => {
-          const saved = sessionStorage.getItem(TOKEN_KEY);
+          const saved = tabSessionStorage.getItem(TOKEN_KEY);
           if (saved) void loginWithToken(saved, true);
         },
       )
@@ -100,7 +105,7 @@ const CobradorExterno = () => {
         "postgres_changes" as any,
         { event: "*", schema: "public", table: "collector_assignments", filter: `user_id=eq.${userId}` },
         () => {
-          const saved = sessionStorage.getItem(TOKEN_KEY);
+          const saved = tabSessionStorage.getItem(TOKEN_KEY);
           if (saved) void loginWithToken(saved, true);
         },
       )
@@ -115,36 +120,39 @@ const CobradorExterno = () => {
       return;
     }
     setLoading(true);
+    const generation=++loginGeneration.current;
     // Esta página roda SEM login. Ler `collector_tokens` direto não funcionava:
     // a RLS só atende `authenticated`, então o visitante anônimo recebia vazio e
     // todo acesso caía em "Token inválido" — o portal nunca abriu para ninguém.
     // Agora usa a função SECURITY DEFINER, mesmo padrão do portal do cliente.
-    const { data, error } = await supabase.rpc("collector_login_by_token", { _token: normalizedToken });
-
-    if (error || !data) {
-      if (!silent) toast({ title: "Acesso negado", description: "Token inválido ou desativado.", variant: "destructive" });
-      sessionStorage.removeItem(TOKEN_KEY);
-      setLoading(false);
-      return;
-    }
-
-    const payload = data as any;
-    setPortal(payload);
-    setCollectorData(payload.collector);
-    setCollectorId(payload.collector?.id ?? null);
-    setUserId(payload.owner_id ?? null);
-    setToken(normalizedToken);
-    sessionStorage.setItem(TOKEN_KEY, normalizedToken);
-    setLoading(false);
+    try{
+      const {data,error,status}=await withAbortTimeout(signal=>supabase.rpc('collector_login_by_token',{_token:normalizedToken}).abortSignal(signal));
+      if(generation!==loginGeneration.current)return;
+      if(status===401||status===403){handleLogout();if(!silent)toast({title:'Acesso negado',description:'Entre novamente com um token válido.',variant:'destructive'});return;}
+      if(error)throw error;
+      const payload=data as any;
+      if(!payload?.collector?.id||!payload?.owner_id){
+        handleLogout();
+        if(!silent)toast({title:'Acesso negado',description:'Token inválido ou desativado.',variant:'destructive'});
+        return;
+      }
+      tabSessionStorage.setItem(TOKEN_KEY,normalizedToken);
+      setPortal(payload);setCollectorData(payload.collector);setCollectorId(payload.collector.id);
+      setUserId(payload.owner_id);setToken(normalizedToken);
+    }catch{
+      if(generation===loginGeneration.current&&!silent)toast({title:'Não foi possível carregar o portal',description:'Tente novamente em instantes.',variant:'destructive'});
+    }finally{if(generation===loginGeneration.current)setLoading(false);}
   };
 
   const handleAccess = async (e: React.FormEvent) => {
     e.preventDefault();
+    ++accessEpoch.current;
     await loginWithToken(token);
   };
 
   const handleLogout = () => {
-    sessionStorage.removeItem(TOKEN_KEY);
+    ++loginGeneration.current;++accessEpoch.current;tabSessionStorage.removeItem(TOKEN_KEY);setLoading(false);
+    setPayOpen(false);setPayInstallment(null);setPayFile(null);setPaySaving(false);
     setCollectorData(null);
     setPortal(null);
     setCollectorId(null);
@@ -177,10 +185,12 @@ const CobradorExterno = () => {
       return;
     }
     setPaySaving(true);
+    const epoch=accessEpoch.current;
+    const accessToken=tabSessionStorage.getItem(TOKEN_KEY)||token;
     try {
       let receipt_url: string | null = null;
       if (payFile && userId) {
-        const savedTok = sessionStorage.getItem(TOKEN_KEY) || token;
+        const savedTok = accessToken;
         const fd = new FormData();
         fd.append("collector_token", savedTok);
         fd.append("installment_id", payInstallment.id);
@@ -194,27 +204,29 @@ const CobradorExterno = () => {
         if (!up?.signed_url) throw new Error("Falha ao gerar URL do comprovante");
         receipt_url = up.signed_url as string;
       }
+      if(epoch!==accessEpoch.current)return;
 
       // A escrita direta não passava pela RLS (0 linhas afetadas) e ainda assim
       // exibia sucesso. A RPC valida o token, exige que o cliente esteja
       // atribuído a este cobrador e faz a contabilidade completa: parcela,
       // lucro, caixa, conclusão do contrato e registro de quem recebeu.
       const { error } = await supabase.rpc("collector_register_payment", {
-        _token: token,
+        _token: accessToken,
         _installment_id: payInstallment.id,
         _paid_total: accumulatedPaymentTotal(payInstallment, amount),
         _method: payMethod,
         _receipt_url: receipt_url ?? null,
       });
-
+      if(epoch!==accessEpoch.current)return;
       if (error) throw error;
       toast({ title: "✓ Pagamento registrado!", description: `${payMethod.toUpperCase()} • R$ ${amount.toFixed(2)}` });
       setPayOpen(false);
-      await loginWithToken(sessionStorage.getItem(TOKEN_KEY) || token, true);
+      await loginWithToken(accessToken, true);
     } catch (err: any) {
+      if(epoch!==accessEpoch.current)return;
       toast({ title: "Erro", description: err?.message || "Falha ao registrar pagamento.", variant: "destructive" });
     } finally {
-      setPaySaving(false);
+      if(epoch===accessEpoch.current)setPaySaving(false);
     }
   };
 

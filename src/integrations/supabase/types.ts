@@ -2829,6 +2829,11 @@ export type Database = {
         Returns: Json
       }
       portal_login_by_token: { Args: { _token: string }; Returns: Json }
+      portal_contract_signatures: { Args: { _session_token: string }; Returns: Json }
+      portal_sign_contract: {
+        Args: { _session_token:string; _contract_id:string; _signer_name:string; _cpf_confirmation:string; _user_agent?:string|null }
+        Returns:Json
+      }
       portal_lookup_creditor_contact:
         | { Args: { _cpf: string }; Returns: Json }
         | { Args: { _birth_date: string; _cpf: string }; Returns: Json }

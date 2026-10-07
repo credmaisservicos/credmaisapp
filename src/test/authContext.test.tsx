@@ -54,6 +54,11 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe("sessão e perfil", () => {
+  it('normal logout does not end the account sessions on other devices',async()=>{
+    const {result}=await open();await emit(session('a'));
+    await act(async()=>{await result.current.signOut();});
+    expect(api.signOut).toHaveBeenCalledExactlyOnceWith({scope:'local'});expect(result.current.user).toBeNull();expect(result.current.profile).toBeNull();
+  });
   it.each([0,503])('recupera uma falha temporária do perfil com uma tentativa limitada: %s',async status=>{
     api.single.mockResolvedValueOnce({data:null,error:{message:'Failed to fetch'},status});
     const {result}=await open();await emit(session('a'));

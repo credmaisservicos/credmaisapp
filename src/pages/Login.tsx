@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
-import { hasPortalSession } from "@/lib/portalSession";
+import { isClientPortalActive } from "@/lib/portalSession";
 import { z } from "zod";
 import defaultLogo from "@/assets/credmais-mark.svg";
 import { supabase } from "@/integrations/supabase/client";
@@ -107,7 +107,7 @@ const Login = () => {
 
   // Se este navegador possui sessão do portal do cliente, não permitir acesso
   // à tela de login do credor — devolve o cliente ao portal dele.
-  const temSessaoDoPortal = hasPortalSession();
+  const temSessaoDoPortal = isClientPortalActive();
 
   const sanitizeNext = (raw: string | null): string | null => {
     if (!raw) return null;

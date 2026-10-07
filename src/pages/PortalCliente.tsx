@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState,useRef } from "react";
 import { formatBR, isOverdue as isDateOverdue, parseLocalDate } from "@/lib/dateUtils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -10,7 +10,8 @@ import { NotificationsBell } from "@/components/ClientPortal/NotificationsBell";
 import { computeLateFee } from "@/lib/lateFee";
 import { portalInstallmentAmount } from "@/lib/portalAmounts";
 import { generatePortalStatementPdf } from "@/utils/portalPdf";
-import { isPortalLoginBlocked, recordPortalLoginAttempt, performFullPortalLogout } from "@/lib/portalSession";
+import { isPortalLoginBlocked, recordPortalLoginAttempt, performFullPortalLogout,getPortalToken,savePortalToken,clearPortalSession,isPortalToken,endCreditorSessionForPortal } from "@/lib/portalSession";
+import {withAbortTimeout} from '@/lib/withTimeout';
 import defaultLogo from "@/assets/credmais-mark.svg";
 import { isValidCPF, onlyDigits } from "@/lib/cpfCnpj";
 import { formatFrequency } from "@/components/cliente-detalhe/constants";
@@ -120,8 +121,6 @@ const statusLabel = (status: string) => {
 
 type Tab = "open" | "overdue" | "paid";
 
-const SESSION_KEY = "portal-cliente-session";
-
 const PortalCliente = () => {
   const { toast } = useToast();
   const [cpf, setCpf] = useState("");
@@ -130,6 +129,7 @@ const PortalCliente = () => {
   const [helpOpen, setHelpOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [portalData, setPortalData] = useState<PortalData | null>(null);
+  const loginGeneration=useRef(0);
   const [tab, setTab] = useState<Tab>("open");
   const [selectedInstallment, setSelectedInstallment] = useState<PortalInstallment | null>(null);
   const [paymentOpen, setPaymentOpen] = useState(false);
@@ -169,48 +169,32 @@ const PortalCliente = () => {
   useEffect(() => {
     // Se houver uma sessão do credor no mesmo navegador, deslogar imediatamente.
     // Portal do cliente e app do credor NÃO podem coexistir na mesma sessão.
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) void supabase.auth.signOut();
-    });
-
-    // Deep-link: ?t=<uuid> → login automático via token (WhatsApp bot)
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const token = params.get("t");
-      if (token && /^[0-9a-f-]{36}$/i.test(token)) {
-        (async () => {
-          try {
-            const { data } = await (supabase as any).rpc("portal_login_by_token", { _token: token });
-            if (data) {
-              setPortalData(normalizePortalData(data));
-              const sessionToken = (data as any)?.session_token;
-              if (sessionToken) sessionStorage.setItem(SESSION_KEY, JSON.stringify({ token: sessionToken }));
-              // Limpa o token da URL pra evitar reuso/histórico
-              const url = new URL(window.location.href);
-              url.searchParams.delete("t");
-              window.history.replaceState({}, "", url.toString());
-              return;
-            }
-          } catch (e) { console.warn("[portal] token login falhou:", e); }
-        })();
-        return;
-      }
-    } catch {}
-
-    const saved = sessionStorage.getItem(SESSION_KEY);
-    if (!saved) return;
-    try {
-      const parsed = JSON.parse(saved);
-      const token = parsed?.token;
-      if (token) {
-        void (async () => {
-          const { data } = await (supabase as any).rpc("portal_login_by_token", { _token: token });
-          if (data) setPortalData(normalizePortalData(data));
-          else sessionStorage.removeItem(SESSION_KEY);
-        })();
-      }
-    } catch {}
-
+    void endCreditorSessionForPortal();
+    const url=new URL(window.location.href);
+    const linkedToken=url.searchParams.get('t');
+    if(linkedToken!==null){url.searchParams.delete('t');window.history.replaceState({},'',url.toString());}
+    const token=isPortalToken(linkedToken)?linkedToken:getPortalToken();
+    const generation=++loginGeneration.current;
+    if(token){
+      setLoading(true);
+      void (async()=>{
+        try{
+          const {data,error}=await withAbortTimeout(signal=>supabase.rpc('portal_login_by_token',{_token:token}).abortSignal(signal));
+          if(generation!==loginGeneration.current)return;
+          if(error)throw error;
+          const normalized=normalizePortalData(data);
+          if(!normalized||!isPortalToken(normalized.session_token)){
+            clearPortalSession();
+            toast({title:'Não foi possível acessar',description:'Solicite um novo link ao credor ou entre com seu CPF.',variant:'destructive'});
+            return;
+          }
+          savePortalToken(normalized.session_token);setPortalData(normalized);
+        }catch{
+          if(generation===loginGeneration.current)toast({title:'Erro ao acessar o portal',description:'Não foi possível carregar seus dados. Tente novamente.',variant:'destructive'});
+        }finally{if(generation===loginGeneration.current)setLoading(false);}
+      })();
+    }
+    return ()=>{++loginGeneration.current;};
   }, []);
 
 
@@ -218,41 +202,49 @@ const PortalCliente = () => {
   useEffect(() => {
     if (!portalData?.client?.id) return;
     const clientId = portalData.client.id;
+    const token=portalData.session_token;
+    let cancelled=false;
     const ch = supabase
       .channel(`portal-client-${clientId}`)
       .on(
         "postgres_changes" as any,
         { event: "*", schema: "public", table: "contract_installments", filter: `client_id=eq.${clientId}` },
           () => {
-            const token = portalData.session_token;
             if (token) void (async () => {
-              const { data } = await (supabase as any).rpc("portal_login_by_token", { _token: token });
-              if (data) setPortalData(normalizePortalData(data));
-            })();
+              const {data,error}=await withAbortTimeout(signal=>supabase.rpc('portal_login_by_token',{_token:token}).abortSignal(signal));
+              if(cancelled||error||getPortalToken()!==token)return;
+              const normalized=normalizePortalData(data);
+              if(normalized&&isPortalToken(normalized.session_token)){savePortalToken(normalized.session_token);setPortalData(normalized);}
+              else {clearPortalSession();setPortalData(null);}
+            })().catch(()=>{/* A transient refresh failure does not discard the current view. */});
           },
       )
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [portalData?.client?.id]);
+    return () => { cancelled=true;supabase.removeChannel(ch); };
+  }, [portalData?.client?.id,portalData?.session_token]);
 
   useEffect(() => {
     const token = portalData?.session_token;
     if (!token) { setSignatureInfo([]); return; }
+    let cancelled=false;
     void (async () => {
-      const { data } = await (supabase as any).rpc("portal_contract_signatures", { _session_token: token });
-      if (Array.isArray(data)) setSignatureInfo(data);
-    })();
+      const {data,error}=await withAbortTimeout(signal=>supabase.rpc('portal_contract_signatures',{_session_token:token}).abortSignal(signal));
+      if (!cancelled&&!error&&getPortalToken()===token&&Array.isArray(data)) setSignatureInfo(data);
+    })().catch(()=>{/* A failed optional read must not interrupt the portal. */});
+    return ()=>{cancelled=true;};
   }, [portalData?.session_token]);
 
   const signContract = async () => {
     if (!signingContract || !portalData?.session_token || !signatureAccepted) return;
     setSignatureLoading(true);
+    const generation=loginGeneration.current;
+    try{
     const { data, error } = await (supabase as any).rpc("portal_sign_contract", {
       _session_token: portalData.session_token, _contract_id: signingContract.id,
       _signer_name: signerName, _cpf_confirmation: onlyDigits(signerCpf),
       _user_agent: navigator.userAgent,
     });
-    setSignatureLoading(false);
+    if(generation!==loginGeneration.current)return;
     if (error) {
       toast({ title: "Não foi possível assinar", description: error.message.includes("cpf_mismatch") ? "O CPF informado não confere." : error.message, variant: "destructive" });
       return;
@@ -260,6 +252,9 @@ const PortalCliente = () => {
     setSignatureInfo((current) => current.map((item) => item.id === signingContract.id ? { ...item, signature_status: "signed", signed_at: data?.signed_at, signer_name: signerName } : item));
     setSigningContract(null); setSignerName(""); setSignerCpf(""); setSignatureAccepted(false);
     toast({ title: "Contrato assinado com sucesso!", description: "O aceite foi registrado com data e identificação." });
+    }catch{
+      if(generation===loginGeneration.current)toast({title:'Não foi possível confirmar a assinatura',description:'Atualize o portal para conferir o resultado antes de tentar novamente.',variant:'destructive'});
+    }finally{if(generation===loginGeneration.current)setSignatureLoading(false);}
   };
 
   const [portalTheme, setPortalTheme] = useState<'light' | 'dark'>(() => {
@@ -330,25 +325,25 @@ const PortalCliente = () => {
       }
     }
     setLoading(true);
+    const generation=++loginGeneration.current;
     try {
       const ownerId = new URLSearchParams(window.location.search).get("o");
       const { data, error } = ownerId && /^[0-9a-f-]{36}$/i.test(ownerId)
-        ? await supabase.rpc("portal_client_login_for_owner", {
+        ? await withAbortTimeout(signal=>supabase.rpc("portal_client_login_for_owner", {
             _cpf: cleanCpf,
             _birth_date: null,
             _owner_id: ownerId,
-          })
-        : await supabase.rpc("portal_client_login", {
+          }).abortSignal(signal))
+        : await withAbortTimeout(signal=>supabase.rpc("portal_client_login", {
             _cpf: cleanCpf,
             _birth_date: null,
-          });
+          }).abortSignal(signal));
+      if(generation!==loginGeneration.current)return;
 
       if (error) {
         if (!silent) {
-          recordPortalLoginAttempt(false);
           toast({ title: "Erro ao acessar o portal", description: "Tente novamente em instantes.", variant: "destructive" });
         }
-        sessionStorage.removeItem(SESSION_KEY);
         return;
       }
 
@@ -359,24 +354,24 @@ const PortalCliente = () => {
           // de "faltou a data", viraria um jeito de descobrir quem é cliente.
           toast({ title: "Não foi possível acessar", description: "Confira o CPF informado ou solicite ao credor o link correto do portal.", variant: "destructive" });
         }
-        sessionStorage.removeItem(SESSION_KEY);
+        clearPortalSession();
         return;
       }
 
-      setPortalData(normalizePortalData(data));
-      const token = (data as unknown as PortalData).session_token;
-      if (token) sessionStorage.setItem(SESSION_KEY, JSON.stringify({ token }));
+      const normalized=normalizePortalData(data);
+      if(!normalized||!isPortalToken(normalized.session_token))throw new Error('Sessão do portal inválida.');
+      savePortalToken(normalized.session_token);setPortalData(normalized);
       if (!silent) {
         recordPortalLoginAttempt(true);
         toast({ title: "Acesso autorizado!" });
       }
     } catch (err) {
+      if(generation!==loginGeneration.current)return;
       if (!silent) {
-        recordPortalLoginAttempt(false);
         toast({ title: "Erro no acesso", description: "Não foi possível carregar seus dados.", variant: "destructive" });
       }
     } finally {
-      setLoading(false);
+      if(generation===loginGeneration.current)setLoading(false);
     }
   };
 
@@ -405,11 +400,13 @@ const PortalCliente = () => {
   };
 
   const handleLogout = async () => {
+    ++loginGeneration.current;clearPortalSession();
     // Limpa estado local do React primeiro para UI responsiva
     setPortalData(null);
     setCpf("");
     setSelectedInstallment(null);
     setPaymentOpen(false);
+    setSignatureInfo([]);setSigningContract(null);setSignerName('');setSignerCpf('');setSignatureAccepted(false);setSignatureLoading(false);
     // Limpeza completa: supabase signOut + storage + cookies + caches
     await performFullPortalLogout();
     // Hard reload garante que nenhum estado in-memory (queries, contexts) sobreviva

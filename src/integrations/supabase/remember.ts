@@ -6,6 +6,7 @@ type Store=()=>Storage;
 export function createRememberMeStorage(local:Store=()=>localStorage,temporary:Store=()=>sessionStorage){
   const shadow=new Map<string,string|null>();
   const pending=new Set<string>();
+  let suspended=false;
   let preference:boolean|undefined;
   const getRememberMe=()=>{
     if(preference!==undefined)return preference;
@@ -21,10 +22,12 @@ export function createRememberMeStorage(local:Store=()=>localStorage,temporary:S
     get length(){return visibleKeys().length;},
     key:(index)=>visibleKeys()[index]??null,
     getItem:(key)=>{
+      if(suspended&&authKey(key))return null;
       if(pending.has(key))return shadow.get(key)??null;
       try{const value=selected().getItem(key);shadow.set(key,value);return value;}catch{return shadow.get(key)??null;}
     },
     setItem:(key,value)=>{
+      if(suspended&&authKey(key))return;
       shadow.set(key,String(value));pending.add(key);
       try{selected().setItem(key,String(value));pending.delete(key);}catch{/* Keep this session only in memory. */}
     },
@@ -65,7 +68,10 @@ export function createRememberMeStorage(local:Store=()=>localStorage,temporary:S
     }
   };
   const isAuthSessionTemporary=()=>[...pending].some(key=>key.endsWith('-auth-token')&&shadow.get(key)!=null);
-  return {rememberMeStorage:adapter,getRememberMe,setRememberMe,isAuthSessionTemporary};
+  // The client portal exits through a document reload. Late owner refreshes in
+  // this document must never recreate a creditor credential while it is open.
+  const suspendAuthSession=()=>{adapter.clear();suspended=true;};
+  return {rememberMeStorage:adapter,getRememberMe,setRememberMe,isAuthSessionTemporary,suspendAuthSession};
 }
 
-export const {rememberMeStorage,getRememberMe,setRememberMe,isAuthSessionTemporary}=createRememberMeStorage();
+export const {rememberMeStorage,getRememberMe,setRememberMe,isAuthSessionTemporary,suspendAuthSession}=createRememberMeStorage();

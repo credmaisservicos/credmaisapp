@@ -106,3 +106,14 @@ test('senha recusada mantém o link válido e a conclusão encerra somente esta 
  await expect(page.getByLabel('Nova senha',{exact:true})).toBeVisible();await expect(page.getByRole('button',{name:/salvar|atualizar|redefinir/i})).toBeEnabled();expect(scopes).toEqual([]);
  await page.getByRole('button',{name:/salvar|atualizar|redefinir/i}).click();await expect(page).toHaveURL(/\/login$/);expect(scopes).toEqual(['local']);expect(updates).toBe(2);
 });
+test('abrir e sair do portal encerra a sessão do credor apenas neste navegador',async({page})=>{
+ await mockBackend(page);const scopes:string[]=[];
+ await page.route('**/auth/v1/logout**',async route=>{scopes.push(new URL(route.request().url()).searchParams.get('scope')||'');await route.fulfill({status:200,json:{}});});
+ await page.route('**/rest/v1/rpc/portal_login_by_token',async route=>{await route.fulfill({status:200,json:{client:{id:'portal-test-client',name:'Cliente teste'},contracts:[],owner:{name:'Empresa teste'},session_token:'550e8400-e29b-41d4-a716-446655440000'}});});
+ await login(page);await expect(page.getByRole('tab',{name:'Visão geral',exact:true})).toBeVisible();
+ await page.goto('/portal-cliente?t=22222222-2222-4222-8222-222222222222');
+ await expect(page.getByRole('tab',{name:/Em aberto/})).toBeVisible();await expect.poll(()=>scopes.length).toBe(1);expect(scopes).toEqual(['local']);
+ await expect(page).toHaveURL(/\/portal-cliente$/);
+ await page.getByRole('button',{name:'Sair com segurança'}).click();await expect(page).toHaveURL(/portal-cliente\?logout=1/);
+ await page.goto('/login');await expect(page.getByLabel(/e-?mail/i)).toBeVisible();expect(scopes.every(scope=>scope==='local')).toBe(true);
+});

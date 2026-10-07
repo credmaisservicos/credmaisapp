@@ -288,14 +288,17 @@ test.describe("smoke responsivo autenticado com backend isolado", () => {
       test.setTimeout(180_000);
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       const pageErrors: string[] = [];
+      const failedScripts:string[]=[];
       page.on("pageerror", error => pageErrors.push(error.message));
+      page.on('requestfailed',request=>{if(new URL(request.url()).pathname.endsWith('.js'))failedScripts.push(new URL(request.url()).pathname+': '+request.failure()?.errorText);});
       await mockBackend(page);
       await login(page);
 
       for (const route of routes) {
         const response = await page.goto(route, { waitUntil: "domcontentloaded" });
         expect(response?.status(), `${route} devolveu HTTP invalido`).toBeLessThan(400);
-        await expect(page.locator("#root"), `${route} nao renderizou`).not.toBeEmpty();
+        try{await expect(page.locator("#root"), `${route} nao renderizou`).not.toBeEmpty();}
+        catch(error){throw new Error(`${route} não iniciou. Erros JavaScript: ${JSON.stringify(pageErrors)}; scripts: ${JSON.stringify(failedScripts)}`,{cause:error});}
         await expect(page, `${route} saiu da area autenticada`).not.toHaveURL(/\/login(?:\?|$)/);
         await expect(page.getByText(/algo deu errado|erro inesperado/i), `${route} mostrou falha fatal`).toHaveCount(0);
         expect(await unnamedVisibleControls(page), `${route} possui controles visíveis sem nome acessível`).toEqual([]);

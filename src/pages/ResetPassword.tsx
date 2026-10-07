@@ -157,7 +157,7 @@ const ResetPassword = () => {
   const goToLoginNow = async () => {
     clearRedirectTimers();
     try {
-      await supabase.auth.signOut();
+      await withTimeout(supabase.auth.signOut({scope:'local'}),20_000);
     } catch (e) {
       console.warn("[reset-password] signOut falhou no clique, prosseguindo", e);
     }

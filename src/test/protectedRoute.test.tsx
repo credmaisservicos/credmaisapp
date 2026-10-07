@@ -12,7 +12,8 @@ const auth = vi.hoisted(() => ({
 }));
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => auth }));
 vi.mock("@/hooks/usePlatformSettings", () => ({ usePlatformSettings: () => ({ settings: { maintenance_mode: false } }) }));
-vi.mock("@/lib/portalSession", () => ({ hasPortalSession: () => false }));
+const portal=vi.hoisted(()=>({active:false}));
+vi.mock("@/lib/portalSession", () => ({ isClientPortalActive: () => portal.active }));
 vi.mock("@/integrations/supabase/client", () => ({ supabase: {
   from: (table: string) => {
     const chain = { select: () => chain, eq: () => chain, or: () => chain, order: () => chain, limit: () => chain,
@@ -26,6 +27,7 @@ const open = async () => {
   await act(async () => { await vi.advanceTimersByTimeAsync(0); });
 };
 beforeEach(() => {
+  portal.active=false;
   vi.useFakeTimers(); vi.clearAllMocks(); localStorage.clear();
   vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
   auth.profile.is_blocked = false;
@@ -35,6 +37,10 @@ beforeEach(() => {
   api.rpc.mockResolvedValue({ data: null, error: null });
 });
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
+it('does not render or query creditor data while a portal session is being isolated',async()=>{
+  portal.active=true;await open();
+  expect(screen.queryByText('Área interna')).toBeNull();expect(api.profile).not.toHaveBeenCalled();expect(api.subscription).not.toHaveBeenCalled();
+});
 
 it("revalida assinatura expirada mesmo com cache positivo de acesso", async () => {
   localStorage.setItem("__credmais_sub_status_v2_a", JSON.stringify({ v: "allowed", t: Date.now() }));

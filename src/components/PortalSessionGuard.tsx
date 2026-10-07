@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { hasPortalSession, isPortalRoute } from "@/lib/portalSession";
-import { supabase } from "@/integrations/supabase/client";
+import { isClientPortalActive, isPortalRoute,endCreditorSessionForPortal } from "@/lib/portalSession";
 
 /**
  * Guarda global: se existir sessão do portal do cliente no navegador,
@@ -14,12 +13,10 @@ export const PortalSessionGuard = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!hasPortalSession()) return;
+    if (!isClientPortalActive()) return;
 
     // Garante que não haja sessão de credor coexistindo
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) void supabase.auth.signOut();
-    });
+    void endCreditorSessionForPortal();
 
     if (!isPortalRoute(location.pathname)) {
       navigate("/portal-cliente", { replace: true });

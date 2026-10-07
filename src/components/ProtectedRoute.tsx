@@ -4,7 +4,7 @@ import { Link, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { AlertCircle, Lock, CreditCard, Wrench } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { hasPortalSession } from "@/lib/portalSession";
+import { isClientPortalActive } from "@/lib/portalSession";
 import { usePlatformSettings } from "@/hooks/usePlatformSettings";
 import { hasProfileEntitlement } from "@/lib/entitlement";
 import { toSafeHttpUrl } from "@/lib/safeUrl";
@@ -56,6 +56,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
   const { settings: platform } = usePlatformSettings();
+  const portalOnly=isClientPortalActive();
   const trialEndsAt = profile?.trial_ends_at ?? null;
   const subscriptionExpiresAt = profile?.subscription_expires_at ?? null;
   const subscriptionType = profile?.subscription_type ?? null;
@@ -65,7 +66,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const access = decision.key === accessKey ? decision.state : "checking";
 
   useEffect(() => {
-    if (loading || authError || !user?.id) return;
+    if (portalOnly || loading || authError || !user?.id) return;
     const setAccess = (state: AccessState) => setDecision({ key: accessKey, state });
     setAccess("checking");
     setCheckoutUrl(null);
@@ -161,10 +162,10 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     });
 
     return () => { cancelled = true; };
-  }, [accessKey]);
+  }, [accessKey,portalOnly]);
 
   // Se o navegador tem sessão do portal do cliente, jamais permite o app do credor.
-  if (hasPortalSession()) {
+  if (portalOnly) {
     return <Navigate to="/portal-cliente" replace />;
   }
 
@@ -283,7 +284,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
             <button
               onClick={async () => {
                 clearAccessCache(user.id);
-                await supabase.auth.signOut();
+                await supabase.auth.signOut({scope:'local'});
                 window.location.href = "/login";
               }}
               className="w-full py-2.5 rounded-xl border border-border text-muted-foreground text-xs hover:text-foreground transition"
