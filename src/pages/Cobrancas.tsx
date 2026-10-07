@@ -78,6 +78,7 @@ const humanDueLabel = (items: any[]): { text: string; tone: "danger" | "warn" | 
 type StatusFilter = "all" | "pending" | "overdue" | "paid";
 type PeriodFilter = "all" | "today" | "tomorrow" | "7d" | "30d" | "future";
 type SortKey = "priority" | "due_asc" | "due_desc" | "amount_desc" | "amount_asc" | "overdue_days";
+const COLLECTION_PAGE_SIZE = 30;
 
 const collectionPriority = (installment: any) => {
   const due = parseLocalDate(installment.due_date);
@@ -122,6 +123,12 @@ const Cobrancas = () => {
   const [bucket, setBucket] = useSessionPreference<"all" | "today" | "1-7" | "8-30" | "30+">(preferenceKey + "bucket", "all", ["all", "today", "1-7", "8-30", "30+"]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [groupMode, setGroupMode] = useSessionPreference<"expanded" | "collapsed">(preferenceKey + "groupMode", "collapsed", ["expanded", "collapsed"]);
+  const [visibleGroupCount, setVisibleGroupCount] = useState(COLLECTION_PAGE_SIZE);
+  const [visibleRowsByClient, setVisibleRowsByClient] = useState<Record<string, number>>({});
+  useEffect(() => {
+    setVisibleGroupCount(COLLECTION_PAGE_SIZE);
+    setVisibleRowsByClient({});
+  }, [user?.id, dSearch, filter, period, sort, focoDia, bucket, view, groupMode]);
   const toggleGroupCollapse = useCallback((cid: string) => {
     setCollapsed(prev => {
       const n = new Set(prev);
@@ -1115,7 +1122,8 @@ const Cobrancas = () => {
                 <button
                   onClick={toggleSelectAll}
                   className={`flex h-11 shrink-0 items-center gap-2 rounded-xl px-3.5 text-xs font-semibold transition-colors focus-ring ${selected.size > 0 ? "bg-primary/10 border border-primary/40 text-primary" : "bg-background/60 border border-border/50 text-foreground hover:border-primary/30"}`}
-                  title="Selecionar todas visíveis"
+                  title="Selecionar todas as parcelas filtradas"
+                  aria-label="Selecionar todas as parcelas filtradas"
                 >
                   {selected.size > 0 ? <CheckSquare size={14} /> : <Square size={14} />}
                   <span className="hidden sm:inline">{selected.size > 0 ? `${selected.size} sel.` : "Selecionar"}</span>
@@ -1242,10 +1250,11 @@ const Cobrancas = () => {
         />
       ) : (
         <div className="collection-list space-y-3 stagger-fade-in">
-          {(() => null)()}
           {(() => {
             const maxTotalWithFees = Math.max(1, ...grouped.map((g: any) => g.totalWithFees || g.total || 0));
-            return grouped.map((group: any) => {
+            // Only cards are limited; totals, filters and selection retain all data.
+            return grouped.slice(0, visibleGroupCount).map((group: any) => {
+            const visibleRows = visibleRowsByClient[group.client_id] ?? COLLECTION_PAGE_SIZE;
             const groupSelectable = group.items.filter((i: any) => isEmAberto(i));
             const groupSelectedCount = groupSelectable.filter((i: any) => selected.has(i.id)).length;
             const allSelected = groupSelectable.length > 0 && groupSelectedCount === groupSelectable.length;
@@ -1501,13 +1510,34 @@ const Cobrancas = () => {
 
                 {(!showHeader || !isCollapsed) && (
                   <div className={showHeader ? "border-t border-border bg-background/40 px-2 py-2 space-y-1.5" : ""}>
-                    {group.items.map((inst: any) => renderRow(inst))}
+                    {group.items.slice(0, visibleRows).map((inst: any) => renderRow(inst))}
+                    {visibleRows < group.items.length && (
+                      <div className="flex flex-wrap items-center justify-center gap-3 py-3 text-sm">
+                        <span className="text-muted-foreground">Mostrando {visibleRows} de {group.items.length} parcelas</span>
+                        <button
+                          type="button"
+                          aria-label={`Mostrar mais parcelas de ${group.client_name}`}
+                          onClick={() => setVisibleRowsByClient(prev => ({ ...prev, [group.client_id]: visibleRows + COLLECTION_PAGE_SIZE }))}
+                          className="rounded-xl bg-accent px-4 py-2.5 font-semibold text-foreground hover:bg-accent/70 focus-ring"
+                        >Mostrar mais parcelas</button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
             );
           });
           })()}
+          {visibleGroupCount < grouped.length && (
+            <div className="flex flex-wrap items-center justify-center gap-3 py-4 text-sm">
+              <span className="text-muted-foreground">Mostrando {visibleGroupCount} de {grouped.length} clientes</span>
+              <button
+                type="button"
+                onClick={() => setVisibleGroupCount(count => count + COLLECTION_PAGE_SIZE)}
+                className="rounded-xl bg-accent px-4 py-2.5 font-semibold text-foreground hover:bg-accent/70 focus-ring"
+              >Carregar mais clientes</button>
+            </div>
+          )}
         </div>
       )}
       </>)}

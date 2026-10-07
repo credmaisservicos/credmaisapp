@@ -29,3 +29,23 @@ Essa comparação mede a redução de arquivos solicitados neste cenário, não 
 Os testes cobrem abertura com importação atrasada, navegação entre telas com rede lenta, espera sem apagar o offline, instalação com concorrência limitada, preparação das rotas adicionais, rede sem resposta e falhas HTTP. A bateria de interface também verifica telas públicas, menus, formulários e tamanhos de celular, tablet e desktop.
 
 Ainda é necessário observar o uso em celulares físicos e contas com volumes reais diferentes para identificar problemas específicos que não se reproduzam com os dados simulados.
+
+## Carteiras grandes e atualizações em tempo real
+
+Na segunda revisão, cobranças passou a desenhar 30 cartões de clientes por vez, com o botão **Carregar mais clientes**. Cada grupo aberto mostra inicialmente até 30 parcelas, com a opção **Mostrar mais parcelas**. Buscar, trocar filtros ou ordenar reinicia essa apresentação. Totais, seleção global, seleção por cliente e consultas continuam usando todos os registros; o calendário também mantém o conjunto completo.
+
+Os eventos do banco agora compartilham um canal por chamada do hook e são agrupados em janelas de 250 ms. Uma sequência de alterações não dispara uma nova consulta para cada evento. Trocar de conta, de tabelas ou de chaves encerra o canal anterior e cancela a atualização pendente. O resumo de contratos na lista de clientes também é invalidado quando contratos ou parcelas mudam.
+
+Medição local em Chromium sem janela, viewport 390 × 844 e CPU limitada a 1/4, com **500 clientes fictícios e 6.000 parcelas**. O service worker foi desativado nas duas medições para observar a montagem da lista.
+
+| Medida | Antes | Depois |
+| --- | ---: | ---: |
+| Cartões montados inicialmente | 500 | 30 |
+| Nós DOM reportados pelo navegador | 42.014 | 4.405 |
+| Tempo observado até montar os cartões | 10.538 ms | 2.733 ms |
+| Tempo de execução de scripts | 2,703 s | 0,703 s |
+| Tempo de layout | 1,058 s | 0,214 s |
+
+Os nós DOM diminuíram 89,5% nesse cenário. Os tempos são uma amostra de execução local e podem variar; não são uma promessa de desempenho em aparelhos físicos. As consultas ainda carregam os registros completos, portanto esta alteração reduz o custo de desenhar a lista, sem reduzir os dados financeiros recebidos.
+
+A validação inclui uma carteira de 120 clientes e 1.440 parcelas, total de R$ 144.000, busca por um cliente fora do primeiro bloco, seleção global e filtrada, carregamento até o último cliente e um grupo com 75 parcelas. Cinco testes do hook verificam agrupamento de 500 eventos, alteração das assinaturas, cancelamento na saída e isolamento na troca de conta. Todos os dados e as chamadas de backend desses testes são simulados.

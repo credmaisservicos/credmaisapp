@@ -119,7 +119,7 @@ const Clientes = () => {
 
   useMultiTableRealtime(
     ["clients", "contracts", "contract_installments"],
-    [["clients", user?.id || ""]],
+    [["clients", user?.id || ""], ["clients-contract-summary", user?.id || ""]],
   );
 
   const online = useOnlineStatus();

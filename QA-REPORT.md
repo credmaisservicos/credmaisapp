@@ -1,5 +1,23 @@
 # QA Report — CredMais
 
+## Listas grandes e consultas repetidas — 2026-10-07
+
+Cobranças monta clientes e parcelas em blocos de 30, mantendo os totais e a
+seleção sobre o conjunto completo. Eventos do banco compartilham um canal por
+hook e atualizam consultas em janelas de 250 ms. Contratos e parcelas também
+atualizam o resumo da lista de clientes.
+
+Na medição com 500 clientes fictícios e 6.000 parcelas, os nós DOM passaram de
+42.014 para 4.405. Os limites e os tempos observados estão em
+[docs/mobile-performance.md](docs/mobile-performance.md).
+
+Validação: 413 testes Vitest, 111 testes de funções, 208 testes de interface,
+tipos, lint, regras de hooks, 42 funções verificadas e build aprovados. O teste
+do catálogo também passou. As novas regressões cobrem totais completos,
+seleção, busca além do primeiro bloco, todas as páginas e cancelamento de
+eventos ao trocar de conta. Backend simulado; nenhuma alteração em dados de
+clientes reais. Não houve teste em telefone físico nesta rodada.
+
 ## Revisão de desempenho em celulares — 2026-10-07
 
 As ilustrações usadas pelas telas passaram de 43,58 MB para 0,83 MB; os PNGs
