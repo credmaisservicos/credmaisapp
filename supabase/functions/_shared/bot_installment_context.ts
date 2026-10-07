@@ -17,6 +17,21 @@ export function freshPaymentContext(setAt:unknown,now=Date.now()) {
   return Number.isFinite(age)&&age>=0&&age<PAYMENT_CONTEXT_MS;
 }
 
+/** A contract-only answer completes the pending reference; a new parcel replaces it. */
+export function continueInstallmentRequest(reference:InstallmentReference,intent:string,memory:any,now=Date.now()) {
+  const pending=Array.isArray(memory.installment_choice_ids)&&memory.installment_choice_ids.length>0
+    && freshPaymentContext(memory.installment_choice_set_at,now)&&!reference.list;
+  if(!pending)return {reference,intent};
+  const previous:InstallmentReference=memory.installment_choice_reference || {};
+  let next=reference;
+  if(reference.context)next=Object.keys(previous).length?previous:reference;
+  else if(reference.option===undefined&&!reference.invalid) {
+    if(reference.contract&&reference.number===undefined&&!reference.date&&reference.day===undefined&&!reference.order)next={...previous,contract:reference.contract};
+    else if(!reference.contract&&previous.contract)next={...reference,contract:previous.contract};
+  }
+  return {reference:next,intent:intent==='summary'?(memory.installment_choice_intent || intent):intent};
+}
+
 /** Only interprets selection; never derives an amount from customer text. */
 export function parseInstallmentReference(text:string,memory:any={},now=Date.now()):InstallmentReference|null {
   const t=normalize(text);

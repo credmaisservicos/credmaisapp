@@ -467,3 +467,91 @@ Deno.test('numeric human choice never claims a handoff when persistence fails',a
 Deno.test('menu state failure does not queue an introductory message with unsaved context',async()=>{
  reset();clientMemory='{}';failMemory=true;const {response}=await turn('oi','first-menu-failed');assertEquals(response.status,500);assertEquals(jobs.length,0);assertEquals(eventCompleted,false);
 });
+
+function duplicateSecondParcel(){
+ addParcel(2);
+ addParcel(2,{id:'second-contract-2',contract_id:'bbbb2222',amount:450,paid_amount:70,due_date:'2099-02-02'});
+ addParcel(3,{contract_id:'bbbb2222'});
+}
+Deno.test('PIX request survives a numeric choice between contracts with the same parcel number',async()=>{
+ reset();duplicateSecondParcel();assertEquals((await turn('PIX parcela 2','fragment-pix')).body.status,'installment_ambiguous');
+ assertEquals(paymentQuote().installment_choice_intent,'payment');jobs=[];
+ const {body}=await turn('2','fragment-choice');assertEquals(body.installment_id,'second-contract-2');assertEquals(body.reply_intent,'payment');assertEquals(pixAmount(),380);
+});
+Deno.test('contract-only fragment retains both the requested parcel and its PIX',async()=>{
+ reset();duplicateSecondParcel();await turn('PIX parcela 2','fragment-contract-pix');jobs=[];
+ const {body}=await turn('contrato bbbb2222','fragment-contract');assertEquals(body.installment_id,'second-contract-2');assertEquals(pixAmount(),380);
+ assertEquals(paymentQuote().installment_choice_reference,{});
+});
+Deno.test('pending selection recalculates the outstanding amount after a new partial receipt',async()=>{
+ reset();duplicateSecondParcel();await turn('PIX parcela 2','fragment-recalculate');
+ additionalInstallments.find(row=>row.id==='second-contract-2').paid_amount=100;jobs=[];
+ const {body}=await turn('escolher 2','fragment-recalculate-choice');assertEquals(body.installment_id,'second-contract-2');assertEquals(pixAmount(),350);assertEquals(paymentQuote().pending_payment_amount,350);
+});
+Deno.test('PIX then parcel number answers the original request without requiring PIX again',async()=>{
+ reset();addParcel(2);await turn('PIX','fragment-generic');jobs=[];
+ const {body}=await turn('parcela 2','fragment-number');assertEquals(body.installment_id,'installment-2');assertEquals(pixAmount(),200);
+});
+for(const [question,intent] of [['quando vence a parcela 2?','due_date'],['qual valor da parcela 2?','balance'],['juros da parcela 2','charges']] as const)Deno.test(`informational intent survives contract selection: ${intent}`,async()=>{
+ reset();duplicateSecondParcel();await turn(question,`fragment-${intent}`);jobs=[];
+ const {body}=await turn('escolher 2',`fragment-${intent}-choice`);assertEquals(body.reply_intent,intent);assertEquals(body.installment_id,'second-contract-2');assert(jobs.every(j=>!j.text.includes('000201')));
+});
+Deno.test('an explicit due date question replaces an earlier PIX request during selection',async()=>{
+ reset();duplicateSecondParcel();await turn('PIX parcela 2','fragment-intent-start');
+ await turn('quando vence?','fragment-intent-change');assertEquals(paymentQuote().installment_choice_intent,'due_date');jobs=[];
+ const {body}=await turn('contrato bbbb2222','fragment-intent-contract');assertEquals(body.reply_intent,'due_date');assert(jobs.every(j=>!j.text.includes('000201')));
+});
+for(const state of ['expired','paid','foreign'] as const)Deno.test(`invalid pending option never pays a replacement parcel: ${state}`,async()=>{
+ reset();duplicateSecondParcel();await turn('PIX parcela 2',`fragment-invalid-${state}`);
+ const memory=paymentQuote();
+ if(state==='expired')memory.installment_choice_set_at=new Date(Date.now()-72*3600_000).toISOString();
+ if(state==='foreign')memory.installment_choice_ids[1]='foreign-installment';
+ if(state==='paid')additionalInstallments.find(row=>row.id==='second-contract-2').status='paid';
+ clientMemory=JSON.stringify(memory);jobs=[];
+ const {body}=await turn('escolher 2',`fragment-invalid-${state}-choice`);assertEquals(body.status,'installment_not_found');assert(jobs.every(j=>!j.text.includes('000201')));
+});
+Deno.test('loan flow clears a fragmented PIX request before selecting the loan profile',async()=>{
+ reset();duplicateSecondParcel();await turn('PIX parcela 2','fragment-clear-pix');
+ const loan=await turn('quero solicitar empréstimo','fragment-clear-loan');assertEquals(loan.body.status,'loan_type_menu');assertEquals(paymentQuote().installment_choice_ids,[]);assertEquals(paymentQuote().installment_choice_reference,{});assertEquals(paymentQuote().installment_choice_intent,'summary');
+ jobs=[];const {body}=await turn('2','fragment-clear-profile');assertEquals(body.status,'loan_documents');assert(jobs.every(j=>!j.text.includes('000201')));
+});
+Deno.test('failed fragment persistence queues no PIX and keeps the incoming event retryable',async()=>{
+ reset();duplicateSecondParcel();await turn('PIX parcela 2','fragment-fail-pix');jobs=[];failMemory=true;
+ const {response}=await turn('contrato bbbb2222','fragment-fail-contract');assertEquals(response.status,500);assertEquals(jobs.length,0);assertEquals(eventCompleted,false);
+});
+function closeSession(){conversation.last_message_preview='Atendimento encerrado por falta de resposta. Quando precisar continuar, envie uma nova mensagem para abrir o menu novamente.';}
+Deno.test('timeout resumption handles the current PIX request instead of replacing it with a menu',async()=>{
+ reset();addParcel(2);closeSession();const {body}=await turn('PIX parcela 2','resume-pix');assertEquals(body.installment_id,'installment-2');assertEquals(pixAmount(),200);
+ assert(paymentQuote().resumed_at);assert(jobs.every(j=>!j.text.includes('Seu atendimento foi reaberto')));
+ const writes=calls.filter(c=>c.path.endsWith('/clients')&&c.method==='PATCH');assert(writes.every(c=>c.query.user_id===`eq.${owner}`));
+});
+Deno.test('timeout resumption honors a human request immediately',async()=>{
+ reset();closeSession();const {body}=await turn('atendente','resume-human');assertEquals(body.status,'human_handoff');assert(conversation.bot_paused&&conversation.needs_human);assert(jobs.every(j=>!j.text.includes('Menu —')));
+});
+Deno.test('timeout resumption processes a numeric reply in the saved loan stage',async()=>{
+ reset();clientMemory=JSON.stringify({service_menu_started:true,service_menu_stage:'loan_type'});closeSession();
+ const {body}=await turn('2','resume-loan-profile');assertEquals(body.status,'loan_documents');assertEquals(paymentQuote().loan_profile,'clt');
+});
+for(const stage of ['main','loan_type','documents'])Deno.test(`generic timeout greeting resumes the saved stage: ${stage}`,async()=>{
+ reset();clientMemory=JSON.stringify({service_menu_started:true,service_menu_stage:stage});closeSession();const {body}=await turn('oi',`resume-greeting-${stage}`);
+ assertEquals(body.status,'session_resumed');assertEquals(body.stage,stage);assertEquals(paymentQuote().service_menu_stage,stage);assert(jobs.every(j=>!j.text.includes('000201')));
+});
+Deno.test('failed timeout memory write does not claim that the session resumed',async()=>{
+ reset();closeSession();failMemory=true;const {response}=await turn('oi','resume-memory-fail');assertEquals(response.status,500);assertEquals(jobs.length,0);assertEquals(eventCompleted,false);
+});
+Deno.test('failed loan profile persistence never requests documents for an unsaved stage',async()=>{
+ reset();clientMemory=JSON.stringify({service_menu_started:true,service_menu_stage:'loan_type'});failMemory=true;
+ const {response}=await turn('2','loan-profile-save-fail');assertEquals(response.status,500);assertEquals(jobs.length,0);assertEquals(eventCompleted,false);
+});
+Deno.test('generic lead greeting after timeout preserves its pending document stage',async()=>{
+ reset();knownClient=false;conversation.client_id=null;lead={id:'lead-test',user_id:owner,phone:'11999999999',notes:{service_menu_stage:'documents'}};closeSession();
+ const {body}=await turn('oi','resume-lead-docs');assertEquals(body.status,'session_reopened');assertEquals(lead.notes.service_menu_stage,'documents');assert(jobs.some(j=>j.text.includes('documentos pendentes')));assert(jobs.every(j=>!j.text.includes('Menu —')));
+ const update=calls.find(c=>c.path.endsWith('/leads')&&c.method==='PATCH');assertEquals(update.query.user_id,`eq.${owner}`);
+});
+Deno.test('transcribed audio resumes and answers the spoken request rather than showing the menu',async()=>{
+ reset();addParcel(2);settings.bot_process_audio=true;closeSession();
+ const keys=['GEMINI_API_KEY','GEMINI_ALLOWED_USER_IDS'],before=keys.map(k=>Deno.env.get(k));
+ Deno.env.set(keys[0],'isolated-gemini-key');Deno.env.set(keys[1],owner);
+ try{geminiTranscript='PIX parcela 2';const {body}=await invoke({audioMessage:{mimetype:'audio/ogg'}},true,'resume-audio');assertEquals(body.installment_id,'installment-2');assertEquals(pixAmount(),200);assert(paymentQuote().resumed_at);}
+ finally{keys.forEach((k,i)=>before[i]===undefined?Deno.env.delete(k):Deno.env.set(k,before[i]!));}
+});

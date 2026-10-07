@@ -32,7 +32,7 @@ import {callGemini, geminiConfigured} from '../_shared/gemini.ts';
 import {testRecipientScope} from '../_shared/bot_test_scope.ts';
 import {pendingClientReceipt} from '../_shared/bot_collection.ts';
 import {requestsHumanNegotiation, HUMAN_NEGOTIATION_REPLY} from '../_shared/human_negotiation.ts';
-import {parseInstallmentReference,resolveInstallmentReference,freshPaymentContext,type InstallmentReference} from '../_shared/bot_installment_context.ts';
+import {parseInstallmentReference,resolveInstallmentReference,continueInstallmentRequest,freshPaymentContext,type InstallmentReference} from '../_shared/bot_installment_context.ts';
 import {conversationSignal,installmentReplyIntent,generalChargesQuestion,GENERAL_CHARGES_REPLY,clarificationReply} from '../_shared/bot_conversation.ts';
 
 const corsHeaders = {
@@ -868,33 +868,44 @@ serve(async (req) => {
       return new Response(JSON.stringify({status:'human_handoff',reason:'negotiation'}),{headers:corsHeaders});
     }
 
-    if (sessionWasClosed && messageType==="text") {
-      if (convoId) await supabase.from("whatsapp_conversations").update({
+    if (sessionWasClosed && (messageType==="text" || messageType==="audio")) {
+      // Restore the saved stage, then handle the message that actually reopened it.
+      const resumeMenu=/^(?:oi|ola|bom dia|boa tarde|boa noite|menu|inicio|voltei|continuar|continue)[.!?\s]*$/.test(normalizeMenuText(incomingText));
+      if (convoId) await checkedBotQuery(supabase.from("whatsapp_conversations").update({
         bot_status: "active",
-      }).eq("id", convoId);
+      }).eq("id", convoId).eq('user_id',userId));
       if (client) {
         const remembered = parseMemory(client.bot_memory);
         const resumeStage = String(remembered.service_menu_stage || "main");
-        await supabase.from("clients").update({
-          bot_memory: serializeMemory({ ...remembered, service_menu_started: true, resumed_at: new Date().toISOString(), last_menu_at: Date.now() }),
-        }).eq("id", client.id);
+        const resumedMemory=serializeMemory({ ...remembered, service_menu_started: true, resumed_at: new Date().toISOString(), last_menu_at: Date.now() });
+        await checkedBotQuery(supabase.from("clients").update({bot_memory:resumedMemory}).eq("id",client.id).eq('user_id',userId));
+        client.bot_memory=resumedMemory;
         const company = settings.company_name || profile?.name || "CredMais Digital Pay";
         const resumeMessage = resumeStage === "documents"
           ? "Seu atendimento foi reaberto do ponto em que paramos. Pode continuar enviando os documentos pendentes, um arquivo por vez."
           : resumeStage === "loan_type"
           ? `Seu atendimento foi reaberto do ponto em que paramos. Escolha o tipo de empréstimo:\n\n${LOAN_TYPE_MENU}`
           : `Seu atendimento foi reaberto e o histórico continua salvo.\n\n*Menu — ${company}*\n${SERVICE_MENU}`;
-        await botSay(resumeMessage);
-        return new Response(JSON.stringify({ status: "session_resumed", stage: resumeStage }), { headers: corsHeaders });
+        if(resumeMenu) {
+          await botSay(resumeMessage);
+          return new Response(JSON.stringify({ status: "session_resumed", stage: resumeStage }), { headers: corsHeaders });
+        }
       } else {
-        const { data: leadToResume } = await supabase.from("leads").select("id, notes").eq("user_id", userId).eq("phone", senderPhone).maybeSingle();
-        if (leadToResume) await supabase.from("leads").update({
-          notes: { ...(leadToResume.notes || {}), service_menu_stage: "main", resumed_at: new Date().toISOString() },
-        }).eq("id", leadToResume.id);
+        const { data: leadToResume } = await checkedBotQuery(supabase.from("leads").select("id, notes").eq("user_id", userId).eq("phone", senderPhone).maybeSingle());
+        if (leadToResume) await checkedBotQuery(supabase.from("leads").update({
+          notes: { ...(leadToResume.notes || {}), service_menu_stage: leadToResume.notes?.service_menu_stage || "main", resumed_at: new Date().toISOString() },
+        }).eq("id", leadToResume.id).eq('user_id',userId));
+        if(resumeMenu) {
+          const company = settings.company_name || profile?.name || "CredMais Digital Pay";
+          const stage=leadToResume?.notes?.service_menu_stage;
+          await botSay(stage==='documents'
+            ? 'Seu atendimento foi reaberto do ponto em que paramos. Pode continuar enviando os documentos pendentes, um arquivo por vez.'
+            : stage==='loan_type'
+            ? `Seu atendimento foi reaberto do ponto em que paramos. Escolha o tipo de empréstimo:\n\n${LOAN_TYPE_MENU}`
+            : `Seu atendimento foi reaberto. O histórico anterior continua salvo.\n\n*Menu — ${company}*\n${SERVICE_MENU}`);
+          return new Response(JSON.stringify({ status: "session_reopened" }), { headers: corsHeaders });
+        }
       }
-      const company = settings.company_name || profile?.name || "CredMais Digital Pay";
-      await botSay(`Seu atendimento foi reaberto. O histórico anterior continua salvo.\n\n*Menu — ${company}*\n${SERVICE_MENU}`);
-      return new Response(JSON.stringify({ status: "session_reopened" }), { headers: corsHeaders });
     }
 
     if (convoExisting?.bot_paused) return new Response(JSON.stringify({ status: "paused" }), { headers: corsHeaders });
@@ -1306,9 +1317,12 @@ serve(async (req) => {
       const hasOpen = openInstQuick.length > 0;
       const hasPix = !!profile?.pix_key;
       const humanRequested = !!(convoExisting as any)?.needs_human;
-      const clearPaymentContext={pending_payment_installment_id:'',pending_payment_set_at:'',pending_payment_kind:'',pending_payment_amount:0,installment_choice_ids:[],installment_choice_set_at:'',clarification_count:0};
+      const clearPaymentContext={pending_payment_installment_id:'',pending_payment_set_at:'',pending_payment_kind:'',pending_payment_amount:0,installment_choice_ids:[],installment_choice_set_at:'',installment_choice_intent:'summary',installment_choice_reference:{},clarification_count:0};
 
       const respondInstallment = async (reference:InstallmentReference) => {
+        const request=continueInstallmentRequest(reference,installmentReplyIntent(txtRaw),mem,now);
+        reference=request.reference;
+        const replyIntent=request.intent;
         const selected=resolveInstallmentReference(openInstQuick,reference,mem,nowBrDay,now);
         const due=(row:any)=>String(row.due_date).split('-').reverse().join('/');
         const label=(row:any)=>`Parcela #${row.installment_number} · contrato ${String(row.contract_id).slice(0,8)} · vence ${due(row)} · ${money(botBalance(row))}`;
@@ -1326,16 +1340,16 @@ serve(async (req) => {
         }
         if(selected.length!==1) {
           const options=selected.slice(0,10);
-          await saveContext({...clearQuote,installment_choice_ids:options.map(row=>row.id),installment_choice_set_at:new Date(now).toISOString()});
+          await saveContext({...clearQuote,installment_choice_ids:options.map(row=>row.id),installment_choice_set_at:new Date(now).toISOString(),
+            installment_choice_intent:options.length?replyIntent:'summary',installment_choice_reference:options.length?reference:{}});
           await botSay(options.length
             ? `Encontrei mais de uma parcela. Qual você deseja?\n\n${options.map((row,index)=>`${index+1}. ${label(row)}`).join('\n')}\n\nResponda “escolher 1”, “escolher 2” ou informe o número da parcela e o contrato.${selected.length>10?' Existem outras parcelas; informe também o contrato para localizá-las.':''}`
             : 'Não encontrei uma parcela ativa em aberto com essa referência. Informe o número da parcela e o contrato, ou escreva “consultar parcelas”.');
           return new Response(JSON.stringify({status:options.length?'installment_ambiguous':'installment_not_found'}),{headers:corsHeaders});
         }
         const installment=selected[0],amount=botBalance(installment);
-        const replyIntent=installmentReplyIntent(txtRaw);
         await saveContext({pending_payment_installment_id:installment.id,pending_payment_kind:'payment',pending_payment_amount:amount,
-          pending_payment_set_at:new Date(now).toISOString(),installment_choice_ids:[],installment_choice_set_at:''});
+          pending_payment_set_at:new Date(now).toISOString(),installment_choice_ids:[],installment_choice_set_at:'',installment_choice_intent:'summary',installment_choice_reference:{}});
         const detail=`Valor original: ${money(installment.amount)}\nJá recebido: ${money(installment.paid_amount ?? 0)}\nEncargos de atraso: ${money(installment.late_fee ?? 0)}\n*Saldo atualizado: ${money(amount)}*`;
         if(replyIntent==='due_date')await botSay(`A parcela #${installment.installment_number} do contrato ${String(installment.contract_id).slice(0,8)} ${installment.due_date<nowBrDay?'venceu':'vence'} em *${due(installment)}*.`);
         else if(replyIntent==='charges')await botSay(`${label(installment)}\n\n${detail}\nOs encargos seguem as regras do contrato. Se discordar, escreva “atendente” para pedir uma conferência.`);
@@ -1496,16 +1510,16 @@ serve(async (req) => {
           await botSay(`Não consegui identificar a modalidade. Responda com um número:\n\n${LOAN_TYPE_MENU}`);
           return new Response(JSON.stringify({ status: "loan_type_invalid" }), { headers: corsHeaders });
         }
-        await botSay(`${loanDocumentsMessage(empresa, type)}\n\nPode enviar os documentos por aqui, um arquivo por vez.`);
         await checkedBotQuery(supabase.from("clients").update({
           bot_memory: serializeMemory({ ...mem, service_menu_stage: "documents", loan_profile: type, last_menu_at: now }),
         }).eq("id", client.id).eq("user_id", userId));
+        await botSay(`${loanDocumentsMessage(empresa, type)}\n\nPode enviar os documentos por aqui, um arquivo por vez.`);
         return new Response(JSON.stringify({ status: "loan_documents", type }), { headers: corsHeaders });
       }
 
       // ─── Roteamento por linguagem natural ────────────────────────────
       const naturalRoute = (): { choice: string; parcelHint?: number; amountHint?: number } | null => {
-        const t = txtLow;
+        const t = normalizeMenuText(txtRaw);
         // Números direto
         const numMatch = /^([1-5])[\.\)\s]*$/.exec(txtRaw);
         if (numMatch) return { choice: numMatch[1] };

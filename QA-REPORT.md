@@ -1,5 +1,9 @@
 # QA Report — CredMais
 
+## 2026-10-07 — Pedidos fragmentados e retomada de atendimento
+
+PIX, vencimento, saldo e encargos mantêm a intenção durante a escolha da parcela ou contrato. Referências expiram em 48 horas e opções inválidas não selecionam outra dívida; o saldo é recalculado após pagamentos novos. Sessões encerradas processam o pedido recebido na retomada, incluindo áudio transcrito, sem desfazer a pausa humana. Pedidos com acentos abrem a solicitação de empréstimo; a etapa de documentos é salva antes da orientação. Validação local: 468 testes Vitest, 185 compartilhados e 159 integrações HTTP sem rede, totalizando 812 testes, com 29 regressões novas. Tipos de 43 funções, tipos do app, lint, hooks e build aprovados. A suíte de 224 testes de interface permanece no CI. [Cenários e limites](docs/agente-continuidade-2026-10-07.md).
+
 ## 2026-10-07 — Clareza das respostas e saída de atendimento
 
 Consultas de vencimento, saldo e encargos recebem respostas específicas; o código PIX é enviado quando solicitado. Agradecimentos e recusas recebem respostas curtas. Saudações não iniciam cobrança e pedidos diretos de portal são atendidos antes da apresentação. Contestações de titularidade, dívida ou valor pausam o bot e chegam à equipe antes da exposição de parcelas. Duas tentativas de esclarecimento oferecem atendimento humano, incluindo IA. Mensagens e exemplos da IA deixam de prometer retorno ou baixa em prazo não confirmado. Validação local: 468 testes Vitest, 179 compartilhados e 136 integrações HTTP sem rede, totalizando 783 testes. Tipos de 43 funções, tipos do app, lint, hooks e build aprovados. A suíte de 224 testes de interface permanece no CI. [Cenários e limites](docs/agente-conversa-2026-10-07.md).

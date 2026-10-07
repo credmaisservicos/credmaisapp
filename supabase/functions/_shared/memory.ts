@@ -33,6 +33,17 @@ function flowState(raw: any): Record<string, unknown> {
   for (const key of numbers) if (typeof raw?.[key] === 'number' && Number.isFinite(raw[key]) && raw[key] >= 0) state[key] = raw[key];
   if (typeof raw?.service_menu_started === 'boolean') state.service_menu_started = raw.service_menu_started;
   if(Array.isArray(raw?.installment_choice_ids))state.installment_choice_ids=[...new Set(raw.installment_choice_ids.filter((id:unknown)=>typeof id==='string'&&id.length>0&&id.length<=150))].slice(0,10);
+  if(['payment','due_date','charges','balance','summary'].includes(raw?.installment_choice_intent))state.installment_choice_intent=raw.installment_choice_intent;
+  const reference=raw?.installment_choice_reference;
+  if(reference&&typeof reference==='object'&&!Array.isArray(reference)) {
+    const safe:Record<string,unknown>={};
+    if(Number.isInteger(reference.number)&&reference.number>0&&reference.number<=9999)safe.number=reference.number;
+    if(typeof reference.contract==='string'&&/^[a-z0-9][a-z0-9-]{3,35}$/.test(reference.contract))safe.contract=reference.contract;
+    if(typeof reference.date==='string'&&/^(?:\d{4}-)?\d{2}-\d{2}$/.test(reference.date))safe.date=reference.date;
+    if(Number.isInteger(reference.day)&&reference.day>=1&&reference.day<=31)safe.day=reference.day;
+    if(['next','last','oldest'].includes(reference.order))safe.order=reference.order;
+    state.installment_choice_reference=safe;
+  }
   for (const key of ['loan_documents_received','loan_documents_missing','loan_document_validations']) {
     if (Array.isArray(raw?.[key])) state[key] = dedupArr([],raw[key],SECTION_LIMIT);
   }
