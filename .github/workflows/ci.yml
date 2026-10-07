@@ -94,7 +94,7 @@ jobs:
 
   login:
     name: Login, rotas e interface (E2E local isolado)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
 
     steps:
@@ -106,6 +106,9 @@ jobs:
           cache: npm
 
       - run: npm ci
+      # The Azure HTTP mirror stalled repeatedly while fetching WebKit's codecs.
+      - name: Usar o mirror oficial do Ubuntu por HTTPS
+        run: sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list.d/ubuntu.sources
       - run: npx playwright install --with-deps chromium webkit
       - name: Testar login e interface com dados simulados
         # WebKit exercises the iPhone fetch errors and recovery too.
