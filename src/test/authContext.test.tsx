@@ -5,12 +5,12 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { saveOfflineSession } from "@/lib/offlineSession";
 
 const api = vi.hoisted(() => ({
-  getSession: vi.fn(), single: vi.fn(), rpc: vi.fn(), signOut: vi.fn(),
+  getSession: vi.fn(), single: vi.fn(), rpc: vi.fn(), signOut: vi.fn(), refreshSession: vi.fn(),
   listener: null as null | ((event: string, session: Session | null) => void),
 }));
 vi.mock("@/integrations/supabase/client", () => ({ supabase: {
   auth: {
-    getSession: api.getSession, signOut: api.signOut,
+    getSession: api.getSession, signOut: api.signOut, refreshSession: api.refreshSession,
     onAuthStateChange: (listener: typeof api.listener) => {
       api.listener = listener;
       return { data: { subscription: { unsubscribe: vi.fn() } } };
@@ -48,10 +48,89 @@ beforeEach(() => {
   api.single.mockResolvedValue(profileResult("a"));
   api.rpc.mockResolvedValue({ data: false, error: null });
   api.signOut.mockResolvedValue({ error: null });
+  api.refreshSession.mockResolvedValue({ data: { session: session("a") }, error: null });
 });
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe("sessão e perfil", () => {
+  it("renova uma sessão rejeitada com 401 e consulta novamente a mesma conta", async () => {
+    api.single.mockResolvedValueOnce({ data: null, error: { code: "PGRST303" }, status: 401 });
+    api.refreshSession.mockImplementation(async () => {
+      api.listener!("TOKEN_REFRESHED", session("a"));
+      return { data: { session: session("a") }, error: null };
+    });
+    const { result } = await open(); await emit(session("a"));
+    expect(result.current.profile?.id).toBe("a");
+    expect(result.current.authError).toBeNull();
+    expect(api.refreshSession).toHaveBeenCalledTimes(1);
+    expect(api.single).toHaveBeenCalledTimes(2);
+  });
+  it("limita a renovação a uma tentativa e não libera o acesso se o 401 persistir", async () => {
+    api.single.mockResolvedValue({ data: null, error: { code: "PGRST303" }, status: 401 });
+    const { result } = await open(); await emit(session("a"));
+    expect(result.current.profile).toBeNull();
+    expect(result.current.authError).toContain("perfil");
+    expect(api.refreshSession).toHaveBeenCalledTimes(1);
+    expect(api.single).toHaveBeenCalledTimes(2);
+  });
+  it.each(["SIGNED_IN", "TOKEN_REFRESHED"])("recupera um perfil que falhou após %s na mesma conta", async event => {
+    api.single.mockResolvedValueOnce({ data: null, error: { message: "Falha de rede" } });
+    const { result } = await open(); await emit(session("a"));
+    expect(result.current.authError).toContain("perfil");
+    await emit(session("a"), event);
+    expect(result.current.profile?.id).toBe("a");
+    expect(result.current.authError).toBeNull();
+    expect(api.single).toHaveBeenCalledTimes(2);
+  });
+  it("retoma a verificação quando a conexão volta", async () => {
+    api.single.mockResolvedValueOnce({ data: null, error: { message: "Falha de rede" } });
+    const { result } = await open(); await emit(session("a"));
+    await act(async () => { window.dispatchEvent(new Event("online")); });
+    expect(result.current.profile?.id).toBe("a");
+    expect(result.current.authError).toBeNull();
+  });
+  it("não consulta a conta antiga se a renovação ocorrer durante uma troca de usuário", async () => {
+    api.single.mockResolvedValueOnce({ data: null, error: {}, status: 401 }).mockResolvedValue(profileResult("b"));
+    api.refreshSession.mockImplementation(async () => {
+      api.listener!("SIGNED_IN", session("b"));
+      return { data: { session: session("b") }, error: null };
+    });
+    const { result } = await open(); await emit(session("a"));
+    expect(result.current.user?.id).toBe("b");
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(result.current.profile?.id).toBe("b");
+    expect(api.single).toHaveBeenCalledTimes(2);
+  });
+  it("descarta a renovação pendente após logout", async () => {
+    const renewal = deferred<{ data: { session: Session }; error: null }>();
+    api.single.mockResolvedValueOnce({ data: null, error: {}, status: 401 });
+    api.refreshSession.mockReturnValue(renewal.promise);
+    const { result } = await open(); await emit(session("a"));
+    await emit(null, "SIGNED_OUT");
+    await act(async () => { renewal.resolve({ data: { session: session("a") }, error: null }); });
+    expect(result.current.profile).toBeNull();
+    expect(result.current.user).toBeNull();
+    expect(api.single).toHaveBeenCalledTimes(1);
+  });
+  it("não renova nem usa cache para contornar uma negativa de acesso 403", async () => {
+    saveOfflineSession("a", { id: "a", subscription_type: "lifetime" }, true);
+    api.single.mockResolvedValue({ data: null, error: { code: "42501" }, status: 403 });
+    const { result } = await open(); await emit(session("a"));
+    expect(result.current.profile).toBeNull();
+    expect(result.current.isPlatformAdmin).toBe(false);
+    expect(api.refreshSession).not.toHaveBeenCalled();
+  });
+  it("revalida um administrador em cache ao reconectar e respeita a revogação", async () => {
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    saveOfflineSession("a", { id: "a", subscription_type: "lifetime" }, true);
+    const { result } = await open(); await emit(session("a"));
+    expect(result.current.isPlatformAdmin).toBe(true);
+    api.single.mockResolvedValue({ data: { id: "a", subscription_type: "lifetime", is_blocked: true }, error: null });
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
+    await act(async () => { window.dispatchEvent(new Event("online")); });
+    expect(result.current.isPlatformAdmin).toBe(false);
+    expect(result.current.profile?.is_blocked).toBe(true);
+  });
   it("aguarda o perfil no primeiro login antes de liberar as rotas", async () => {
     const pending = deferred<ReturnType<typeof profileResult>>();
     api.single.mockReturnValue(pending.promise);

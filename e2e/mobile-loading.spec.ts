@@ -20,6 +20,70 @@ async function mockBackend(page: Page) {
   });
 }
 
+async function login(page: Page) {
+  await page.goto("/login");
+  await page.getByLabel(/e-?mail/i).fill(user.email);
+  await page.getByLabel(/senha/i).first().fill("SenhaDeTeste123!");
+  await page.getByRole("button", { name: /entrar/i }).click();
+}
+
+test("sessão rejeitada na consulta de perfil é renovada sem prender o usuário na tela de erro", async ({ page }) => {
+  await mockBackend(page);
+  let rejected = false, refreshes = 0;
+  page.on("request", request => {
+    const url = new URL(request.url());
+    if (url.pathname === "/auth/v1/token" && url.searchParams.get("grant_type") === "refresh_token") refreshes++;
+  });
+  await page.route("**/rest/v1/profiles?**", async route => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get("select") === "*" && !rejected) {
+      rejected = true;
+      await route.fulfill({ status: 401, json: { code: "PGRST303", message: "JWT expired" } });
+    } else await route.fallback();
+  });
+  await login(page);
+  await expect(page.getByRole("tab", { name: "Visão geral", exact: true })).toBeVisible();
+  expect(rejected).toBe(true);
+  expect(refreshes).toBe(1);
+  await expect(page.getByRole("heading", { name: "Não foi possível verificar seu acesso", exact: true })).toHaveCount(0);
+});
+
+test("novo login na mesma conta recupera uma consulta de perfil que falhou", async ({ page }) => {
+  await mockBackend(page);
+  let unavailable = true;
+  await page.route("**/rest/v1/profiles?**", async route => {
+    if (new URL(route.request().url()).searchParams.get("select") === "*" && unavailable) {
+      await route.fulfill({ status: 503, json: { message: "Temporarily unavailable" } });
+    } else await route.fallback();
+  });
+  await login(page);
+  await expect(page.getByRole("heading", { name: "Não foi possível verificar seu acesso", exact: true })).toBeVisible();
+  unavailable = false;
+  // Navegação interna preserva o provider, como ao entrar novamente na mesma aba.
+  await page.evaluate(() => {
+    history.pushState({}, "", "/login"); window.dispatchEvent(new PopStateEvent("popstate"));
+  });
+  await page.getByLabel(/e-?mail/i).fill(user.email);
+  await page.getByLabel(/senha/i).first().fill("SenhaDeTeste123!");
+  await page.getByRole("button", { name: /entrar/i }).click();
+  await expect(page.getByRole("tab", { name: "Visão geral", exact: true })).toBeVisible();
+});
+
+test("consulta de perfil retoma automaticamente quando a conexão volta", async ({ page }) => {
+  await mockBackend(page);
+  let unavailable = true;
+  await page.route("**/rest/v1/profiles?**", async route => {
+    if (new URL(route.request().url()).searchParams.get("select") === "*" && unavailable) {
+      await route.fulfill({ status: 503, json: { message: "Temporarily unavailable" } });
+    } else await route.fallback();
+  });
+  await login(page);
+  await expect(page.getByRole("heading", { name: "Não foi possível verificar seu acesso", exact: true })).toBeVisible();
+  unavailable = false;
+  await page.evaluate(() => { window.dispatchEvent(new Event("online")); });
+  await expect(page.getByRole("tab", { name: "Visão geral", exact: true })).toBeVisible();
+});
+
 test("abertura lenta mantém a espera sem recarregar nem apagar o cache", async ({ page }) => {
   await mockBackend(page);
   await page.clock.install();

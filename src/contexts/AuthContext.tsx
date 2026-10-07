@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
-import { Session, User } from "@supabase/supabase-js";
+import { Session, User, type AuthChangeEvent } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { clearOfflineSession, loadOfflineSession, saveOfflineSession } from "@/lib/offlineSession";
@@ -56,11 +56,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const mounted = useRef(false);
   const activeUserId = useRef<string | null>(null);
   const profileRequest = useRef(0);
+  const profilePhase = useRef<"idle" | "loading" | "ready" | "error">("idle");
 
   const fetchProfile = useCallback(async (userId: string) => {
     if (!mounted.current || activeUserId.current !== userId) return;
     const request = ++profileRequest.current;
     const isCurrent = () => mounted.current && request === profileRequest.current && activeUserId.current === userId;
+    profilePhase.current = "loading";
     setLoading(true);
     setAuthError(null);
 
@@ -69,13 +71,27 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (!navigator.onLine && cached?.profile.id === userId) {
         setProfile(cached.profile);
         setIsPlatformAdmin(cached.isPlatformAdmin === true);
+        profilePhase.current = "ready";
         return;
       }
 
-      const [profileSettled, adminSettled] = await Promise.allSettled([
+      const readProfile = () => Promise.allSettled([
         withTimeout(supabase.from("profiles").select("*").eq("id", userId).single()),
         withTimeout(supabase.rpc("is_admin", { _user_id: userId })),
-      ]);
+      ] as const);
+      let [profileSettled, adminSettled] = await readProfile();
+      if (!isCurrent()) return;
+      if (profileSettled.status === "fulfilled" && profileSettled.value.status === 401) {
+        // A stored access token can be rejected while the refresh token is still
+        // valid. Renew once, then verify this same account with fresh requests.
+        // This runs outside the SDK's auth callback to avoid locking auth.
+        const renewed = await withTimeout(supabase.auth.refreshSession());
+        if (!isCurrent()) return;
+        if (renewed.error || renewed.data.session?.user.id !== userId) {
+          throw new Error("Não foi possível renovar sua sessão.");
+        }
+        [profileSettled, adminSettled] = await readProfile();
+      }
       if (!isCurrent()) return;
       const profileResult = profileSettled.status === "fulfilled" ? profileSettled.value : null;
       const adminResult = adminSettled.status === "fulfilled" ? adminSettled.value : null;
@@ -88,11 +104,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setProfile(profileResult.data);
       setIsPlatformAdmin(admin);
       saveOfflineSession(userId, profileResult.data, admin);
+      profilePhase.current = "ready";
     } catch {
       if (!isCurrent()) return;
       setProfile(null);
       setIsPlatformAdmin(false);
       setAuthError("Não foi possível carregar seu perfil. Verifique sua conexão e tente novamente.");
+      profilePhase.current = "error";
     } finally {
       if (isCurrent()) setLoading(false);
     }
@@ -110,18 +128,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     let initialized = false;
     let profileTimer: ReturnType<typeof setTimeout> | undefined;
 
-    const applySession = (newSession: Session | null) => {
+    const applySession = (newSession: Session | null, event?: AuthChangeEvent) => {
       if (disposed) return;
       const userId = newSession?.user.id ?? null;
       const sameUser = initialized && activeUserId.current === userId;
       initialized = true;
       setSession(newSession);
       setUser(newSession?.user ?? null);
-      if (sameUser) return;
+      if (sameUser) {
+        if (userId && profilePhase.current === "error" && (event === "SIGNED_IN" || event === "TOKEN_REFRESHED")) {
+          clearTimeout(profileTimer);
+          profileTimer = setTimeout(() => { if (!disposed) void fetchProfile(userId); }, 0);
+        }
+        return;
+      }
 
       const previousUserId = activeUserId.current;
       activeUserId.current = userId;
       ++profileRequest.current;
+      profilePhase.current = "idle";
       clearTimeout(profileTimer);
       setProfile(null);
       setIsPlatformAdmin(false);
@@ -134,9 +159,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     };
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
       receivedAuthEvent = true;
-      applySession(newSession);
+      applySession(newSession, event);
     });
 
     void withTimeout(supabase.auth.getSession())
@@ -160,6 +185,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
   }, [fetchProfile, bootstrapKey]);
 
+  useEffect(() => {
+    const reconnect = () => {
+      const userId = activeUserId.current;
+      if (navigator.onLine && userId && profilePhase.current !== "loading") void fetchProfile(userId);
+    };
+    window.addEventListener("online", reconnect);
+    return () => window.removeEventListener("online", reconnect);
+  }, [fetchProfile]);
+
   const signOut = async () => {
     const signedOutUserId = user?.id;
     const { error } = await withTimeout(supabase.auth.signOut());
@@ -167,6 +201,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     // Também invalida consultas caso o SDK não emita SIGNED_OUT.
     ++profileRequest.current;
     activeUserId.current = null;
+    profilePhase.current = "idle";
     if (signedOutUserId) clearOfflineSession(signedOutUserId);
     setSession(null);
     setUser(null);

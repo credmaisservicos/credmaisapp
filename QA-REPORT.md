@@ -1,5 +1,23 @@
 # QA Report — CredMais
 
+## Recuperação de perfil e sessão — 2026-10-07
+
+Foi observada uma consulta de perfil rejeitada com HTTP 401. O app não renovava
+a sessão nessa consulta e ignorava novo login ou renovação na mesma conta após
+a falha. Agora renova uma vez e reconsulta o perfil e a permissão administrativa,
+mantendo a verificação de identidade. Novo login e reconexão também retomam a
+consulta. Negativas persistentes continuam bloqueando o acesso.
+
+Validação: 422 testes Vitest, 111 testes de funções e 211 testes de interface,
+com tipos, lint, hooks, 42 funções verificadas e build aprovados. As novas
+regressões de navegador simulam 401, novo login e reconexão. Os testes de contexto
+cobrem também 403, renovação persistente, logout, troca de usuário e revogação de
+administrador ao reconectar. Backend de teste simulado.
+
+O diagnóstico do servidor usou consultas somente de leitura. Perfis, RLS, CORS
+e configuração de autenticação foram conferidos sem alterar dados ou permissões.
+Detalhes: [docs/auth-session-recovery.md](docs/auth-session-recovery.md).
+
 ## Listas grandes e consultas repetidas — 2026-10-07
 
 Cobranças monta clientes e parcelas em blocos de 30, mantendo os totais e a
