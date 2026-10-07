@@ -1,3 +1,4 @@
+import {testRecipientScope} from './bot_test_scope.ts';
 export function automationAccountActive(profile: any, now = new Date()) {
   if (!profile || profile.is_blocked) return false;
   const trial = new Date(profile.trial_ends_at || 0).getTime() > now.getTime();
@@ -18,11 +19,13 @@ export function withinBotHours(settings: any, now = new Date()) {
 }
 export function deliveryPolicy(settings: any, convo: any, profile: any, job: any, now = new Date()) {
   if (!convo || convo.blocked) return 'conversation_blocked';
+  const testScope=testRecipientScope(job.user_id || settings?.user_id,String(convo.jid || convo.phone || ''));
+  if (testScope === false) return 'test_recipient_blocked';
   if (job.purpose === 'manual' || job.approved_by) return null;
   if (!settings?.bot_enabled) return 'bot_disabled';
   if (!automationAccountActive(profile, now)) return 'automation_unavailable';
   if ((convo.bot_paused || convo.needs_human) && job.purpose !== 'handoff_notice') return 'human_takeover';
   if (!withinBotHours(settings, now)) return 'outside_business_hours';
-  if (settings.bot_auto_send !== true) return 'approval_required';
+  if (settings.bot_auto_send !== true && testScope !== true) return 'approval_required';
   return null;
 }

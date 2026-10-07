@@ -73,7 +73,7 @@ export const FAQ: FaqEntry[] = [
     patterns: rx("(qual (seu|teu) nome|voce e um bot|voce e humano|é um robo|é robô|é uma pessoa|com quem falo|quem esta ai)"),
     answer: (c) => `Sou o assistente virtual da *${c.companyName}* 🤖 — trabalho junto com o time pra te atender rapidinho. Se preferir humano é só pedir!` },
   { id: "greet.compliment", category: "greet",
-    patterns: rx("(muito bom|excelente|otimo atendimento|ótimo atendimento|voces sao demais|amei|adorei|nota 10|melhor|top demais)"),
+    patterns: rx("(muito bom|excelente|otimo atendimento|ótimo atendimento|voces sao demais|amei|adorei|nota 10|melhor atendimento|melhor empresa|top demais)"),
     answer: (c) => `Que alegria ouvir isso! 💚 Muito obrigado pelo carinho. A ${c.companyName} tá aqui pra isso.` },
 
   // ═════ EMPRÉSTIMO — INFORMAÇÕES BÁSICAS ═════
@@ -139,7 +139,7 @@ export const FAQ: FaqEntry[] = [
       : `Ainda não temos chave PIX configurada — já vou chamar um atendente pra te passar os dados. 👤` },
   { id: "pix.copy_paste", category: "pix",
     patterns: rx("(pix copia e cola|codigo pix|código pix|qr code|qrcode|copia e cola)"),
-    answer: (c) => `Digite *3* no menu que eu gero o *PIX Copia e Cola* já com o valor exato da sua parcela. 🔗` },
+    answer: () => `Digite *2* para consultar suas parcelas e os dados de pagamento disponíveis.` },
   { id: "pix.confirm_payment", category: "pix",
     patterns: rx("(ja paguei|já paguei|acabei de pagar|paguei agora|paguei hoje|efetuei o pagamento|fiz o pagamento)"),
     answer: (c) => `Ótimo! 🎉 Me envia o *comprovante* aqui (imagem ou PDF) que eu já dou baixa na sua parcela. Se preferir, também posso pedir pro time confirmar manualmente.` },
@@ -168,7 +168,7 @@ export const FAQ: FaqEntry[] = [
     answer: () => `Temos tolerância informal de alguns dias, mas juros diários começam a contar após o vencimento. Melhor é combinar antes! ⏰` },
   { id: "late.no_money", category: "late",
     patterns: rx("(sem dinheiro|nao tenho como pagar|não tenho como pagar|nao tenho grana|tô duro|to duro|desempregado|perdi o emprego|estou apertado)"),
-    answer: (c) => `Entendo, ${c.firstName || "amigo(a)"}. 💛 Vamos achar uma saída juntos: podemos *parcelar de novo* ou *dar um prazo*. Digite *5* pra renegociar ou me diga quanto consegue pagar hoje.` },
+    answer: (c) => `Entendo, ${c.firstName || "amigo(a)"}. A equipe pode avaliar sua situação. Digite *3* para solicitar renegociação; valores e prazos dependem da análise de um atendente.` },
   { id: "late.deadline_extend", category: "late",
     patterns: rx("(mais prazo|estender prazo|adiar|prorrogar|posso pagar (depois|semana que vem|mes que vem)|adiantar pra depois)"),
     answer: () => `Vamos ver o que dá pra fazer! Me diz *até que data* consegue pagar e o *valor* — envio pro time avaliar rapidinho. 📅` },
@@ -182,10 +182,10 @@ export const FAQ: FaqEntry[] = [
   // ═════ PORTAL / ACESSO ═════
   { id: "portal.link", category: "portal",
     patterns: rx("(portal|site|app|link|acessar minha conta|entrar no sistema|onde vejo|onde acompanho)"),
-    answer: (c) => `🔐 *Portal do Cliente*: ${c.portalLink || "digite *2* no menu"}\n\nLá você vê parcelas, comprovantes, contratos e ainda pode renegociar. Digite *2* pra receber um link com login automático!` },
+    answer: (c) => `*Portal do Cliente*: ${c.portalLink || 'digite portal'}\n\nLá você consulta parcelas, comprovantes e contratos. Digite *portal* para receber seu link de acesso.` },
   { id: "portal.password", category: "portal",
     patterns: rx("(esqueci a senha|nao lembro a senha|senha errada|nao consigo entrar|não consigo entrar|erro no login|login nao funciona)"),
-    answer: (c) => `Nosso portal não usa senha — o acesso é só com o *seu CPF*. Ou digite *2* aqui que eu te mando um *link mágico* que já loga automático! 🪄` },
+    answer: () => `Nosso portal usa o CPF cadastrado. Digite *portal* para receber seu link de acesso.` },
   { id: "portal.mobile", category: "portal",
     patterns: rx("(tem app|aplicativo|celular|baixar app|app da loja|play store|app store)"),
     answer: (c) => `Não precisa baixar nada! O portal roda direto no navegador do celular, é rápido e funciona igual app. 📱` },
@@ -199,9 +199,7 @@ export const FAQ: FaqEntry[] = [
     answer: (c) => `Ótimo que quer regularizar! 🤝 Podemos: 1) *reparcelar* a dívida; 2) dar *entrada + saldo*; 3) *desconto pra à vista*. Me diz quanto consegue por mês (ou hoje) que já preparo a proposta.` },
   { id: "reneg.discount", category: "reneg",
     patterns: rx("(desconto|reduzir juros|abater multa|tirar multa|desconto à vista|desconto a vista)"),
-    answer: (c) => c.earlyDiscountPct
-      ? `Pra quitação à vista temos até *${c.earlyDiscountPct}% de desconto* sobre o saldo! 💥 Digite *3* que já calculo com desconto aplicado.`
-      : `Podemos avaliar desconto pra pagamento à vista sim! Me diz quanto consegue pagar hoje que verifico com o gestor. 💚` },
+    answer: () => `A equipe precisa avaliar qualquer desconto para quitação. Digite *3* para solicitar renegociação.` },
   { id: "reneg.entry", category: "reneg",
     patterns: rx("(entrada|primeira parcela|dou um valor|dar um valor|adiantar um pouco)"),
     answer: () => `Perfeito! Uma boa entrada reduz muito o parcelamento. Me diz o *valor da entrada* e em *quantas parcelas* quer o saldo. 💪` },
@@ -212,9 +210,7 @@ export const FAQ: FaqEntry[] = [
   // ═════ QUITAÇÃO / ANTECIPAÇÃO ═════
   { id: "early.pay", category: "early",
     patterns: rx("(antecipar|quitar antes|pagar antes|pagar tudo|quitar tudo|liquidar|encerrar contrato)"),
-    answer: (c) => c.earlyDiscountPct
-      ? `Ótima escolha! 💚 Antecipando dá *${c.earlyDiscountPct}% de desconto* sobre juros que não venceram. Digite *3* + "tudo" que gero o PIX com desconto.`
-      : `Pode antecipar sim! Você paga só o principal + juros até a data + desconto proporcional. Digite *3* que gero o valor exato.` },
+    answer: () => `A equipe precisa conferir o saldo e as condições de antecipação. Digite *5* para falar com um atendente.` },
   { id: "early.next_installment", category: "early",
     patterns: rx("(pagar a proxima|próxima parcela|proxima parcela|adiantar (uma|duas|tres) parcela)"),
     answer: () => `Claro! Me diz *quantas parcelas* quer adiantar que já mando o PIX total. 💸` },
@@ -245,7 +241,7 @@ export const FAQ: FaqEntry[] = [
     answer: (c) => `Claro! O PDF assinado está no *portal* (${c.portalLink || "link acima"}). Se preferir, peço pro time enviar aqui também. 📄` },
   { id: "contract.change", category: "contract",
     patterns: rx("(alterar contrato|mudar contrato|trocar prazo|trocar valor|refazer contrato)"),
-    answer: () => `Contrato assinado não muda, mas *sempre podemos renegociar* criando um novo com condições diferentes. Digite *5* pra iniciar!` },
+    answer: () => `Alterações de valores ou prazos precisam ser avaliadas pela equipe. Digite *3* para solicitar renegociação.` },
   { id: "contract.cancel", category: "contract",
     patterns: rx("(cancelar (o )?contrato|desistir|arrependimento|nao quero mais|não quero mais o contrato)"),
     answer: () => `Se o dinheiro ainda não foi liberado, cancelamos sem custo. Se já caiu, você tem *7 dias* pra desistir (Código do Consumidor) devolvendo o valor. Chamo um atendente? 👤` },
@@ -253,7 +249,7 @@ export const FAQ: FaqEntry[] = [
   // ═════ HUMANO / ATENDIMENTO ═════
   { id: "human.talk", category: "human",
     patterns: rx("(atendente|humano|pessoa de verdade|falar com alguem|operador|gerente|responsavel|responsável|com uma pessoa|alguém real|dono|patrao|patrão|consultor)"),
-    answer: (c) => `Claro! 👤 Digite *4* que avisamos um atendente da *${c.companyName}* e pausamos o robô. Antes, me diz *em uma linha o que precisa* pra ele já entrar por dentro!` },
+    answer: (c) => `Digite *5* para falar com um atendente da *${c.companyName}*. O atendimento automático será pausado.` },
   { id: "human.hours", category: "human",
     patterns: rx("(horario de atendimento|horário|que horas atendem|abrem que horas|fim de semana|sabado|sábado|domingo|feriado)"),
     answer: (c) => `Nosso atendimento humano é *${c.businessHours || "seg-sex 9h-18h"}*. O bot responde 24h! Fora do horário deixe sua mensagem que retornamos assim que abrir. ⏰` },
@@ -261,7 +257,7 @@ export const FAQ: FaqEntry[] = [
     patterns: rx("(telefone|numero (de|do|para) contato|numero da empresa|liga (pra|para) mim|me liga)"),
     answer: (c) => c.supportPhone
       ? `Nosso contato oficial é *${c.supportPhone}*. 📞 Mas por aqui geralmente é mais rápido!`
-      : `Nosso canal oficial é este WhatsApp mesmo. 📱 Prefere que um atendente ligue? Digite *4*!` },
+      : `Nosso canal oficial é este WhatsApp. Se precisar de atendimento humano, digite *5*.` },
 
   // ═════ SIMULAÇÃO — VALORES ESPECÍFICOS ═════
   { id: "sim.1000", category: "sim",
@@ -311,16 +307,16 @@ export const FAQ: FaqEntry[] = [
   // ═════ PERGUNTAS CONTEXTUAIS (CLIENTE ATIVO) ═════
   { id: "ctx.next_due", category: "context",
     patterns: rx("(quando vence|proximo vencimento|próximo vencimento|proxima parcela vence|data de vencimento|dia da parcela)"),
-    answer: (c) => `Digite *1* que já te mando *todas as parcelas em aberto* com data e valor certinhos. 📅` },
+    answer: () => `Digite *2* para consultar as parcelas em aberto, com vencimentos e valores atualizados.` },
   { id: "ctx.balance", category: "context",
     patterns: rx("(saldo devedor|quanto (eu )?devo|quanto falta pagar|meu saldo|quanto ainda devo|total em aberto)"),
-    answer: (c) => `Digite *1* que puxo *tudo em aberto* com o saldo atualizado. 💰` },
+    answer: () => `Digite *2* para consultar suas parcelas e o saldo atualizado.` },
   { id: "ctx.installments_left", category: "context",
     patterns: rx("(quantas parcelas faltam|parcelas restantes|faltam quantas)"),
-    answer: () => `Digite *1* que mostro parcelas em aberto e progresso do contrato com barra visual! 📊` },
+    answer: () => `Digite *2* para consultar as parcelas em aberto. O progresso do contrato também aparece no portal.` },
   { id: "ctx.history", category: "context",
     patterns: rx("(historico|histórico|extrato|todos os pagamentos|o que ja paguei|que ja paguei)"),
-    answer: (c) => `Digite *2* pro portal — lá tem *extrato completo* com todos os pagamentos, comprovantes em PDF e datas. 📜` },
+    answer: () => `Digite *portal* para acessar o histórico de parcelas e pagamentos do seu cadastro.` },
   { id: "ctx.new_loan", category: "context",
     patterns: rx("(novo emprestimo|outro emprestimo|mais um emprestimo|posso pegar mais|quero pegar de novo|renovar)"),
     answer: (c) => `Que ótimo saber que voltou! 💚 Vou avisar seu consultor pra preparar uma *nova proposta com condições especiais* (cliente antigo tem prioridade).` },
@@ -334,7 +330,7 @@ export const FAQ: FaqEntry[] = [
     answer: () => `Atendemos *todo o Brasil*! Onde tiver PIX, a gente empresta. 🇧🇷` },
   { id: "misc.tax_id", category: "misc",
     patterns: rx("(cnpj|razao social|razão social|nome empresarial|registro banco central|bacen|autorizacao)"),
-    answer: (c) => `Somos empresa registrada e atuamos dentro das normas. Posso pedir pro time enviar o CNPJ e razão social? Digite *4*! 📋` },
+    answer: () => `Digite *5* para solicitar à equipe o CNPJ e a razão social da empresa.` },
   { id: "misc.language", category: "misc",
     patterns: rx("(fala ingles|english|habla espanol|other language|otro idioma)"),
     answer: () => `Atendemos em *português* apenas por enquanto. 🇧🇷 Português mesmo é o que fluímos! 😄` },

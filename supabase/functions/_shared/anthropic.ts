@@ -1,16 +1,11 @@
 // ============================================================================
 // Helper compartilhado de IA.
 //
-// Antes chamava a API da Anthropic direto e todas as funções de IA do app
-// quebravam com "Your credit balance is too low to access the Anthropic API".
-// Agora o caminho padrão é o Lovable AI Gateway (OpenAI-compatible), que já é
-// usado no resto do app. A Anthropic continua como reserva: se não houver
-// LOVABLE_API_KEY mas houver ANTHROPIC_API_KEY, usamos a Anthropic.
-//
-// A assinatura pública (callAnthropic / callAnthropicJSON / ANTHROPIC_MODEL)
-// foi mantida de propósito para não mexer nas 11 funções que já a importam.
+// Gemini direto, com escopo opcional por conta, e provedores de reserva.
+// A assinatura pública é mantida para os consumidores existentes.
 // ============================================================================
 
+import { callGemini, geminiConfigured } from './gemini.ts';
 export const ANTHROPIC_MODEL = "claude-sonnet-4-5-20250929";
 
 /** Modelo usado no Lovable AI Gateway. */
@@ -30,6 +25,7 @@ export interface CallAnthropicParams {
   temperature?: number;
   model?: string;
   timeoutMs?: number;
+  userId?: string;
 }
 
 /** Converte o conteúdo (string ou blocos Anthropic) para texto simples. */
@@ -128,22 +124,30 @@ async function callAnthropicDirect(params: CallAnthropicParams, apiKey: string):
 }
 
 /**
- * Chama a IA. Ordem de tentativa: DeepSeek → Lovable AI Gateway → Anthropic.
+ * Chama a IA. Ordem: Gemini → DeepSeek → Lovable AI Gateway → Anthropic.
  * A ordem existe porque o gateway e a Anthropic podem estar sem crédito; a
  * primeira chave que responder resolve a chamada.
  */
+export function hasAIProvider(userId?: string): boolean {
+  return geminiConfigured(userId) || ['DEEPSEEK_API_KEY','LOVABLE_API_KEY','ANTHROPIC_API_KEY'].some(k => !!Deno.env.get(k));
+}
+
 export async function callAnthropic(params: CallAnthropicParams): Promise<string> {
   const deepseekKey = Deno.env.get("DEEPSEEK_API_KEY");
   const lovableKey = Deno.env.get("LOVABLE_API_KEY");
   const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
 
   const provedores: Array<[string, () => Promise<string>]> = [];
+  if (geminiConfigured(params.userId)) provedores.push(['Gemini', async () => {
+    const result = await callGemini(params);
+    return result.content.filter(b => b.type === 'text').map(b => b.text).join('\n');
+  }]);
   if (deepseekKey) provedores.push(["DeepSeek", () => callDeepSeek(params, deepseekKey)]);
   if (lovableKey) provedores.push(["Lovable AI Gateway", () => callGateway(params, lovableKey)]);
   if (anthropicKey) provedores.push(["Anthropic", () => callAnthropicDirect(params, anthropicKey)]);
 
   if (provedores.length === 0) {
-    throw new Error("Nenhuma chave de IA configurada (DEEPSEEK_API_KEY, LOVABLE_API_KEY ou ANTHROPIC_API_KEY)");
+    throw new Error("Nenhuma chave de IA configurada para esta conta");
   }
 
   let ultimoErro: unknown;

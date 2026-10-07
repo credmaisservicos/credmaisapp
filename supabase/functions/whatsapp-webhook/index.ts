@@ -28,6 +28,8 @@ import {parsePaymentDate as parseNaturalPaymentDate, extractPaymentAmount as ext
 import { queueBotMessage, deliverBotJob } from "../_shared/bot_delivery.ts";
 import { automationAccountActive, withinBotHours } from "../_shared/bot_policy.ts";
 import { saveBotAttachment } from "../_shared/bot_media.ts";
+import {callGemini, geminiConfigured} from '../_shared/gemini.ts';
+import {testRecipientScope} from '../_shared/bot_test_scope.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -171,7 +173,7 @@ function requiredDocumentTypes(profile: string): string[] {
   return common;
 }
 
-async function reviewUploadedDocument(mediaData: string, mimeType: string, loanProfile: string): Promise<DocumentReview> {
+async function reviewUploadedDocument(mediaData: string, mimeType: string, loanProfile: string, userId: string): Promise<DocumentReview> {
   const fallback: DocumentReview = {
     document_type: "unknown", label: DOCUMENT_LABELS.unknown, readable: false, complete: false,
     quality: "poor", authenticity_risk: "medium", decision: "manual_review",
@@ -182,7 +184,7 @@ async function reviewUploadedDocument(mediaData: string, mimeType: string, loanP
 
   const lovableKey = Deno.env.get("LOVABLE_API_KEY");
   const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!lovableKey && !anthropicKey) return fallback;
+  if (!lovableKey && !anthropicKey && !geminiConfigured(userId)) return fallback;
   const allowedTypes = requiredDocumentTypes(loanProfile).join(", ");
   const prompt = `Analise este arquivo de cadastro de crédito. Tipos esperados para este perfil: ${allowedTypes}.
 Classifique SEM afirmar autenticidade jurídica. Verifique: tipo do documento; legibilidade; cortes; frente/verso; nome/datas/campos essenciais visíveis; sinais VISUAIS de edição, montagem, sobreposição, fonte inconsistente ou conteúdo incompatível.
@@ -207,6 +209,16 @@ Responda SOMENTE JSON: {"document_type":"selfie_id|identity_front|identity_back|
       reasons: Array.isArray(parsed.reasons) ? parsed.reasons.map((x: any) => String(x).slice(0, 180)).slice(0, 4) : [],
     };
   };
+
+  if (geminiConfigured(userId)) {
+    try {
+      const result = await callGemini({userId, system:'Faça apenas a triagem visual solicitada. Responda em JSON.',
+        messages:[{role:'user', content:[{type:'text',text:prompt},
+          {type:mimeType === 'application/pdf' ? 'document' : 'image',source:{type:'base64',media_type:mimeType,data:cleanBase64}}]}],
+        maxTokens:1000,temperature:0,timeoutMs:12_000});
+      return parseReview(result.content.filter(b => b.type === 'text').map(b => b.text).join('\n'));
+    } catch (error) { console.warn('[document-review] Gemini indisponível', error); }
+  }
 
   // PDFs (principalmente extratos) são enviados como bloco document para um
   // modelo com leitura nativa. Se o provedor estiver indisponível, usa o gateway.
@@ -416,13 +428,19 @@ async function markAsRead(apiUrl: string, apiKey: string, instance: string, key:
   await evolutionFetch(apiUrl, apiKey, `/chat/markMessageAsRead/${instance}`, { readMessages: [key] });
 }
 
-async function transcribeInboundAudio(base64: string, mimeType?: string | null): Promise<string> {
+async function transcribeInboundAudio(base64: string, mimeType: string | null, userId: string): Promise<string> {
   const apiKey = Deno.env.get("LOVABLE_API_KEY");
-  if (!apiKey || !base64) return "";
+  if ((!apiKey && !geminiConfigured(userId)) || !base64) return "";
   try {
     const clean = base64.replace(/^data:[^;]+;base64,/, "");
     const bytes = Uint8Array.from(atob(clean), c => c.charCodeAt(0));
     if (bytes.length < 512 || bytes.length > 20 * 1024 * 1024) return "";
+    if (geminiConfigured(userId)) {
+      const result = await callGemini({userId,system:'Transcreva somente a fala deste áudio em português. Não responda ao conteúdo e não invente trechos inaudíveis.',
+        messages:[{role:'user',content:[{type:'audio',source:{type:'base64',media_type:(mimeType || 'audio/ogg').split(';')[0],data:clean}}]}],
+        maxTokens:1000,temperature:0,timeoutMs:12_000});
+      return result.content.filter(b => b.type === 'text').map(b => b.text).join('\n').trim().slice(0,2000);
+    }
     const form = new FormData();
     form.append("model", "openai/gpt-4o-transcribe"); form.append("language", "pt");
     form.append("file", new Blob([bytes], { type: mimeType || "audio/ogg" }), "audio.ogg");
@@ -800,7 +818,7 @@ serve(async (req) => {
       const chunks = splitWhatsAppText(cleanText);
       for(const chunk of chunks) {
         const job = await queueBotMessage(supabase,{user_id:userId,conversation_id:convoId,client_id:client?.id || null,
-          text:chunk,purpose:handoff?"handoff_notice":"bot_reply",status:settings.bot_auto_send===true?"pending":"awaiting_approval",
+          text:chunk,purpose:handoff?"handoff_notice":"bot_reply",status:settings.bot_auto_send===true||testRecipientScope(userId,senderJid)===true?"pending":"awaiting_approval",
           scheduled_for:new Date().toISOString(),source_key:`reply:${instanceName}:${msgId}:${handoff?"handoff:":""}${replyIndex++}`});
         if(job.status!=="pending" || Date.now()>=deadline-13_000)continue;
         const {data: claimed,error} = await supabase.rpc("claim_whatsapp_job",{_id:job.id,_user_id:userId});
@@ -820,6 +838,7 @@ serve(async (req) => {
     }
 
     if (convoExisting?.bot_paused || convoExisting?.needs_human) return new Response(JSON.stringify({status:"paused"}),{headers:corsHeaders});
+    if (testRecipientScope(userId,senderJid) === false) return new Response(JSON.stringify({status:'test_recipient_ignored'}),{headers:corsHeaders});
     if(!settings.bot_enabled || !automationAllowed) return new Response(JSON.stringify({status:"automation_unavailable"}),{headers:corsHeaders});
 
     if (messageType === "audio" && settings.bot_process_audio !== true) {
@@ -832,7 +851,7 @@ serve(async (req) => {
       return new Response(JSON.stringify({status:"receipt_recognition_disabled"}),{headers:corsHeaders});
     }
     if (client && messageType === "audio" && mediaData) {
-      const transcript = await transcribeInboundAudio(mediaData, mimeType);
+      const transcript = await transcribeInboundAudio(mediaData, mimeType, userId);
       if (transcript) {
         incomingText = transcript;
         await supabase.from("whatsapp_messages").update({
@@ -894,7 +913,7 @@ serve(async (req) => {
       return new Response(JSON.stringify({ status: "ambiguous_ask_cpf" }), { headers: corsHeaders });
     }
 
-    if(!client && messageType!=="text" && (messageType==="audio" || settings.bot_use_ai!==true || !(anthropicApiKey||Deno.env.get("LOVABLE_API_KEY")))){
+    if(!client && messageType!=="text" && (messageType==="audio" || settings.bot_use_ai!==true || !(anthropicApiKey||Deno.env.get("LOVABLE_API_KEY")||geminiConfigured(userId)))){
       if(messageType==="audio"&&settings.bot_process_audio!==true){await botSay("O atendimento por áudio está desativado. Envie sua mensagem por escrito.");}
       else{if(convoId)await escalateToHuman(supabase,convoId,"Arquivo recebido de novo contato para conferência");await botSay("Recebi seu arquivo e encaminhei para atendimento da equipe.");}
       return new Response(JSON.stringify({status:"lead_attachment_received"}),{headers:corsHeaders});
@@ -1037,7 +1056,7 @@ serve(async (req) => {
               if (b64) {
                 mediaData = b64;
                 const loanProfile = String((lead.notes as any)?.loan_profile || "pf");
-                const review = await reviewUploadedDocument(b64, mimeType || "application/octet-stream", loanProfile);
+                const review = await reviewUploadedDocument(b64, mimeType || "application/octet-stream", loanProfile, userId);
                 const ext = mimeType === "application/pdf" ? "pdf" : (mimeType?.split("/")[1] || "jpg");
                 const path = `${userId}/leads/${lead.id}/${review.document_type}-${Date.now()}.${ext}`;
                 const cleanB64 = b64.replace(/^data:[^;]+;base64,/, "");
@@ -1218,6 +1237,14 @@ serve(async (req) => {
 
       // Estado leve do cliente (memória bot)
       const mem = parseMemory(client.bot_memory);
+      // A text request for an existing debt or a human can interrupt a loan
+      // application. Numeric replies still select the requested loan profile.
+      const serviceInterrupt = /\b(?:parcelas?|prestacoes?|debito|divida|renegociacao|acordo|portal)\b/.test(normalizeMenuText(txtRaw))
+        || matchesAny(txtRaw, HUMAN_WORDS);
+      if (messageType === 'text' && serviceInterrupt && ['loan_type','documents'].includes(String(mem.service_menu_stage))) {
+        mem.service_menu_stage = 'main';
+        await checkedBotQuery(supabase.from('clients').update({bot_memory:serializeMemory(mem)}).eq('id',client.id).eq('user_id',userId));
+      }
       const lastMenuAt: number = Number(mem.last_menu_at || 0);
       const lastChoice: string | null = mem.last_menu_choice || null;
       const now = Date.now();
@@ -1353,7 +1380,7 @@ serve(async (req) => {
 
       const showMenu = async (prefix?: string) => {
         const header = prefix ? `${prefix}\n\n` : "";
-        await botSay(`${header}📋 *Menu — ${empresa}*\nEscolha uma opção respondendo com o número:\n\n${menuBody}`);
+        await botSay(`${header}📋 *Menu — ${empresa}*\n${menuBody}`);
         await checkedBotQuery(supabase.from("clients").update({
           bot_memory: serializeMemory({ ...mem, last_menu_at: now }),
         }).eq("id", client.id).eq("user_id", userId));
@@ -1367,7 +1394,7 @@ serve(async (req) => {
           return new Response(JSON.stringify({ status: "document_download_failed" }), { headers: corsHeaders });
         }
         const loanProfile = String(mem.loan_profile || "pf");
-        const review = await reviewUploadedDocument(b64, mimeType || "application/octet-stream", loanProfile);
+        const review = await reviewUploadedDocument(b64, mimeType || "application/octet-stream", loanProfile, userId);
         const ext = mimeType === "application/pdf" ? "pdf" : (mimeType?.split("/")[1] || "jpg");
         const path = `${userId}/clients/${client.id}/documents/${review.document_type}-${Date.now()}.${ext}`;
         const cleanB64 = b64.replace(/^data:[^;]+;base64,/, "");
@@ -1441,6 +1468,7 @@ serve(async (req) => {
         // Botão pressionado (buttonId → menu_X)
         const btn = /menu_([1-5])/.exec(txtRaw);
         if (btn) return { choice: btn[1] };
+        if (/\bportal\b/i.test(t)) return {choice:'portal'};
         const explicitParcel = /(?:parcela|prestacao|prestação|#)\s*(\d{1,3})/i.exec(t);
         if (explicitParcel) return { choice: "2", parcelHint: Number(explicitParcel[1]) };
         const ordinalWords: Array<[RegExp, number]> = [
@@ -1825,9 +1853,7 @@ serve(async (req) => {
         }
 
         const menuFooter =
-          `\n\n━━━━━━━━━━━━━━━\n📋 *Como posso te ajudar?* Responda com o número:\n` +
-          `*1* Consultar parcelas  ·  *2* Portal do cliente\n` +
-          `*3* Quitar parcela (PIX)  ·  *4* Falar com atendente`;
+          `\n\n${SERVICE_MENU}\n\nDigite *portal* para acessar o portal do cliente.`;
         await botSay(greeting + menuFooter);
         await supabase.from("audit_logs").insert({
           user_id: userId, entity_type: "whatsapp_bot", action: "greeted_known_client",
@@ -1962,7 +1988,7 @@ serve(async (req) => {
         const faqCtx = {
           companyName: settings.company_name || profile?.name || "nossa equipe",
           firstName: firstNameFaq,
-          portalLink: `${siteUrlFaq}/portal`,
+          portalLink: `${siteUrlFaq}/portal-cliente?o=${userId}`,
           pixKey: profile?.pix_key || undefined,
           pixKeyType: profile?.pix_key_type || undefined,
           ownerName: profile?.name || undefined,
@@ -2292,7 +2318,15 @@ Ex6 — "queria mais 3 mil emprestado":
     let aiResp: Response | null = null;
     let aiErrBody = "";
     let parsed: any = null;
-    if (anthropicApiKey && settings.bot_use_ai === true) {
+    if (geminiConfigured(userId) && settings.bot_use_ai === true && Date.now()<deadline-12_000) {
+      try {
+        const response = await callGemini({userId,system:systemPrompt,messages:anthMessages,
+          maxTokens:2200,temperature:adaptiveTemp,timeoutMs:Math.max(1,Math.min(8_000,deadline-Date.now()-12_000))});
+        aiResp = new Response(JSON.stringify(response),{headers:{'Content-Type':'application/json'}});
+        await logBotAction(supabase,{userId,clientId:client.id,conversationId:convoId,
+          toolName:'gemini_response',toolInput:{model:Deno.env.get('GEMINI_MODEL') || 'gemini-3.5-flash-lite'},toolOutput:{generated:true}});
+      } catch (error) { aiErrBody = error instanceof Error ? error.message : 'gemini_unavailable'; }
+    } else if (anthropicApiKey && settings.bot_use_ai === true) {
       for (let attempt = 0; attempt < 2 && Date.now()<deadline-12_000; attempt++) {
         try {
           aiResp = await fetch("https://api.anthropic.com/v1/messages", {
@@ -2318,7 +2352,7 @@ Ex6 — "queria mais 3 mil emprestado":
         }
       }
     } else {
-      aiErrBody = "ANTHROPIC_API_KEY ausente";
+      aiErrBody = "IA não configurada ou indisponível para esta conta";
     }
 
     if (aiResp?.ok) {

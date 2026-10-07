@@ -6,12 +6,12 @@ for(const [k,v] of Object.entries({SUPABASE_URL:backend,SUPABASE_SERVICE_ROLE_KE
 Deno.env.delete('ANTHROPIC_API_KEY');Deno.env.delete('LOVABLE_API_KEY');
 let calls:any[]=[],messages:any[]=[],reviews:any[]=[],jobs:any[]=[];
 let settings:any,conversation:any,knownClient=true,failSettings=false,ownsLease=true,eventCompleted=false;
-let clientMemory:string,installment:any,contract:any,failPromise=false,failCancel=false,failContract=false,failReview=false,failMemory=false;
+let clientMemory:string,installment:any,contract:any,failPromise=false,failCancel=false,failContract=false,failReview=false,failMemory=false,geminiStatus=200;
 const json=(v:any,status=200)=>new Response(JSON.stringify(v),{status,headers:{'Content-Type':'application/json'}});
 const rows=(v:any,req:Request)=>json(req.headers.get('Accept')?.includes('vnd.pgrst.object')?v:(v?[v]:[]));
 function reset(){
  calls=[];messages=[];reviews=[];jobs=[];knownClient=true;failSettings=false;ownsLease=true;eventCompleted=false;
- clientMemory=JSON.stringify({service_menu_started:true});failPromise=false;failCancel=false;failContract=false;failReview=false;failMemory=false;
+ clientMemory=JSON.stringify({service_menu_started:true});failPromise=false;failCancel=false;failContract=false;failReview=false;failMemory=false;geminiStatus=200;
  installment={id:'installment-test',user_id:owner,client_id:clientId,contract_id:'contract-test',amount:100,paid_amount:40,late_fee:0,scheduled_interest:10,status:'pending',due_date:'2099-01-01',installment_number:1,contracts:{status:'active',daily_interest_percent:4}};
  contract={id:'contract-test',status:'active',capital:90,total_amount:100,total_interest:10,interest_rate:10,num_installments:1,loan_mode:'fixed'};
  settings={user_id:owner,company_name:'Teste',bot_enabled:true,bot_auto_send:false,bot_auto_confirm_payment:true,bot_use_ai:false,bot_process_receipts:true,bot_process_audio:false,bot_work_days:['mon','tue','wed','thu','fri','sat','sun'],bot_business_start:'00:00',bot_business_end:'23:59',whatsapp_instance:'test',whatsapp_api_url:provider,whatsapp_api_key:'isolated-provider'};
@@ -20,6 +20,9 @@ function reset(){
 globalThis.fetch=async(input,init)=>{
  const req=new Request(input,init),u=new URL(req.url),raw=await req.clone().text();let body:any={};try{body=JSON.parse(raw||'{}');}catch{/* binary attachment */}
  calls.push({path:u.pathname,method:req.method,body,origin:u.origin,query:Object.fromEntries(u.searchParams)});
+ if(u.origin==='https://generativelanguage.googleapis.com')return geminiStatus===200
+   ? json({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify({reply:'Posso orientar sobre suas parcelas e encaminhar pedidos para a equipe.',intent:'duvida',needs_human:false})}]}}]})
+   : json({error:{message:'isolated-provider-error'}},geminiStatus);
  if(u.origin===provider){
    if(u.pathname.includes('getBase64FromMediaMessage'))return json({base64:btoa('isolated fictional receipt')});
    return json({key:{id:'provider-test'}});
@@ -65,8 +68,8 @@ globalThis.fetch=async(input,init)=>{
  return new Response(null,{status:201});
 };
 await import('../whatsapp-webhook/index.ts');const webhook=handlers.at(-1)!;
-async function invoke(message:any={conversation:'menu'},valid=true,id='event-test'){
- const response=await webhook(new Request('https://webhook.test.invalid/',{method:'POST',headers:{'Content-Type':'application/json','x-webhook-secret':valid?secret:'wrong'},body:JSON.stringify({event:'MESSAGES_UPSERT',instance:'test',data:{key:{id,remoteJid:'5511999999999@s.whatsapp.net',fromMe:false},message}})}));
+async function invoke(message:any={conversation:'menu'},valid=true,id='event-test',remoteJid='5511999999999@s.whatsapp.net'){
+ const response=await webhook(new Request('https://webhook.test.invalid/',{method:'POST',headers:{'Content-Type':'application/json','x-webhook-secret':valid?secret:'wrong'},body:JSON.stringify({event:'MESSAGES_UPSERT',instance:'test',data:{key:{id,remoteJid,fromMe:false},message}})}));
  return {response,body:await response.json()};
 }
 Deno.test('webhook denies invalid secret without processing incoming data',async()=>{reset();const {response}=await invoke(undefined,false);assertEquals(response.status,401);assertEquals(messages.length,0);assertEquals(jobs.length,0);});
@@ -115,6 +118,45 @@ Deno.test('receipt status lookup failure never says that no receipt was received
 Deno.test('loan menu preserves the selected stage across messages',async()=>{
  reset();const first=await invoke({conversation:'1'});assertEquals(first.body.status,'loan_type_menu');assertEquals(JSON.parse(clientMemory).service_menu_stage,'loan_type');
  eventCompleted=false;const second=await invoke({conversation:'2'},true,'second-event');assertEquals(second.body.status,'loan_documents');assertEquals(JSON.parse(clientMemory).loan_profile,'clt');assertEquals(JSON.parse(clientMemory).service_menu_stage,'documents');
+});
+for (const stage of ['loan_type','documents'])Deno.test(`parcel inquiry interrupts ${stage} without restarting the loan application`,async()=>{
+ reset();clientMemory=JSON.stringify({service_menu_started:true,service_menu_stage:stage,loan_profile:'clt'});
+ const {response,body}=await invoke({conversation:'Quero saber das minhas parcelas'});
+ assertEquals(response.status,200);assertEquals(body.status,'menu_choice');assertEquals(body.choice,'2');
+ assertEquals(JSON.parse(clientMemory).service_menu_stage,'main');
+ assert(jobs.some(j=>j.text.includes('60,00')));assert(jobs.every(j=>!j.text.includes('Não consegui identificar a modalidade')));
+});
+Deno.test('human request interrupts loan profile selection and pauses automation',async()=>{
+ reset();clientMemory=JSON.stringify({service_menu_started:true,service_menu_stage:'loan_type'});
+ const {body}=await invoke({conversation:'quero falar com um atendente'});
+ assertEquals(body.status,'human_handoff');assert(conversation.needs_human);assert(conversation.bot_paused);
+});
+Deno.test('known client menu has only one numeric-choice instruction',async()=>{
+ reset();const {response}=await invoke({conversation:'menu'});assertEquals(response.status,200);
+ assertEquals(jobs.map(j=>j.text).join('\n').split('Escolha uma opção respondendo com o número:').length-1,1);
+});
+for(const scenario of ['allowed','other-owner','quota'])Deno.test(`Gemini webhook: ${scenario} preserves tenant scope and manual delivery`,async()=>{
+ reset();settings.bot_use_ai=true;
+ const vars=['GEMINI_API_KEY','GEMINI_ALLOWED_USER_IDS'];const previous=vars.map(k=>Deno.env.get(k));
+ Deno.env.set(vars[0],'isolated-gemini-key');Deno.env.set(vars[1],scenario==='other-owner'?'different-owner':owner);
+ if(scenario==='quota')geminiStatus=429;
+ try{
+  const {response}=await invoke({conversation:'Gostaria de entender melhor minha situação específica antes de decidir.'});
+  assertEquals(response.status,200);assert(jobs.length>0);assert(jobs.every(j=>j.status==='awaiting_approval'));
+  assertEquals(calls.filter(c=>c.origin==='https://generativelanguage.googleapis.com').length,scenario==='other-owner'?0:1);
+  assertEquals(calls.filter(c=>c.path.includes('/message/send')).length,0);
+  if(scenario==='allowed')assert(jobs.some(j=>j.text.includes('Posso orientar')));
+  else assert(calls.some(c=>c.body.tool_name==='local_ai_fallback'));
+ }finally{vars.forEach((k,i)=>previous[i]===undefined?Deno.env.delete(k):Deno.env.set(k,previous[i]!));}
+});
+Deno.test('test recipient restriction records other incoming messages without replying or generating an AI draft',async()=>{
+ reset();const keys=['BOT_TEST_OWNER_ID','BOT_TEST_RECIPIENT'],before=keys.map(k=>Deno.env.get(k));
+ Deno.env.set(keys[0],owner);Deno.env.set(keys[1],'5511999999999');
+ try{
+  const {response,body}=await invoke({conversation:'Olá'},true,'other-test-contact','5511888888888@s.whatsapp.net');
+  assertEquals(response.status,200);assertEquals(body.status,'test_recipient_ignored');assertEquals(messages.length,1);assertEquals(jobs.length,0);
+  assertEquals(calls.filter(c=>c.path.includes('/message/send')||c.origin==='https://generativelanguage.googleapis.com').length,0);
+ }finally{keys.forEach((k,i)=>before[i]===undefined?Deno.env.delete(k):Deno.env.set(k,before[i]!));}
 });
 Deno.test('failed loan menu state remains retryable without pretending to advance',async()=>{
  reset();failMemory=true;const {response}=await invoke({conversation:'1'});assertEquals(response.status,500);assertEquals(jobs.length,0);assertEquals(eventCompleted,false);assertEquals(JSON.parse(clientMemory).service_menu_stage,undefined);

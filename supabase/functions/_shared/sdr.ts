@@ -12,7 +12,7 @@
 //
 // A tabela `leads` guarda o estado por (user_id, phone).
 
-import { callAnthropic } from "./anthropic.ts";
+import { callAnthropic, hasAIProvider } from "./anthropic.ts";
 
 export interface Lead {
   id?: string;
@@ -584,7 +584,7 @@ export async function polishWithAI(
   history: Array<{ role: "user" | "bot"; text: string }>,
 ): Promise<string> {
   try {
-    if (!Deno.env.get("ANTHROPIC_API_KEY")) return base;
+    if (!hasAIProvider(ctx.lead?.user_id)) return base;
     const system =
       `Você é um SDR (pré-vendas) da empresa ${ctx.companyName}, especializada em empréstimos pessoais. ` +
       `Reescreva a resposta abaixo mantendo TODAS as informações, valores e perguntas, ` +
@@ -596,6 +596,7 @@ export async function polishWithAI(
       `Histórico:\n${hist}\n\n` +
       `Resposta base (reescreva mantendo o conteúdo):\n"""${base}"""`;
     const out = await callAnthropic({
+      userId:ctx.lead?.user_id,
       system,
       messages: [{ role: "user", content: user }],
       maxTokens: 400,
@@ -644,7 +645,7 @@ export async function understand(ctx: SdrContext): Promise<Understood | null> {
   const localFirst = understandLocal(ctx);
 
   try {
-    if (!Deno.env.get("ANTHROPIC_API_KEY")) return localFirst;
+    if (!hasAIProvider(ctx.lead?.user_id)) return localFirst;
     const lead = ctx.lead || {};
     const filled = {
       name: lead.name || null,
@@ -678,6 +679,7 @@ export async function understand(ctx: SdrContext): Promise<Understood | null> {
       `Responda apenas com o JSON.`;
 
     const out = await callAnthropic({
+      userId:ctx.lead?.user_id,
       system,
       messages: [{ role: "user", content: user }],
       maxTokens: 350,

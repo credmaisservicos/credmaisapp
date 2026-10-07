@@ -95,6 +95,7 @@ Retorne APENAS JSON puro: { "intent": "...", "confidence": 0-1, "urgency": "low|
     let result: any;
     try {
       result = await callAnthropicJSON({
+        userId:user.id,
         system: systemPrompt,
         messages: [{ role: "user", content: userMsg }],
         temperature,

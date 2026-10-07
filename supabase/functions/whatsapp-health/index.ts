@@ -2,6 +2,8 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getCallerUser } from '../_shared/guard.ts';
 import { resolveWhatsAppInstance } from '../_shared/bot_delivery.ts';
+import {hasAIProvider} from '../_shared/anthropic.ts';
+import {geminiConfigured} from '../_shared/gemini.ts';
 const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,x-client-info,apikey,content-type','Content-Type':'application/json'};
 serve(async req=>{
   if(req.method==='OPTIONS')return new Response(null,{headers});
@@ -28,7 +30,7 @@ serve(async req=>{
       else{await response.body?.cancel();connection='provider_error';}
     }catch{connection='unavailable';}
     return new Response(JSON.stringify({webhook_ready:!!Deno.env.get('EVOLUTION_WEBHOOK_SECRET'),cron_ready:!!Deno.env.get('CRON_SECRET'),
-      ai_ready:!!Deno.env.get('ANTHROPIC_API_KEY'),audio_ready:!!Deno.env.get('LOVABLE_API_KEY'),connection,
+      ai_ready:hasAIProvider(user.id),audio_ready:geminiConfigured(user.id)||!!Deno.env.get('LOVABLE_API_KEY'),connection,
       pending_approval:approval.count||0,uncertain:uncertain.count||0,failed24h:failed.count||0,
       last_incoming:lastIncoming.data?.created_at||null,last_provider_accepted:lastAccepted.data?.sent_at||null}),{headers});
   }catch{return new Response(JSON.stringify({error:'health_unavailable'}),{status:503,headers});}

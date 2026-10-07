@@ -30,6 +30,18 @@ const CTX: FaqContext = {
   hasOpenInstallments: true,
   isKnownClient: true,
 };
+Deno.test('asking to understand better is not mistaken for a compliment',()=>{
+  const hit=findFaqMatch('Gostaria de entender melhor minha situação específica antes de decidir.',CTX);
+  assert(hit?.entry.id !== 'greet.compliment');
+});
+Deno.test('FAQ payment and portal guidance agrees with the current service menu',()=>{
+  assert(findFaqMatch('meu saldo',CTX)?.answer.includes('*2*'));
+  assert(findFaqMatch('quantas parcelas faltam',CTX)?.answer.includes('*2*'));
+  assert(findFaqMatch('esqueci a senha',CTX)?.answer.includes('*portal*'));
+  assert(findFaqMatch('cnpj',CTX)?.answer.includes('*5*'));
+  const discount=findFaqMatch('desconto à vista',CTX)?.answer || '';
+  assert(discount.includes('equipe'));assert(!discount.includes('5%'));
+});
 
 // ═══════════════════════════════════════════════════════════════════════
 // CORPUS BASE — pergunta → categoria (ou id) esperado

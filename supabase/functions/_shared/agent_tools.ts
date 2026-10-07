@@ -5,6 +5,7 @@
 // Formato compatível com Anthropic Tool Use:
 //   https://docs.anthropic.com/en/docs/build-with-claude/tool-use
 import { ANTHROPIC_MODEL } from "./anthropic.ts";
+import {callGemini, geminiConfigured} from './gemini.ts';
 import { botBalance, activeDebt, botLateFee } from "./bot_finance.ts";
 import { botRows, botPortalLink } from "./bot_data.ts";
 
@@ -302,7 +303,8 @@ export async function runAgentWithTools(
   params: RunAgentParams,
 ): Promise<RunAgentResult> {
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!apiKey) throw new Error("ANTHROPIC_API_KEY não configurada");
+  const useGemini = geminiConfigured(params.ctx.ownerId);
+  if (!apiKey && !useGemini) throw new Error("IA não configurada para esta conta");
 
   const maxSteps = params.maxSteps ?? 6;
   const toolsUsed: RunAgentResult["tools_used"] = [];
@@ -317,11 +319,16 @@ export async function runAgentWithTools(
 
   for (let step = 0; step < maxSteps; step++) {
     if (Date.now() >= deadline) break;
+    let data: any;
+    if (useGemini) {
+      data = await callGemini({userId:params.ctx.ownerId, system:params.system, messages, tools:AGENT_TOOLS,
+        maxTokens:1024, temperature:0.3, timeoutMs:Math.max(1, Math.min(10_000, deadline - Date.now()))});
+    } else {
     const resp = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": apiKey,
+        "x-api-key": apiKey!,
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
@@ -339,7 +346,8 @@ export async function runAgentWithTools(
       const err = await resp.text();
       throw new Error(`Anthropic ${resp.status}: ${err}`);
     }
-    const data = await resp.json();
+    data = await resp.json();
+    }
     const stopReason = data.stop_reason as string;
     const content = data.content || [];
     messages.push({ role: "assistant", content });

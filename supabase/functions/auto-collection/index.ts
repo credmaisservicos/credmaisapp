@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendEmail } from "../_shared/brevo.ts";
-import { callAnthropic } from "../_shared/anthropic.ts";
+import { callAnthropic, hasAIProvider } from "../_shared/anthropic.ts";
 import { parseMemory, summarizeIntents, lastApproach, pushIntent, serializeMemory } from "../_shared/memory.ts";
 import { renderTemplate, renderMessage } from "../_shared/messageTemplate.ts";
 import { assertReplySafe } from "../_shared/bot_utils.ts";
@@ -67,7 +67,6 @@ serve(async (req) => {
 
   try {
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-    const aiConfigured = ['ANTHROPIC_API_KEY','LOVABLE_API_KEY','DEEPSEEK_API_KEY'].some(key => !!Deno.env.get(key));
     const generateWithinBudget = collectionAiBudget();
 
     const now = new Date();
@@ -104,6 +103,7 @@ serve(async (req) => {
 
     for (const settings of allSettings) {
       const userId = settings.user_id;
+      const aiConfigured = hasAIProvider(userId);
       const entitlementProfile: any = profilesById.get(userId);
       const entitlementEnd = entitlementProfile?.subscription_type === "trial"
         ? entitlementProfile?.trial_ends_at || entitlementProfile?.subscription_expires_at
@@ -432,6 +432,7 @@ ${extraDiversity}`;
           const systemPrompt = `Você é especialista em recuperação de crédito da empresa ${companyName}. Tom: ${tone}. Severidade atual: ${severity}. NUNCA diga que é uma IA. Use português brasileiro. Máximo 4 linhas curtas. Emojis discretos (1-2). Gere APENAS o texto da mensagem, sem aspas, sem comentários. REGRA CRÍTICA: cada mensagem precisa ser NOVA — nunca repita aberturas ("Olá X,", "Identificamos…"), nem estrutura, nem frases das mensagens anteriores desse cliente.`;
           try {
             message = await generateWithinBudget(timeoutMs => callAnthropic({
+              userId,
               system: systemPrompt,
               messages: [{ role: "user", content: buildPrompt("") }],
               temperature: 0.85, maxTokens: 400,timeoutMs,
@@ -440,6 +441,7 @@ ${extraDiversity}`;
             // Se ficou muito parecido com envios anteriores → regenerar com mais diversidade
             if (message && maxSimVs(message) >= 0.5) {
               const retry = await generateWithinBudget(timeoutMs => callAnthropic({
+                userId,
                 system: systemPrompt,
                 messages: [{ role: "user", content: buildPrompt("A mensagem gerada anteriormente ficou parecida com envios passados. REESCREVA do zero com abertura diferente, verbos diferentes, ordem diferente e outro CTA.") }],
                 temperature: 1.0, maxTokens: 400,timeoutMs,
