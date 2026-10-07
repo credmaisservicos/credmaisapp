@@ -2,6 +2,7 @@
 import { PGlite } from '@electric-sql/pglite';
 import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, expect, it } from 'vitest';
+import { portalInstallmentAmount, accumulatedPaymentTotal } from '@/lib/portalAmounts';
 const owner = '11111111-1111-4111-8111-111111111111', other = '22222222-2222-4222-8222-222222222222';
 const client = '33333333-3333-4333-8333-333333333333', contract = '44444444-4444-4444-8444-444444444444', collector = '55555555-5555-4555-8555-555555555555';
 const token = '66666666-6666-4666-8666-666666666666';
@@ -27,6 +28,14 @@ beforeAll(async () => {
     INSERT INTO collector_assignments VALUES('${collector}','${owner}','${client}');
   `);
   await db.exec(readFileSync('supabase/migrations/20261007193000_portal_financial_payload.sql','utf8'));
+  await db.exec(`
+    ALTER TABLE contract_installments ADD scheduled_principal numeric DEFAULT 90, ADD paid_principal numeric DEFAULT 30, ADD paid_interest numeric DEFAULT 10, ADD paid_fees numeric DEFAULT 0;
+    CREATE TABLE profits(user_id uuid,amount numeric,description text,client_id uuid,installment_id uuid);
+    CREATE UNIQUE INDEX profits_installment_unique ON profits(installment_id) WHERE installment_id IS NOT NULL;
+    CREATE TABLE transactions(user_id uuid,amount numeric,type text,category text,description text,client_id uuid,contract_id uuid,installment_id uuid,principal_amount numeric,interest_amount numeric,fee_amount numeric);
+    CREATE TABLE collection_attempts(user_id uuid,client_id uuid,contract_id uuid,installment_id uuid,channel text,message_preview text);
+  `);
+  await db.exec(readFileSync('supabase/migrations/20261007200500_collector_quote_parity.sql','utf8'));
 }, 30_000);
 afterAll(async () => { await db?.close(); });
 async function payload(name: string, value: string) { const result = await db.query<{ data: any }>(`SELECT ${name}($1) AS data`, [value]); return result.rows[0].data; }
@@ -61,4 +70,52 @@ it('registros inconsistentes de outro dono não entram no payload público', asy
     await db.exec(`UPDATE clients SET user_id='${other}'`);
     expect((await payload('collector_login_by_token','fictional-collector')).clients).toHaveLength(0);
   } finally { await db.exec('ROLLBACK'); }
+});
+
+it.each([
+  { stored: 0, snapshot: false, cap: 50 },
+  { stored: 15, snapshot: false, cap: 5 },
+  { stored: 15, snapshot: true, cap: 50 },
+])('cobrador recebe exatamente a cotação exibida, com ledger incremental e sem duplicar: %o', async ({ stored, snapshot, cap }) => {
+  await db.exec('BEGIN');
+  try {
+    await db.query('UPDATE contract_installments SET due_date=current_date-2, late_fee=$1, pre_settlement_snapshot=$2::jsonb', [stored, snapshot ? '{}' : null]);
+    await db.query('UPDATE contracts SET max_interest_cap_percent=$1',[cap]);
+    const data=await payload('collector_login_by_token','fictional-collector');
+    const row=data.clients[0].installments[0];
+    const dates=await db.query<{ today: string }>('SELECT current_date::text AS today'); const [y,m,d]=dates.rows[0].today.split('-').map(Number);
+    const due=portalInstallmentAmount(row,new Date(y,m-1,d,16)); const total=accumulatedPaymentTotal(row,due);
+    const result=await db.query<{ data:any }>("SELECT collector_register_payment('fictional-collector',$1::uuid,$2::numeric,'pix') AS data",[owner,total]);
+    expect(result.rows[0].data).toMatchObject({ok:true,new_money:due});
+    const ledger=await db.query<{ amount: string; allocated: string }>('SELECT amount,(principal_amount+interest_amount+fee_amount)::text AS allocated FROM transactions');
+    expect(Number(ledger.rows[0].amount)).toBe(due);expect(Number(ledger.rows[0].allocated)).toBeCloseTo(due,2);
+    await db.query("SELECT collector_register_payment('fictional-collector',$1::uuid,$2::numeric,'pix')",[owner,total]);
+    expect((await db.query('SELECT * FROM transactions')).rows).toHaveLength(1);
+  } finally {await db.exec('ROLLBACK');}
+});
+it.each(["UPDATE contract_installments SET status='cancelled'", "UPDATE contracts SET status='cancelled'"])('cobrador não recebe cancelamentos: %s', async change => {
+  await db.exec('BEGIN;'+change);
+  try {await expect(db.query("SELECT collector_register_payment('fictional-collector',$1::uuid,100,'pix')",[owner])).rejects.toThrow(/cancelad/);}finally{await db.exec('ROLLBACK');}
+});
+it('cobrador rejeita valor abaixo do saldo e método ausente antes de gravar',async()=>{
+  await expect(db.query("SELECT collector_register_payment('fictional-collector',$1::uuid,99.99,'pix')",[owner])).rejects.toThrow('valor_de_quitacao_invalido');
+  await expect(db.query("SELECT collector_register_payment('fictional-collector',$1::uuid,100,NULL)",[owner])).rejects.toThrow('metodo_invalido');
+  expect((await db.query('SELECT * FROM transactions')).rows).toHaveLength(0);
+});
+it.each(['pending',null,'cancelled'])('quitar a última parcela respeita outra parcela %s',async status=>{
+  await db.exec('BEGIN');
+  try {
+    await db.query('INSERT INTO contract_installments(id,user_id,client_id,contract_id,amount,paid_amount,status) VALUES($1,$2,$3,$4,100,40,$5)',[token,owner,client,contract,status]);
+    await db.query("SELECT collector_register_payment('fictional-collector',$1::uuid,100,'pix')",[owner]);
+    const result=await db.query<{status:string}>('SELECT status FROM contracts');expect(result.rows[0].status).toBe(status==='cancelled'?'completed':'active');
+  }finally{await db.exec('ROLLBACK');}
+});
+it.each(['unassigned','foreign-owner'])('cobrador não recebe parcela %s',async failure=>{
+  await db.exec('BEGIN');
+  try {
+    if(failure==='unassigned')await db.exec('DELETE FROM collector_assignments');
+    else await db.query('UPDATE contract_installments SET user_id=$1',[other]);
+    await expect(db.query("SELECT collector_register_payment('fictional-collector',$1::uuid,100,'pix')",[owner])).rejects.toThrow(/cliente_nao_atribuido|parcela_de_outro_credor/);
+  }finally{await db.exec('ROLLBACK');}
+  expect((await db.query('SELECT * FROM transactions')).rows).toHaveLength(0);
 });
