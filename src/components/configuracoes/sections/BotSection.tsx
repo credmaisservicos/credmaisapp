@@ -353,7 +353,7 @@ const BotSection = ({ ctx }: SectionProps) => {
                       { key: "bot_stop_on_payment" as const, label: "Parar ao detectar pagamento", desc: "Interrompe a sequência se a parcela for paga" },
                       { key: "bot_notify_owner" as const, label: "Notificar proprietário", desc: "Receba um alerta cada vez que o bot enviar uma cobrança" },
                       { key: "bot_send_pix" as const, label: "Incluir chave PIX", desc: "Anexar chave PIX na mensagem para pagamento rápido" },
-                      { key: "bot_send_receipt" as const, label: "Enviar comprovante ao pagar", desc: "Envia confirmação automática quando o pagamento é registrado" },
+                      { key: "bot_send_receipt" as const, label: "Enviar comprovante ao pagar", desc: "Confirma cada recebimento registrado, inclusive parcial; respeita aprovação manual e evita envios duplicados" },
                     ].map((opt) => (
                       <div key={opt.key} className="flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/10">
                         <button

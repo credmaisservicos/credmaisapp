@@ -3,6 +3,12 @@ import { automationAccountActive, deliveryPolicy, withinBotHours } from './bot_p
 import { botBalance, botLateFee } from './bot_finance.ts';
 const profile={plan_tier:'completo',subscription_type:'lifetime'};
 const settings={bot_enabled:true,bot_auto_send:true};
+Deno.test('cash confirmations preserve human takeover and receipt opt-out',()=>{
+ const receipt={purpose:'payment_receipt'};
+ assertEquals(deliveryPolicy({...settings,bot_send_receipt:true},{needs_human:true,bot_paused:true},profile,receipt),null);
+ assertEquals(deliveryPolicy({...settings,bot_send_receipt:false},{},profile,{...receipt,approved_by:'owner'}),'receipts_disabled');
+ assertEquals(deliveryPolicy({...settings,bot_send_receipt:true,bot_auto_send:false},{},profile,receipt),'approval_required');
+});
 Deno.test('automation stops for disabled, blocked, paused and pending-human conversations',()=>{
   assertEquals(deliveryPolicy({...settings,bot_enabled:false},{},profile,{purpose:'bot_reply'}),'bot_disabled');
   assertEquals(deliveryPolicy(settings,{bot_paused:true},profile,{purpose:'session_timeout'}),'human_takeover');

@@ -1,5 +1,9 @@
 # QA Report — CredMais
 
+## 2026-10-07 — Recibos vinculados ao caixa e fila de envio
+
+Confirmações usam cada lançamento recebido, inclusive parcial, em vez do valor previsto ou do acumulado da parcela. O gatilho de status com URL antiga é aposentado; lançamento e agendamento ficam na mesma transação. Repetição mantém a mesma identidade, estorno cancela mensagens não iniciadas e aprovação humana não substitui a validação do caixa e do destinatário. A auditoria só registra envio após aceitação pelo provedor. Testes de pagamentos, estorno e pedidos concorrentes passaram no PostgreSQL isolado do servidor; HTTP simulado cobre telefone alterado, conta de outro dono, aprovação, resultado incerto e restrição do número de testes. Migração não envia nem agenda histórico e exige backup/conferência financeira para publicação. Conciliação legada, reprodução física do acesso e demais itens de entrega continuam pendentes. [Comportamento e limites](docs/recibos-pagamentos-2026-10-07.md).
+
 ## 2026-10-07 — Calendário e encargos consistentes
 
 Baixa do credor, cobrador e rotina automática passam a compartilhar cotação SQL; portal e bot usam cálculo decimal comum e calendário brasileiro. Lotes bloqueiam parcela e contrato antes de calcular, preservam encargos registrados/snapshots e não criam recebimentos nem lucro. Avisos ao cliente são atômicos com a atualização; falhas não são anunciadas como sucesso. A fila só cancela cobranças do mesmo dono quando todos os saldos, inclusive apenas encargos, acabarem; atendimento genérico é preservado. Testes com `timestamptz`, datas de horário de verão, outro fuso no servidor e duas sessões reais de PostgreSQL isolado confirmam valores e concorrência. Publicação exige backup e comparação financeira; aparelhos afetados, DNS com `www`, conciliação legada e recibos permanecem pendentes. [Comportamento, evidências e limites](docs/calendario-encargos-2026-10-07.md).

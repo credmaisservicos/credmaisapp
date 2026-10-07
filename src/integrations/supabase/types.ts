@@ -2471,6 +2471,7 @@ export type Database = {
       }
       whatsapp_scheduled_messages: {
         Row: {
+          payment_transaction_id: string | null
           conversation_id: string
           created_at: string
           error: string | null
@@ -2482,6 +2483,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          payment_transaction_id?: string | null
           conversation_id: string
           created_at?: string
           error?: string | null
@@ -2493,6 +2495,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          payment_transaction_id?: string | null
           conversation_id?: string
           created_at?: string
           error?: string | null
@@ -2855,6 +2858,10 @@ export type Database = {
       }
       reverse_installment_payment: {
         Args: { _installment_id: string }
+        Returns: Json
+      }
+      request_payment_receipt: {
+        Args: { _transaction_id: string }
         Returns: Json
       }
       reverse_last_investor_payment: {

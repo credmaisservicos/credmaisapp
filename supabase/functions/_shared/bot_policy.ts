@@ -21,10 +21,11 @@ export function deliveryPolicy(settings: any, convo: any, profile: any, job: any
   if (!convo || convo.blocked) return 'conversation_blocked';
   const testScope=testRecipientScope(job.user_id || settings?.user_id,String(convo.jid || convo.phone || ''));
   if (testScope === false) return 'test_recipient_blocked';
+  if (job.purpose === 'payment_receipt' && settings?.bot_send_receipt !== true) return 'receipts_disabled';
   if (job.purpose === 'manual' || job.approved_by) return null;
   if (!settings?.bot_enabled) return 'bot_disabled';
   if (!automationAccountActive(profile, now)) return 'automation_unavailable';
-  if ((convo.bot_paused || convo.needs_human) && job.purpose !== 'handoff_notice') return 'human_takeover';
+  if ((convo.bot_paused || convo.needs_human) && !['handoff_notice','payment_receipt'].includes(job.purpose)) return 'human_takeover';
   if (!withinBotHours(settings, now)) return 'outside_business_hours';
   if (settings.bot_auto_send !== true && testScope !== true) return 'approval_required';
   return null;

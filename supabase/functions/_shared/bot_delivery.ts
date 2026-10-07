@@ -2,6 +2,7 @@ import { deliveryPolicy } from './bot_policy.ts';
 import { botRows } from './bot_data.ts';
 import { activeDebt, botBalance, BOT_CONTRACT_FIELDS } from './bot_finance.ts';
 import { collectionSuppression, collectionPaymentAfter, pendingClientReceipt } from './bot_collection.ts';
+import { samePhoneBR } from './agent_core.ts';
 export const SESSION_TIMEOUT_MESSAGE = 'Atendimento encerrado por falta de resposta. Quando precisar continuar, envie uma nova mensagem para abrir o menu novamente.';
 export async function resolveWhatsAppInstance(supabase: any, ownerId: string, settings: any, name?: string) {
   const instance = name || settings?.whatsapp_instance;
@@ -32,6 +33,21 @@ export async function deliverBotJob(supabase: any, job: any) {
     const { data: settings,error:se } = await supabase.from('settings').select('*').eq('user_id',job.user_id).single();
     const { data: profile,error:pe } = await supabase.from('profiles').select('is_admin,is_blocked,plan_tier,subscription_type,subscription_expires_at,trial_ends_at').eq('id',job.user_id).single();
     if (ce || se || pe) throw new Error('delivery_context_unavailable');
+    if (job.purpose === 'payment_receipt') {
+      const {data:receipt,error}=await supabase.rpc('payment_receipt_context',{
+        _transaction_id:job.payment_transaction_id,_user_id:job.user_id,
+      });
+      if(error)throw new Error('receipt_context_unavailable');
+      if(!receipt?.valid || receipt.user_id!==job.user_id || receipt.client_id!==job.client_id
+        || receipt.installment_id!==job.installment_id || receipt.transaction_id!==job.payment_transaction_id
+        || job.source_key!==`receipt:${receipt.transaction_id}` || Number(receipt.amount)!==Number(job.expected_amount)
+        || (convo.client_id && convo.client_id!==receipt.client_id) || /@(?:g\.us|broadcast|lid)$/.test(convo.jid || '')
+        || !samePhoneBR(convo.jid || convo.phone || '',receipt.phone || '') || !receipt.text || job.media_url) {
+        await update({status:'cancelled',error:'receipt_payment_or_recipient_changed'});return 'cancelled';
+      }
+      // Always use canonical cash data, including after human approval.
+      job={...job,text:receipt.text};
+    }
     const reason = deliveryPolicy(settings,convo,profile,job);
     if (reason) {
       await update({status:reason==='approval_required'?'awaiting_approval':reason==='outside_business_hours'?'pending':'cancelled',
@@ -88,6 +104,10 @@ export async function deliverBotJob(supabase: any, job: any) {
       last_message_preview:job.text.slice(0,200),last_message_from:sender,updated_at:new Date().toISOString()}).eq('id',job.conversation_id).eq('user_id',job.user_id);
     if (me || ue) await supabase.from('bot_actions_log').insert({user_id:job.user_id,conversation_id:job.conversation_id,
       tool_name:'delivery_log_incomplete',success:false,error_message:'provider_accepted_log_incomplete',tool_input:{job_id:job.id}});
+    if(job.purpose==='payment_receipt')await supabase.from('audit_logs').insert({
+      user_id:job.user_id,action:'receipt_sent',entity_type:'payment_receipt',entity_id:job.payment_transaction_id,
+      details:{job_id:job.id,amount:Number(job.expected_amount),provider_message_id:result?.key?.id || result?.messageId || null,provider_accepted:true},
+    });
     if (job.purpose==='bot_reply') {
       const { data: current } = await supabase.from('whatsapp_conversations').select('bot_paused,needs_human').eq('id',job.conversation_id).eq('user_id',job.user_id).single();
       if (current && !current.bot_paused && !current.needs_human) {

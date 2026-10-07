@@ -46,6 +46,10 @@ globalThis.fetch = async (input, init) => {
       ? json({ id: owner, email: "qa@example.invalid" }) : json({ message: "Invalid token" }, 401);
     if (url.pathname === "/auth/v1/admin/generate_link") return json({ properties: { action_link: "https://app.test.invalid/login" } });
     if (url.pathname === "/rest/v1/rpc/try_consume_rate_limit") return json({ allowed: true, remaining: 20, retry_after_ms: 0 });
+    if (url.pathname === "/rest/v1/rpc/request_payment_receipt") {
+      if(installmentOwner!==owner)return json({code:'P0002',message:'payment_not_found'},404);
+      return json(receiptsEnabled?{queued:true,job_id:'receipt-test',status:'pending'}:{queued:false,reason:'receipts_disabled'});
+    }
     if (url.pathname === "/rest/v1/contract_installments") return row({
       id: "installment-test", user_id: installmentOwner, paid_amount: 40, amount: 100,
       installment_number: 1, clients: { name: "Cliente de teste", whatsapp: "5500000000000" }, contracts: { num_installments: 2 },
@@ -135,22 +139,24 @@ Deno.test("recibo: visitante não consulta nem envia dados", async () => {
   reset(); assertEquals((await invoke(receipt, { installment_id: "installment-test" }, false)).status, 401);
   assertEquals(calls.length, 0);
 });
-Deno.test("recibo: usuário não pode enviar recibo da parcela de outro dono", async () => {
+Deno.test("recibo: usuário não pode solicitar confirmação do pagamento de outro dono", async () => {
   reset(); installmentOwner = other;
-  assertEquals((await invoke(receipt, { installment_id: "installment-test", user_id: other })).status, 403);
+  assertEquals((await invoke(receipt, { transaction_id: "00000000-0000-4000-8000-000000000003", user_id: other })).status, 404);
   assert(!calls.some(call => call.url.origin === evolution));
 });
-Deno.test("recibo: pagamento parcial usa o valor efetivamente recebido", async () => {
-  reset(); const response = await invoke(receipt, { installment_id: "installment-test", user_id: other });
-  assertEquals(response.status, 200); assertEquals((await response.json()).sent, true);
-  const sent = calls.find(call => call.url.origin === evolution)!;
-  assert(String(sent.body.text).includes("R$ 40.00"));
-  const audit = calls.find(call => call.url.pathname === "/rest/v1/audit_logs")!;
-  assertEquals(audit.body.user_id, owner);
+Deno.test("recibo: solicitação autenticada só agenda pelo caixa e não envia diretamente", async () => {
+  reset(); const response = await invoke(receipt, { transaction_id: "00000000-0000-4000-8000-000000000003", user_id: other, amount:999 });
+  assertEquals(response.status, 200); assertEquals((await response.json()).sent, false);
+  assert(!calls.some(call=>call.url.origin===evolution || call.url.pathname==='/rest/v1/audit_logs'));
+  assertEquals(calls.find(call=>call.url.pathname.endsWith('/request_payment_receipt'))!.body,{_transaction_id:'00000000-0000-4000-8000-000000000003'});
 });
 Deno.test("recibo: envio desativado não chama o provedor", async () => {
-  reset(); receiptsEnabled = false; assertEquals((await invoke(receipt, { installment_id: "installment-test" })).status, 200);
+  reset(); receiptsEnabled = false; assertEquals((await invoke(receipt, { transaction_id: "00000000-0000-4000-8000-000000000003" })).status, 200);
   assert(!calls.some(call => call.url.origin === evolution));
+});
+Deno.test('recibo: parcela sem um lançamento financeiro não prova recebimento',async()=>{
+  reset();assertEquals((await invoke(receipt,{installment_id:'installment-test'})).status,400);
+  assert(!calls.some(call=>call.url.origin===evolution || call.url.pathname.startsWith('/rest/')));
 });
 Deno.test("WhatsApp: visitante é recusado", async () => {
   reset(); assertEquals((await invoke(whatsapp, { conversation_id: "conversation-test", text: "Teste" }, false)).status, 401);
