@@ -233,12 +233,12 @@ const rolarListaAteOFim = (ref: React.RefObject<HTMLDivElement>) => {
   }
 };
 
-const AgenteIA = () => {
+const AgenteIA = ({embedded=false,view='chat'}:{embedded?:boolean;view?:'chat'|'documentos'} = {}) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const [tab, setTab] = useState<TabType>("chat");
+  const [tab, setTab] = useState<TabType>(view);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([
     { role: "assistant", content: "Olá! Sou o assistente IA do CredMais App. Como posso ajudar?", timestamp: new Date() },
@@ -319,11 +319,12 @@ const AgenteIA = () => {
   const { data: settings } = useQuery({
     queryKey: ["settings-agent", user?.id],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("settings")
+      const { data, error } = await supabase
+        .from("settings_safe")
         .select("bot_enabled, bot_auto_send, bot_send_pix, bot_notify_owner, bot_max_messages_per_day, bot_send_hour, bot_send_minute, bot_tone, whatsapp_instance, bot_use_ai")
         .eq("user_id", user!.id)
         .single();
+      if(error)throw error;
       return data;
     },
     enabled: !!user,
@@ -525,9 +526,9 @@ const AgenteIA = () => {
 
   // Check WhatsApp status
   useEffect(() => {
-    if (settings === undefined) return;
+    if (embedded || settings === undefined) return;
     checkStatus();
-  }, [settings]);
+  }, [settings,embedded]);
 
   const checkStatus = async () => {
     setWhatsappStatus("checking");
@@ -1382,7 +1383,7 @@ const AgenteIA = () => {
 
   return (
     <div className="space-y-6">
-      <div className="page-hero animate-fade-in">
+      {!embedded && <div className="page-hero animate-fade-in">
         <div className="page-hero-content flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="page-hero-icon">
@@ -1397,10 +1398,10 @@ const AgenteIA = () => {
             {whatsappStatus === "connected" ? <><Wifi size={12} /> Conectado</> : <><WifiOff size={12} /> Offline</>}
           </span>
         </div>
-      </div>
+      </div>}
 
       {/* Tabs */}
-      <div className="flex gap-2 flex-wrap">
+      {!embedded && <div className="flex gap-2 flex-wrap">
         {([
           { id: "chat", label: "Chat IA", icon: <Bot size={16} /> },
           { id: "mensagens", label: "Mensagens", icon: <Inbox size={16} /> },
@@ -1414,7 +1415,7 @@ const AgenteIA = () => {
             {t.icon} {t.label}
           </button>
         ))}
-      </div>
+      </div>}
 
       {/* ========== REVISÕES TAB ========== */}
       {tab === "documentos" && (

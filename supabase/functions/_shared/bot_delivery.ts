@@ -1,6 +1,7 @@
 import { deliveryPolicy } from './bot_policy.ts';
 import { botRows } from './bot_data.ts';
 import { activeDebt, botBalance, BOT_CONTRACT_FIELDS } from './bot_finance.ts';
+import { collectionSuppression, collectionPaymentAfter } from './bot_collection.ts';
 export const SESSION_TIMEOUT_MESSAGE = 'Atendimento encerrado por falta de resposta. Quando precisar continuar, envie uma nova mensagem para abrir o menu novamente.';
 export async function resolveWhatsAppInstance(supabase: any, ownerId: string, settings: any, name?: string) {
   const instance = name || settings?.whatsapp_instance;
@@ -36,6 +37,13 @@ export async function deliverBotJob(supabase: any, job: any) {
       await update({status:reason==='approval_required'?'awaiting_approval':reason==='outside_business_hours'?'pending':'cancelled',
         error:reason,scheduled_for:reason==='outside_business_hours'?new Date(Date.now()+15*60_000).toISOString():job.scheduled_for});
       return reason;
+    }
+    if (job.purpose === 'collection' && job.client_id) {
+      const suppression = await collectionSuppression(supabase, job.user_id, job.client_id, new Date(), !!job.approved_by);
+      if (suppression) { await update({status:'cancelled',error:suppression}); return 'cancelled'; }
+      if (settings.bot_stop_on_payment !== false && job.created_at && await collectionPaymentAfter(supabase,job.user_id,job.client_id,job.created_at)) {
+        await update({status:'cancelled',error:'payment_received'});return 'cancelled';
+      }
     }
     if (['collection','service_followup'].includes(job.purpose) && job.client_id) {
       const rows = await botRows(()=>supabase.from('contract_installments').select(`id,amount,paid_amount,late_fee,status,due_date,pre_settlement_snapshot,contracts(${BOT_CONTRACT_FIELDS})`)

@@ -11,10 +11,8 @@ const NotificacoesSection = React.lazy(() => import("./sections/NotificacoesSect
 const ModulosSection = React.lazy(() => import("./sections/ModulosSection"));
 const PortalSection = React.lazy(() => import("./sections/PortalSection"));
 const ContratoSection = React.lazy(() => import("./sections/ContratoSection"));
-const BotSection = React.lazy(() => import("./sections/BotSection"));
-const TemplatesSection = React.lazy(() => import("./sections/TemplatesSection"));
+const AtendimentoSection = React.lazy(() => import("./sections/AtendimentoSection"));
 const MensagemSection = React.lazy(() => import("./sections/MensagemSection"));
-const WhatsAppSection = React.lazy(() => import("./sections/WhatsAppSection"));
 const WebhooksSection = React.lazy(() => import("./sections/WebhooksSection"));
 const PwaSection = React.lazy(() => import("./sections/PwaSection"));
 
@@ -36,10 +34,10 @@ export const SECTIONS: Record<SectionId, React.ComponentType<{ ctx: SettingsCtx 
   modulos: ModulosSection,
   portal: PortalSection,
   contrato: ContratoSection,
-  bot: BotSection,
-  templates: TemplatesSection,
+  bot: AtendimentoSection,
+  templates: AtendimentoSection,
   mensagem: MensagemSection,
-  whatsapp: WhatsAppSection,
+  whatsapp: AtendimentoSection,
   webhooks: WebhooksSection,
   pwa: PwaSection,
 };

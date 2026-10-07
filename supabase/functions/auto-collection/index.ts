@@ -8,9 +8,10 @@ import { assertReplySafe } from "../_shared/bot_utils.ts";
 import { alertPlatformAdmins } from "../_shared/operations.ts";
 import { checkSharedSecret } from "../_shared/guard.ts";
 import { botRows, checkedBotQuery } from "../_shared/bot_data.ts";
-import { botBalance, botLateFee, activeDebt } from "../_shared/bot_finance.ts";
+import { botBalance, activeDebt } from "../_shared/bot_finance.ts";
 import { queueBotMessage } from "../_shared/bot_delivery.ts";
 import { withinBotHours,automationAccountActive } from "../_shared/bot_policy.ts";
+import { collectionPlan, collectionCooldownHours, collectionSuppression, collectionAiBudget } from "../_shared/bot_collection.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -66,7 +67,8 @@ serve(async (req) => {
 
   try {
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-    const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
+    const aiConfigured = ['ANTHROPIC_API_KEY','LOVABLE_API_KEY','DEEPSEEK_API_KEY'].some(key => !!Deno.env.get(key));
+    const generateWithinBudget = collectionAiBudget();
 
     const now = new Date();
     const spParts = Object.fromEntries(
@@ -77,7 +79,6 @@ serve(async (req) => {
     );
     const todayStr = `${spParts.year}-${spParts.month}-${spParts.day}`;
     const dayOfWeek = String(spParts.weekday || "").slice(0, 3).toLowerCase();
-    const todayDateValue = Date.parse(`${todayStr}T12:00:00Z`);
     const startOfTodayUtc = `${todayStr}T03:00:00Z`;
 
     // A régua diária também fecha promessas que venceram sem baixa. Falhar aqui
@@ -203,7 +204,6 @@ serve(async (req) => {
 
       // Régua escalonada: separamos regras de pré-vencimento (days<=0) e atraso (days>0)
       const preDueRules  = escalationRules.filter(r => Number(r.days) <= 0).sort((a,b) => a.days - b.days); // -3 antes de -1
-      const overdueRules = escalationRules.filter(r => Number(r.days) >  0).sort((a,b) => b.days - a.days); // 30 antes de 3
 
       // Janela de leitura das parcelas — pega o maior D-N configurado (default 7)
       const maxLookAhead = preDueRules.length
@@ -245,7 +245,7 @@ serve(async (req) => {
         .select("client_id, promised_for, promised_amount")
         .eq("user_id", userId)
         .eq("status", "open")
-        .gt("promised_for", todayStr).order("id"));
+        .gte("promised_for", todayStr).order("id"));
       const promiseByClient = new Map((futurePromises || []).map((promise: any) => [promise.client_id, promise]));
 
       // Opt-out/bloqueio no Inbox vale também para a régua automática.
@@ -268,7 +268,7 @@ serve(async (req) => {
       }
       const contactedRecipients = new Set<string>();
 
-      for (const [clientId, insts] of byClient) {
+      for (const [clientId, clientInstallments] of byClient) {
         if (sent + emailSent + queued >= remaining) break;
         const client = clientMap.get(clientId);
         if (!client) continue;
@@ -286,76 +286,50 @@ serve(async (req) => {
         const recipientKey = phoneWithCountry.length > 4 ? `wa:${phoneWithCountry}` : email ? `email:${String(email).trim().toLowerCase()}` : "";
         if (recipientKey && contactedRecipients.has(recipientKey)) { skipped++; continue; }
 
-        // Descobre parcela mais atrasada OU mais próxima do vencimento
-        let selectedDays = -9999;   // valor "dias em atraso" (negativo = pré-vencimento)
-        let selectedInst = insts[0];
-        for (const i of insts) {
-          const dueDateValue = Date.parse(`${String(i.due_date).slice(0, 10)}T12:00:00Z`);
-          const days = Math.floor((todayDateValue - dueDateValue) / 86400000);
-          if (days > selectedDays) { selectedDays = days; selectedInst = i; }
-        }
+        const plan = collectionPlan(clientInstallments, escalationRules, todayStr);
+        if (!plan) continue;
+        const {installments:insts,rule:matchingRule,days:selectedDays,isPreDue} = plan;
 
-        // Escolhe a regra: se está em atraso, usa a maior faixa vencida atingida;
-        // caso contrário, tenta bater com uma regra pré-vencimento (D-N).
-        let matchingRule: EscalationRule | undefined;
-        let isPreDue = false;
-        if (selectedDays > 0) {
-          matchingRule = overdueRules.find(r => selectedDays >= r.days);
-        } else {
-          // pré-vencimento — só dispara EXATAMENTE no dia D-N configurado
-          const daysUntilDue = Math.abs(selectedDays); // 0,1,2,3...
-          matchingRule = preDueRules.find(r => Math.abs(Number(r.days)) === daysUntilDue);
-          isPreDue = !!matchingRule;
-        }
-        if (!matchingRule) continue;
-
-        // Intervalo mínimo entre duas mensagens para o MESMO cliente.
-        //
-        // Antes era fixo no código (20h antes do vencimento; 5h a partir de 30
-        // dias de atraso, o que permitia ~4 mensagens por dia para a mesma
-        // pessoa) e o campo "Intervalo entre cobranças (h)" de Configurações
-        // nunca era lido — o operador ajustava um número que não ajustava nada.
-        //
-        // Agora o valor configurado manda. A severidade continua encurtando o
-        // intervalo, mas nunca abaixo da metade do que foi configurado, para
-        // "24h" não virar 5h sem o operador saber.
-        const configurado = Number(settings.bot_retry_interval_hours) || 24;
-        const pisoSeveridade = Math.max(1, Math.ceil(configurado / 2));
-        const cooldownHours = isPreDue
-          ? configurado
-          : selectedDays >= 30 ? pisoSeveridade
-          : selectedDays >= 8 ? Math.max(pisoSeveridade, Math.ceil(configurado * 0.75))
-          : configurado;
+        // O intervalo escolhido pelo operador vale para todos os níveis de atraso.
+        const cooldownHours = collectionCooldownHours(settings.bot_retry_interval_hours);
         const cutoff = new Date(now.getTime() - cooldownHours * 3600000).toISOString();
 
-        const { data: alreadySent } = await supabase
+        const { data: alreadySent } = await checkedBotQuery(supabase
           .from("audit_logs").select("id, created_at, details")
           .eq("user_id", userId).eq("entity_type", "auto_collection")
-          .eq("entity_id", clientId).order("created_at", { ascending: false }).limit(5);
+          .eq("action","message_sent").eq("entity_id", clientId).order("created_at", { ascending: false }).limit(5));
         const withinCooldown = alreadySent?.find(r => new Date(r.created_at as string).getTime() >= new Date(cutoff).getTime());
         if (withinCooldown) { skipped++; continue; }
+        const {data:recentQueued} = await checkedBotQuery(supabase.from('whatsapp_scheduled_messages')
+          .select('id,text,status,created_at,sent_at').eq('user_id',userId).eq('client_id',clientId).eq('purpose','collection')
+          .or(`status.in.(pending,processing,awaiting_approval,uncertain),and(status.eq.sent,sent_at.gte.${cutoff})`)
+          .order('created_at',{ascending:false}).limit(5));
+        if (recentQueued?.length) { skipped++; continue; }
         // Últimas mensagens enviadas — para banir repetição no prompt
         const recentSentTexts: string[] = (alreadySent || [])
           .map(r => (r.details as any)?.message_preview)
           .filter((s: any) => typeof s === "string" && s.length > 0)
           .slice(0, 3);
 
-        const { data: history } = await supabase
+        const { data: history } = await checkedBotQuery(supabase
           .from("contract_installments").select("status, paid_at, due_date")
           .eq("user_id", userId).eq("client_id", clientId)
-          .order("due_date", { ascending: false }).limit(20);
+          .order("due_date", { ascending: false }).limit(20));
 
         // "Parar ao detectar pagamento": o campo existia em Configurações e nunca
         // era lido. Se o cliente pagou alguma parcela desde a última cobrança, ele
         // está respondendo — insistir é o caminho mais curto para irritar quem já
         // está pagando. Só vale quando o operador liga a opção.
         if (settings.bot_stop_on_payment !== false) {
-          const ultimaCobranca = alreadySent?.[0]?.created_at as string | undefined;
+          const {data:lastWhatsApp} = await checkedBotQuery(supabase.from('whatsapp_scheduled_messages')
+            .select('sent_at').eq('user_id',userId).eq('client_id',clientId).eq('purpose','collection')
+            .eq('status','sent').order('sent_at',{ascending:false}).limit(1).maybeSingle());
+          const ultimaCobranca = [alreadySent?.[0]?.created_at,lastWhatsApp?.sent_at].filter(Boolean).sort().at(-1) as string | undefined;
           if (ultimaCobranca) {
-            const pagouDepois = history?.some(
-              (h) => h.paid_at && new Date(h.paid_at).getTime() > new Date(ultimaCobranca).getTime(),
-            );
-            if (pagouDepois) { skipped++; continue; }
+            const {data:payments} = await checkedBotQuery(supabase.from('transactions').select('id')
+              .eq('user_id',userId).eq('client_id',clientId).eq('type','payment')
+              .gt('created_at',ultimaCobranca).limit(1));
+            if (payments?.length) { skipped++; continue; }
           }
         }
 
@@ -368,9 +342,8 @@ serve(async (req) => {
 
         // Juros diário composto (4% a.d. padrão) calculado ao vivo — nunca depende
         // apenas do late_fee gravado, que pode estar desatualizado.
-        const liveLateFee=(i:any)=>botLateFee(i);
-        const totalAmount=insts.reduce((sum,i:any)=>sum+botBalance(i),0);
-        const totalLateFees=insts.reduce((sum,i:any)=>sum+Math.min(liveLateFee(i),botBalance(i)),0);
+        const totalAmount=plan.amount;
+        const totalLateFees=plan.fees;
         // A taxa aparecia como "4% ao dia" escrito à mão na mensagem e no
         // prompt da IA, enquanto o cálculo já usava a taxa do contrato. Hoje os
         // 74 contratos em atraso são todos 4%, então o número está certo — mas
@@ -392,25 +365,25 @@ serve(async (req) => {
         const has = (t: string) => intentsList.some((i: any) => i && i.tipo === t);
         const promiseIntent = intentsList.find((i: any) => i && i.tipo === "prometeu_pagar");
         const personalizations: string[] = [];
-        if (has("prometeu_pagar") && promiseIntent) personalizations.push(`Cliente PROMETEU pagar (registro ${promiseIntent.data}${promiseIntent.detalhe ? " – " + promiseIntent.detalhe : ""}). Cobre a promessa com respeito, sem repetir a mesma frase.`);
+        if (has("prometeu_pagar") && promiseIntent) personalizations.push("Cliente mencionou intenção de pagar. Não use a data do registro como prazo combinado; não invente data nem novas condições.");
         if (has("pediu_desconto")) personalizations.push("Cliente pediu desconto. NÃO negocie nem ofereça condições; informe que a equipe humana avaliará.");
         if (has("dificuldade")) personalizations.push("Cliente sinalizou dificuldade financeira. Seja empático, mas NÃO ofereça parcelamento, desconto ou prorrogação.");
         if (has("abriu_portal")) personalizations.push("Cliente ABRIU O PORTAL recentemente — reforce o CTA de pagar pelo portal, não repita o link.");
         if (has("hostil")) personalizations.push("Cliente ficou HOSTIL — desarme, seja curto, ofereça falar com humano.");
-        if (has("pediu_prazo")) personalizations.push("Cliente PEDIU PRAZO antes — proponha data concreta, não repita a pergunta.");
+        if (has("pediu_prazo")) personalizations.push("Cliente PEDIU PRAZO antes — encaminhe para a equipe, sem propor nova data ou mudar condições.");
 
         // Escolhe uma nova abordagem — DIFERENTE da última usada
         const stageApproach = isPreDue ? "lembrete_amigavel"
           : selectedDays >= 30 ? "cobranca_firme"
-          : selectedDays >= 15 ? "acordo_desconto"
+          : selectedDays >= 15 ? "cobranca_respeitosa"
           : selectedDays >= 7 ? "cobranca_padrao"
           : "cobranca_padrao";
         // Escolhe uma nova abordagem — DIFERENTE das últimas usadas
         const approachPool: Record<string, string[]> = {
           lembrete_amigavel: ["lembrete_amigavel", "pergunta_confirmacao", "aviso_curto", "cta_portal"],
-          cobranca_firme: ["cobranca_firme", "proposta_acordo", "ultimatum_educado", "escalonamento_juridico"],
-          acordo_desconto: ["acordo_desconto", "condicao_especial", "parcelamento_flex", "desconto_a_vista"],
-          cobranca_padrao: ["cobranca_padrao", "opcao_parcelar", "pergunta_previsao", "cta_portal"],
+          cobranca_firme: ["cobranca_firme", "resumo_pendencias", "aviso_curto", "atendimento_humano"],
+          cobranca_respeitosa: ["cobranca_respeitosa", "resumo_pendencias", "aviso_curto", "atendimento_humano"],
+          cobranca_padrao: ["cobranca_padrao", "atendimento_humano", "pergunta_previsao", "cta_portal"],
         };
         const recentApproaches = (intentsList || [])
           .map((i: any) => i && typeof i.abordagem === "string" ? i.abordagem : null)
@@ -434,7 +407,7 @@ serve(async (req) => {
         const maxSimVs = (candidate: string) =>
           recentSentTexts.length ? Math.max(...recentSentTexts.map(t => jaccard(candidate, t))) : 0;
 
-        if (settings.bot_use_ai && anthropicKey) {
+        if (settings.bot_use_ai && aiConfigured) {
           const tone = settings.bot_tone || "profissional";
           const severity = isPreDue ? "AMIGÁVEL — só um lembrete gentil"
             : selectedDays >= 30 ? "FIRME e direta"
@@ -458,19 +431,19 @@ NUNCA negocie, ofereça desconto, parcelamento, prorrogação ou pagamento parci
 ${extraDiversity}`;
           const systemPrompt = `Você é especialista em recuperação de crédito da empresa ${companyName}. Tom: ${tone}. Severidade atual: ${severity}. NUNCA diga que é uma IA. Use português brasileiro. Máximo 4 linhas curtas. Emojis discretos (1-2). Gere APENAS o texto da mensagem, sem aspas, sem comentários. REGRA CRÍTICA: cada mensagem precisa ser NOVA — nunca repita aberturas ("Olá X,", "Identificamos…"), nem estrutura, nem frases das mensagens anteriores desse cliente.`;
           try {
-            message = await callAnthropic({
+            message = await generateWithinBudget(timeoutMs => callAnthropic({
               system: systemPrompt,
               messages: [{ role: "user", content: buildPrompt("") }],
-              temperature: 0.85, maxTokens: 400,
-            });
+              temperature: 0.85, maxTokens: 400,timeoutMs,
+            }));
             message = (message || "").trim();
             // Se ficou muito parecido com envios anteriores → regenerar com mais diversidade
             if (message && maxSimVs(message) >= 0.5) {
-              const retry = await callAnthropic({
+              const retry = await generateWithinBudget(timeoutMs => callAnthropic({
                 system: systemPrompt,
                 messages: [{ role: "user", content: buildPrompt("A mensagem gerada anteriormente ficou parecida com envios passados. REESCREVA do zero com abertura diferente, verbos diferentes, ordem diferente e outro CTA.") }],
-                temperature: 1.0, maxTokens: 400,
-              });
+                temperature: 1.0, maxTokens: 400,timeoutMs,
+              }));
               const retryTxt = (retry || "").trim();
               if (retryTxt && maxSimVs(retryTxt) < maxSimVs(message)) message = retryTxt;
             }
@@ -486,6 +459,8 @@ ${extraDiversity}`;
                 currentClient: client,
                 otherClientsSample: (clients || []).filter((c: any) => c.id !== client.id).slice(0, 25),
                 negotiationEnabled: false,
+                allowedAmounts: [totalAmount,totalLateFees,totalAmount-totalLateFees,...insts.map(i=>botBalance(i))],
+                amountToleranceCents: 0,
               } as any);
               if (guarda.block) {
                 console.warn(`[auto-collection] mensagem da IA bloqueada (${guarda.reasons.join(", ")}) — usando o texto padrão`);
@@ -526,7 +501,8 @@ ${extraDiversity}`;
             portal: `${(Deno.env.get("SITE_URL") ?? "https://www.credmaisapp.com.br").replace(/\/+$/, "")}/portal-cliente?o=${userId}`,
           };
 
-          const template = templates?.find(t => t.name.toLowerCase().includes(matchingRule.template.toLowerCase()));
+          const templateName=String(matchingRule.template || '').trim().toLowerCase();
+          const template = templateName ? templates?.find(t => t.name.trim().toLowerCase()===templateName) : undefined;
           if (template) {
             const r = renderTemplate(template.content, varsMensagem);
             message = r.texto;
@@ -567,7 +543,7 @@ ${extraDiversity}`;
           }
           // Variação por intenção no template básico (evita eco literal)
           if (has("prometeu_pagar") && promiseIntent) {
-            message += `\n\nVocê havia combinado pagar em ${promiseIntent.data}${promiseIntent.detalhe ? " (" + promiseIntent.detalhe + ")" : ""}. Conseguiu se organizar?`;
+            message += `\n\nVocê comentou que pretende pagar. Se precisar de ajuda, fale com nossa equipe.`;
           } else if (has("pediu_desconto") || has("dificuldade")) {
             message += `\n\nSua solicitação precisa ser avaliada pela equipe de atendimento. Não consigo alterar valores ou condições por aqui.`;
           } else if (has("abriu_portal")) {
@@ -580,6 +556,14 @@ ${extraDiversity}`;
           }
         }
 
+
+        // Os valores configuráveis também precisam corresponder ao saldo selecionado.
+        const amountGuard = assertReplySafe({reply:message,currentClient:client,
+          allowedAmounts:[totalAmount,totalLateFees,totalAmount-totalLateFees,...insts.map(i=>botBalance(i))],amountToleranceCents:0});
+        if (amountGuard.reasons.some(reason=>reason.startsWith('invented_amount:'))) {
+          message = `Olá ${client.name}. ${isPreDue ? `Lembrete de vencimento em ${daysUntilDue} dia(s)` : `Pendência de ${insts.length} parcela(s), com atraso de ${daysOverdue} dia(s)`}. Qualquer dúvida, fale com nossa equipe.`;
+        }
+        message += `\n\nTotal ${isPreDue?'do lembrete':'a pagar'}: R$ ${totalAmount.toFixed(2)}${totalLateFees>0?` (inclui R$ ${totalLateFees.toFixed(2)} de encargos)` : ''}.`;
 
         if (settings.bot_send_pix && profile?.pix_key) {
           try {
@@ -605,6 +589,8 @@ ${extraDiversity}`;
         }
 
         let waOk = false;
+        const suppression = await collectionSuppression(supabase,userId,clientId);
+        if (suppression) { skipped++; continue; }
         if (waConfigured && phone && ["whatsapp","both"].includes(matchingRule.channel)) {
           const recipient=phoneWithCountry;
           const {data:existing,error:ce}=await supabase.from("whatsapp_conversations").select("id,blocked,bot_paused,needs_human,instance").eq("user_id",userId).eq("phone",recipient).maybeSingle();
@@ -644,9 +630,9 @@ ${extraDiversity}`;
         }
 
         if (shouldEmail) {
-          const { data: claimed } = await supabase.rpc("claim_collection_dispatch", {
+          const { data: claimed } = await checkedBotQuery(supabase.rpc("claim_collection_dispatch", {
             _user_id: userId, _client_id: clientId, _channel: "email", _bucket: now.toISOString(),
-          });
+          }));
           shouldEmail = !!claimed;
         }
 
@@ -690,10 +676,10 @@ ${extraDiversity}`;
       totalSent += sent; totalEmail += emailSent; totalSkipped += skipped;totalQueued+=queued;
       results.push({ user_id: userId, sent, queued,email_sent: emailSent, skipped, errors });
 
-      if ((sent + emailSent) > 0 && settings.bot_notify_owner) {
+      if ((queued + emailSent) > 0 && settings.bot_notify_owner) {
         await supabase.from("notifications").insert({
           user_id: userId,
-          message: `🤖 Bot: ${sent} WhatsApp + ${emailSent} email enviados${settings.bot_use_ai ? " (IA)" : ""}.`,
+          message: `Bot de cobranças: ${queued} WhatsApp ${settings.bot_auto_send===true?'na fila de envio':'aguardando aprovação'} e ${emailSent} e-mail(s) aceito(s) pelo provedor.`,
           type: "collection_auto", from: "Bot de Cobranças", link: "/auditoria",
         });
       }

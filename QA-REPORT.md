@@ -1,5 +1,13 @@
 # QA Report — CredMais
 
+## 2026-10-07 — Agente e cobranças no módulo de Atendimento
+
+Resumo, conexão, assistente, conversas, revisões e configurações foram reunidos em Atendimento. Agenda, limites, régua e modelos têm edição no mesmo módulo, com layout verificado em 360 e 1366 pixels. Links antigos continuam funcionando. As configurações gerais deixam de sobrescrever campos do bot e da conexão.
+
+Cobranças excluem parcelas futuras do atraso, respeitam o intervalo cadastrado e bloqueiam repetição enquanto houver fila, revisão ou entrega incerta. Promessas no dia, pausas humanas e recebimentos após agendamento são revalidados antes do envio. A IA valida valores e usa orçamento limitado; notificações distinguem fila, revisão e aceitação.
+
+Validação: 444 testes Vitest, 128 testes compartilhados, 39 testes HTTP sem rede e 215 testes de interface com backend fictício. Tipos, lint, hooks, 43 funções e build aprovados. Nenhuma mensagem real ou pagamento de cliente foi usado nos testes. Publicação das funções com backup, sem novas migrações. Detalhes em [agente-cobrancas-modulo-2026-10-07.md](docs/agente-cobrancas-modulo-2026-10-07.md).
+
 ## Correções da auditoria do bot — 2026-10-07
 
 RPCs internas protegidas, ferramentas vinculadas ao dono e cliente, fila persistente de eventos e entregas, pausa humana preservada, aprovação manual no inbox e comprovantes privados com conferência do valor recebido. Cobranças e PIX incluem encargos pendentes; a confirmação parcial acrescenta somente o novo recebimento. Renovação de juros exige valor compatível e novo vencimento.

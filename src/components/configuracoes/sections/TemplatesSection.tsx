@@ -7,15 +7,12 @@ import InstallAppCard from "@/components/InstallAppCard";
 import { COLOR_PRESETS, TEMPLATE_PRESETS } from "../constants";
 import VariaveisDisponiveis from "../VariaveisDisponiveis";
 import VariaveisNaoReconhecidas from "../VariaveisNaoReconhecidas";
-import type { SectionProps } from "../types";
+import type { SettingsCtx } from "../types";
 
-const TemplatesSection = ({ ctx }: SectionProps) => {
+const TemplatesSection = ({ ctx }: {ctx:Pick<SettingsCtx,'templates'|'newTemplate'|'setNewTemplate'|'onAddTemplate'|'onDeleteTemplate'|'onAddPresetTemplate'|'inputCls'|'notify'>}) => {
   const {
-    form, setForm, inputCls, settings, templates,
+    inputCls, templates,
     newTemplate, setNewTemplate, onAddTemplate, onDeleteTemplate, onAddPresetTemplate,
-    logoInputRef, faviconInputRef, portalLogoInputRef,
-    onUploadLogo, onUploadFavicon, onUploadPortalLogo,
-    uploadingLogo, uploadingFavicon, uploadingPortalLogo,
     notify,
   } = ctx;
 
@@ -86,7 +83,7 @@ const TemplatesSection = ({ ctx }: SectionProps) => {
                         </div>
                       )}
                     </div>
-                    <button onClick={() => onDeleteTemplate(t.id)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all p-1"><Trash2 size={14} /></button>
+                    <button aria-label={`Excluir modelo ${t.name}`} onClick={() => onDeleteTemplate(t.id)} className="min-h-11 min-w-11 text-muted-foreground hover:text-destructive p-2"><Trash2 size={14} /></button>
                   </div>
                 ))}
               </div>

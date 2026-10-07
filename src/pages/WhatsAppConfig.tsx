@@ -33,6 +33,9 @@ const WhatsAppConfig = () => {
   const [status, setStatus] = useState<"disconnected" | "connecting" | "connected">("disconnected");
   const [instanceData, setInstanceData] = useState<any>(null);
   const [settings, setSettings] = useState<any>(null);
+  const [apiUrl,setApiUrl] = useState('');
+  const [apiKey,setApiKey] = useState('');
+  const [configuredInstance,setConfiguredInstance] = useState('');
 
   useEffect(() => {
     if (user) {
@@ -51,7 +54,7 @@ const WhatsAppConfig = () => {
         const data = await invokeEvolution({ action: "getInstance", instanceName: settings.whatsapp_instance });
         const arr = Array.isArray(data) ? data : Array.isArray(data?.data) ? data.data : null;
         const inst = arr ? arr[0] : (data?.instance ?? data);
-        const connStatus = inst?.connectionStatus || inst?.status;
+        const connStatus = inst?.connectionStatus || inst?.status || inst?.state;
         if (connStatus === "open") {
           setStatus("connected");
           setQrCode(null);
@@ -98,6 +101,8 @@ const WhatsAppConfig = () => {
     }
 
     setSettings(data);
+    setApiUrl(data?.whatsapp_api_url || '');
+    setConfiguredInstance(data?.whatsapp_instance || '');
     if (data?.whatsapp_instance) {
       checkStatus(data.whatsapp_instance);
     }
@@ -154,7 +159,8 @@ const WhatsAppConfig = () => {
     try {
       const previousInstance = settings?.whatsapp_instance;
       if (previousInstance) {
-        await invokeEvolution({ action: "deleteInstance", instanceName: previousInstance });
+        await handleConnect(previousInstance);
+        return;
       }
 
       // Um nome novo evita conflito com registros órfãos que a Evolution ainda
@@ -184,8 +190,9 @@ const WhatsAppConfig = () => {
       if (qr) {
         const src = qr.startsWith("data:") ? qr : `data:image/png;base64,${qr.replace(/^data:image\/[a-z]+;base64,/, "")}`;
         setQrCode(src);
-      } else if (data.instance?.status === "open" || data.status === "open" || data.upstream_status === 200) {
+      } else if (data?.instance?.state === "open" || data?.instance?.status === "open" || data.status === "open") {
         setStatus("connected");
+        setQrCode(null);
         toast({ title: "Conectado!", description: "WhatsApp pronto para uso." });
       } else {
         throw new Error("A API não retornou um QR Code válido. Tente novamente.");
@@ -193,6 +200,7 @@ const WhatsAppConfig = () => {
     } catch (err: any) {
       toast({ title: "Erro de conexão", description: err.message, variant: "destructive" });
       setStatus("disconnected");
+      setQrCode(null);
     }
   };
 
@@ -271,7 +279,7 @@ const WhatsAppConfig = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-6">
         {/* Connection Card */}
         <Card className="md:col-span-2 p-6 border-border/50 bg-card/50 backdrop-blur-xs">
           <div className="space-y-6">
@@ -293,8 +301,8 @@ const WhatsAppConfig = () => {
                   <MessageSquare size={32} className="text-muted-foreground/30" />
                 </div>
                 <div>
-                  <h4 className="font-medium">Nenhuma instância ativa</h4>
-                  <p className="text-sm text-muted-foreground mt-1">Clique abaixo para criar e gerar o QR Code.</p>
+                  <h4 className="font-medium">WhatsApp desconectado</h4>
+                  <p className="text-sm text-muted-foreground mt-1">Gere o QR Code e conecte pelo WhatsApp do seu celular.</p>
                 </div>
                 <Button onClick={handleCreateInstance} disabled={loading || !settings} className="btn-premium">
                   {loading ? <Loader2 className="animate-spin mr-2" size={16} /> : <Zap size={16} className="mr-2" />}
@@ -330,8 +338,8 @@ const WhatsAppConfig = () => {
                   </div>
                 </div>
                 <div>
-                  <h4 className="font-bold text-lg">Bot de WhatsApp Ativo</h4>
-                  <p className="text-sm text-muted-foreground mt-1">Sua instância <span className="text-primary font-mono">{settings?.whatsapp_instance}</span> está pronta.</p>
+                  <h4 className="font-bold text-lg">WhatsApp conectado</h4>
+                  <p className="text-sm text-muted-foreground mt-1">Sua conexão está aberta. Confira as regras do agente na aba Configurações.</p>
                 </div>
                 <div className="grid grid-cols-1 gap-3 max-w-sm mx-auto sm:grid-cols-2">
                   <div className="p-3 rounded-xl bg-muted/30 text-left">
@@ -354,54 +362,6 @@ const WhatsAppConfig = () => {
           </div>
         </Card>
 
-        {/* Sidebar Info */}
-        <div className="space-y-6">
-          <Card className="p-5 border-border/50 bg-card/50">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">Automações do Bot</h4>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Headphones size={14} className="text-violet-500" />
-                  <span className="text-xs font-medium">Processar Áudios</span>
-                </div>
-                <Switch 
-                  checked={settings?.bot_process_audio} 
-                  onCheckedChange={(v) => updateSettings({ bot_process_audio: v })}
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <FileCheck size={14} className="text-blue-500" />
-                  <span className="text-xs font-medium">Analisar Comprovantes</span>
-                </div>
-                <Switch 
-                  checked={settings?.bot_process_receipts} 
-                  onCheckedChange={(v) => updateSettings({ bot_process_receipts: v })}
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 size={14} className="text-emerald-500" />
-                  <span className="text-xs font-medium">Baixa Automática</span>
-                </div>
-                <Switch 
-                  checked={settings?.bot_auto_confirm_payment} 
-                  onCheckedChange={(v) => updateSettings({ bot_auto_confirm_payment: v })}
-                />
-              </div>
-            </div>
-          </Card>
-
-          <div className="rounded-2xl border border-primary/20 bg-primary/5 p-5 space-y-3">
-            <div className="flex items-center gap-2 text-primary">
-              <ShieldCheck size={16} />
-              <h4 className="text-xs font-bold uppercase">Segurança</h4>
-            </div>
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
-              Suas credenciais são armazenadas de forma segura. O bot respeita os limites de envio para evitar banimentos no WhatsApp.
-            </p>
-          </div>
-        </div>
       </div>
       
       {/* Help Card */}
@@ -422,7 +382,17 @@ const WhatsAppConfig = () => {
         </div>
       </Card>
 
-      <BusinessHoursCard settings={settings} onUpdate={updateSettings} />
+      <details className="rounded-xl border bg-card p-5"><summary className="cursor-pointer font-semibold">Configuração da conexão</summary><div className="pt-4 space-y-4">
+        <div><Label htmlFor="wa-api-url">URL da API</Label><Input id="wa-api-url" type="url" value={apiUrl} onChange={e=>setApiUrl(e.target.value)}/></div>
+        <div><Label htmlFor="wa-api-key">Chave da API</Label><Input id="wa-api-key" type="password" autoComplete="new-password" value={apiKey} onChange={e=>setApiKey(e.target.value)} placeholder={settings?.whatsapp_api_key_configured?'Configurada. Deixe vazio para manter.':'Informe a chave da API'}/></div>
+        <div><Label htmlFor="wa-instance">Nome da instância</Label><Input id="wa-instance" value={configuredInstance} onChange={e=>setConfiguredInstance(e.target.value)}/></div>
+        <Button disabled={loading || !settings} onClick={async()=>{
+          try{const url=new URL(apiUrl);if(url.protocol!=='https:' || url.username || url.password)throw Error('Informe uma URL HTTPS válida.');if(configuredInstance && !/^[A-Za-z0-9_-]{1,80}$/.test(configuredInstance))throw Error('Nome da instância inválido.');setLoading(true);
+            if(apiKey.trim()){const {data,error}=await supabase.functions.invoke('settings-set-secret',{body:{whatsapp_api_key:apiKey.trim()}});if(error || data?.error)throw error || Error(data.error);setApiKey('');}
+            if(await updateSettings({whatsapp_api_url:url.toString().replace(/\/$/,''),whatsapp_instance:configuredInstance.trim() || null})){setQrCode(null);setStatus('disconnected');await fetchSettings();toast({title:'Conexão configurada'});}
+          }catch(error){toast({title:'Não foi possível salvar',description:error instanceof Error?error.message:'Tente novamente.',variant:'destructive'});}finally{setLoading(false);}
+        }}>Salvar conexão</Button>
+      </div></details>
     </div>
   );
 };

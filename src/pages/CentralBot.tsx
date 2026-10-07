@@ -1,5 +1,5 @@
 import { CredinhoAvatar } from "@/components/brand/Credinho";
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   Bot, Zap, MessageCircle, Sparkles, Activity, BarChart3,
@@ -16,11 +16,13 @@ import { fetchAll } from "@/lib/fetchAll";
 
 const WhatsAppConfig = lazy(() => import("./WhatsAppConfig"));
 const AgenteIA = lazy(() => import("./AgenteIA"));
+const BotSettings = lazy(() => import("@/components/agent/BotSettings"));
+const WhatsAppInbox = lazy(() => import("./WhatsAppInbox"));
 
-const VALID_TABS = ["overview", "bot", "agente"] as const;
+const VALID_TABS = ["overview", "bot", "agente", "cobrancas", "inbox", "revisoes"] as const;
 type TabKey = (typeof VALID_TABS)[number];
 const LEGACY_TABS: Record<string, TabKey> = {
-  automacoes: "bot",
+  automacoes: "cobrancas",
   whatsapp: "bot",
   performance: "overview",
 };
@@ -211,7 +213,7 @@ const Overview = () => {
 
       {/* Quick actions */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        <Link to="/comunicacao/inbox">
+        <Link to="/comunicacao?tab=inbox">
           <Card className="p-5 border-border/50 hover:border-primary/40 transition-colors cursor-pointer h-full">
             <Inbox size={18} className="text-primary mb-2" />
             <p className="font-semibold text-sm">Abrir conversas</p>
@@ -242,27 +244,11 @@ const Overview = () => {
 const CentralBot = () => {
   const [params, setParams] = useSearchParams();
   const raw = params.get("tab");
-  const initial: TabKey = raw && (VALID_TABS as readonly string[]).includes(raw)
-    ? (raw as TabKey)
-    : LEGACY_TABS[raw || ""] || "overview";
-  const [tab, setTab] = useState<TabKey>(initial);
-
-  useEffect(() => {
-    const current = params.get("tab");
-    const requested = current && (VALID_TABS as readonly string[]).includes(current)
-      ? (current as TabKey)
-      : LEGACY_TABS[current || ""] || "overview";
-    if (current && requested !== tab) {
-      setTab(requested);
-      return;
-    }
-    if (current !== tab) {
-      const next = new URLSearchParams(params);
-      next.set("tab", tab);
-      setParams(next, { replace: true });
-    }
-
-  }, [params, setParams, tab]);
+  const tab: TabKey = raw && (VALID_TABS as readonly string[]).includes(raw)
+    ? (raw as TabKey) : LEGACY_TABS[raw || ""] || "overview";
+  const setTab = (value: string) => {
+    const next = new URLSearchParams(params); next.set("tab", value); setParams(next);
+  };
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -275,12 +261,12 @@ const CentralBot = () => {
             <div>
               <h1 className="text-2xl font-bold text-shimmer">Atendimento</h1>
               <p className="text-muted-foreground text-sm mt-0.5">
-                Atendimento pelo WhatsApp, fila humana e automações em um só lugar
+                Agente, cobranças e atendimento em um só lugar
               </p>
             </div>
           </div>
           <Button asChild variant="outline" size="sm" className="rounded-xl">
-            <Link to="/comunicacao/inbox">
+            <Link to="/comunicacao?tab=inbox">
               <Inbox size={14} className="mr-2" /> Conversas
             </Link>
           </Button>
@@ -288,16 +274,19 @@ const CentralBot = () => {
       </div>
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)} className="w-full">
-        <TabsList className="grid w-full grid-cols-3 h-12 rounded-2xl bg-card border border-border p-1">
-          <TabsTrigger value="overview" className="rounded-xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-semibold text-xs sm:text-sm flex items-center gap-1.5">
-            <Activity size={14} /><span >Visão Geral</span>
+        <TabsList aria-label="Módulo de atendimento" className="grid w-full grid-cols-3 sm:grid-cols-6 h-auto gap-1 rounded-2xl bg-card border border-border p-1">
+          <TabsTrigger value="overview" className="min-h-11 rounded-xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-semibold text-xs sm:text-sm flex items-center gap-1.5">
+            <Activity size={14} /><span >Resumo</span>
           </TabsTrigger>
-          <TabsTrigger value="bot" className="rounded-xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-semibold text-xs sm:text-sm flex items-center gap-1.5">
-            <MessageCircle size={14} /><span >WhatsApp</span>
+          <TabsTrigger value="bot" className="min-h-11 rounded-xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-semibold text-xs sm:text-sm flex items-center gap-1.5">
+            <MessageCircle size={14} /><span >Conexão</span>
           </TabsTrigger>
-          <TabsTrigger value="agente" className="rounded-xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-semibold text-xs sm:text-sm flex items-center gap-1.5">
-            <Bot size={14} /><span >Configurações</span>
+          <TabsTrigger value="agente" className="min-h-11 rounded-xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-semibold text-xs sm:text-sm flex items-center gap-1.5">
+            <Bot size={14} /><span >Assistente</span>
           </TabsTrigger>
+          <TabsTrigger value="inbox" className="min-h-11 rounded-xl gap-1.5 text-xs sm:text-sm"><Inbox size={14}/>Conversas</TabsTrigger>
+          <TabsTrigger value="revisoes" className="min-h-11 rounded-xl gap-1.5 text-xs sm:text-sm"><CheckCircle2 size={14}/>Revisões</TabsTrigger>
+          <TabsTrigger value="cobrancas" className="min-h-11 rounded-xl gap-1.5 text-xs sm:text-sm"><CalendarClock size={14}/>Configurações</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-5 focus-visible:outline-hidden">
@@ -307,8 +296,11 @@ const CentralBot = () => {
           <Suspense fallback={<Fallback />}><WhatsAppConfig /></Suspense>
         </TabsContent>
         <TabsContent value="agente" className="mt-5 focus-visible:outline-hidden">
-          <Suspense fallback={<Fallback />}><AgenteIA /></Suspense>
+          <Suspense fallback={<Fallback />}><AgenteIA key="chat" embedded view="chat" /></Suspense>
         </TabsContent>
+        <TabsContent value="revisoes" className="mt-5"><Suspense fallback={<Fallback/>}><AgenteIA key="reviews" embedded view="documentos"/></Suspense></TabsContent>
+        <TabsContent value="inbox" className="mt-5"><Suspense fallback={<Fallback/>}><WhatsAppInbox/></Suspense></TabsContent>
+        <TabsContent value="cobrancas" className="mt-5"><Suspense fallback={<Fallback/>}><BotSettings/></Suspense></TabsContent>
       </Tabs>
     </div>
   );

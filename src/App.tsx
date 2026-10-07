@@ -209,10 +209,10 @@ const App = () => (
                     <Route path="/qrcode" element={<QRCodePage />} />
                     <Route path="/comunicacao" element={<PlanGuard><ErrorBoundary><CentralBot /></ErrorBoundary></PlanGuard>} />
                     <Route path="/central" element={<Navigate to="/comunicacao" replace />} />
-                    <Route path="/comunicacao/inbox" element={<PlanGuard><ErrorBoundary><WhatsAppInbox /></ErrorBoundary></PlanGuard>} />
+                    <Route path="/comunicacao/inbox" element={<Navigate to="/comunicacao?tab=inbox" replace />} />
                     <Route path="/agente-ia" element={<Navigate to="/comunicacao?tab=agente" replace />} />
                     <Route path="/bot-performance" element={<Navigate to="/comunicacao?tab=overview" replace />} />
-                    <Route path="/automacoes" element={<Navigate to="/comunicacao?tab=bot" replace />} />
+                    <Route path="/automacoes" element={<Navigate to="/comunicacao?tab=cobrancas" replace />} />
                     <Route path="/configuracoes/whatsapp" element={<Navigate to="/comunicacao?tab=bot" replace />} />
                     <Route path="/auditoria" element={<AdminRoute><ErrorBoundary><Auditoria /></ErrorBoundary></AdminRoute>} />
                     <Route path="/suporte" element={<ErrorBoundary><Suporte /></ErrorBoundary>} />
