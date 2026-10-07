@@ -1,0 +1,9 @@
+# Diagnóstico de acesso em outros dispositivos
+
+O endereço `credmaisapp.com.br` resolve no DNS público. `www.credmaisapp.com.br` retorna NXDOMAIN tanto na Cloudflare quanto no Google. O endereço com `www` precisa de configuração na conta que administra o domínio e associação ao serviço publicado. A credencial disponível para publicação e a sessão atual do navegador não oferecem acesso a essa zona; nenhuma alteração de DNS foi feita.
+
+O login público sem `www` e as consultas de saúde/autenticação passaram em WebKit de computador e com perfil de iPhone. O Chrome com perfil móvel abriu o login, recarregou e ficou sob controle do service worker. Esses perfis são emulados: não comprovam acesso em um aparelho físico ou em outra operadora. Permanecem necessários o endereço completo, a mensagem de erro, o aparelho e a rede do usuário afetado. Não há comprovação de que o DNS explique todos os relatos.
+
+No teste de Safari com armazenamento cheio, uma importação assíncrona do módulo de registro de erros produziu uma rejeição sem tratamento. A reprodução forçando falha no download desse módulo falhou tanto em Chromium quanto em WebKit antes da correção. A inicialização da captura e o registro feito pela tela de recuperação agora tratam a falha do próprio módulo. O aplicativo mantém a interface e a recuperação utilizáveis; a indisponibilidade da telemetria não comprova falha de autenticação. Não há comprovação de que essa rejeição seja a causa do relato de acesso.
+
+O teste de regressão interrompe o download real do módulo, confirma que a tentativa aconteceu, efetua login com backend simulado e verifica o painel sem exceções não tratadas. Os testes de perfil temporariamente indisponível, recuperação da rede, armazenamento bloqueado e armazenamento cheio permanecem ativos. Nenhuma credencial de usuário, pagamento ou mensagem real é usada nesses testes.

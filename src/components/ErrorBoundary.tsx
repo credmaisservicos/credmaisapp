@@ -49,7 +49,10 @@ class ErrorBoundaryInner extends Component<Props, State> {
     void import("@/lib/reportError").then(({ reportError }) => reportError(error, {
       origem: "error-boundary",
       componente: info.componentStack?.slice(0, 1000),
-    }));
+    })).catch(() => {
+      // Reporting is optional: keep the original recovery screen usable when
+      // the reporting module cannot be downloaded.
+    });
 
   }
 

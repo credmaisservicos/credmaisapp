@@ -63,6 +63,19 @@ test("login chega ao dashboard e consulta o perfil uma única vez", async ({ pag
   expect(errors).toEqual([]);
 });
 
+test('login continua utilizável quando o módulo de registro de erros não carrega',async({page})=>{
+ const errors:string[]=[];let failedImports=0;
+ page.on('pageerror',error=>errors.push(error.message));
+ await page.route('**/assets/reportError-*.js',async route=>{failedImports++;await route.abort('failed');});
+ await mockBackend(page);await login(page);
+ await expect(page.getByRole('tab',{name:'Visão geral',exact:true})).toBeVisible();
+ await expect.poll(()=>failedImports).toBeGreaterThan(0);
+ // Give the browser time to dispatch a rejected dynamic import after the abort.
+ await page.waitForTimeout(300);
+ expect(errors).toEqual([]);
+ await expect(page.getByRole('tab',{name:'Visão geral',exact:true})).toBeVisible();
+});
+
 test("perfil com falha permite tentar novamente e abrir o dashboard", async ({ page }) => {
   const reads = await mockBackend(page, true);
   await login(page);

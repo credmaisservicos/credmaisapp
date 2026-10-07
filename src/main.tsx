@@ -56,7 +56,12 @@ void appModule.then(({ default: RootApp }) => {
   // A telemetria não compete com a primeira pintura. O ErrorBoundary ainda a
   // carrega imediatamente sob demanda se um componente falhar antes daqui.
   const installGlobalCapture = () => {
-    void import("@/lib/reportError").then(({ instalarCapturaDeErros }) => instalarCapturaDeErros());
+    void import("@/lib/reportError")
+      .then(({ instalarCapturaDeErros }) => instalarCapturaDeErros())
+      .catch(() => {
+        // Telemetry can be interrupted by navigation or a temporary network
+        // failure. Its own import must not produce an unhandled app error.
+      });
   };
   if ("requestIdleCallback" in window) {
     window.requestIdleCallback(installGlobalCapture, { timeout: 3_000 });
