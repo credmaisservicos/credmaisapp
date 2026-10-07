@@ -27,13 +27,15 @@ export type MemorySection = typeof MEMORY_SECTIONS[number];
 // Estado gravado pelo fluxo determinístico. Atualizações da IA não o alteram.
 function flowState(raw: any): Record<string, unknown> {
   const state: Record<string, unknown> = {};
-  const strings = ['service_menu_stage','last_menu_choice','loan_profile','request_kind','pending_payment_kind','pending_payment_installment_id','pending_payment_set_at','installment_choice_set_at','payment_promise_cancelled_at','resumed_at'];
+  const strings = ['service_menu_stage','last_menu_choice','loan_profile','request_kind','pending_payment_kind','pending_payment_installment_id','pending_payment_set_at','installment_choice_set_at','payment_promise_cancelled_at','resumed_at','pending_promise_date','pending_promise_set_at'];
   const numbers = ['last_menu_at','human_reason_asked_at','pending_payment_amount','clarification_count'];
   for (const key of strings) if (typeof raw?.[key] === 'string' && raw[key].length <= 150) state[key] = raw[key];
   for (const key of numbers) if (typeof raw?.[key] === 'number' && Number.isFinite(raw[key]) && raw[key] >= 0) state[key] = raw[key];
   if (typeof raw?.service_menu_started === 'boolean') state.service_menu_started = raw.service_menu_started;
   if(Array.isArray(raw?.installment_choice_ids))state.installment_choice_ids=[...new Set(raw.installment_choice_ids.filter((id:unknown)=>typeof id==='string'&&id.length>0&&id.length<=150))].slice(0,10);
   if(['payment','due_date','charges','balance','summary'].includes(raw?.installment_choice_intent))state.installment_choice_intent=raw.installment_choice_intent;
+  if(['register','change'].includes(raw?.pending_promise_kind))state.pending_promise_kind=raw.pending_promise_kind;
+  if(typeof raw?.pending_promise_amount==='number'&&Number.isFinite(raw.pending_promise_amount)&&raw.pending_promise_amount>0)state.pending_promise_amount=raw.pending_promise_amount;
   const reference=raw?.installment_choice_reference;
   if(reference&&typeof reference==='object'&&!Array.isArray(reference)) {
     const safe:Record<string,unknown>={};

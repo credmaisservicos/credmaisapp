@@ -24,7 +24,7 @@ import { normalizeSnapshot, transition, saveSnapshot, type AgentState } from "..
 import { isEmAtraso, isEmAberto } from "../_shared/installmentStatus.ts";
 import { botBalance, botLateFee, botRenewalQuote } from "../_shared/bot_finance.ts";
 import { botRows, botPortalLink, checkedBotQuery } from "../_shared/bot_data.ts";
-import {parsePaymentDate as parseNaturalPaymentDate, extractPaymentAmount as extractPromisedAmount} from '../_shared/payment_input.ts';
+import {parsePaymentDate as parseNaturalPaymentDate} from '../_shared/payment_input.ts';
 import { queueBotMessage, deliverBotJob } from "../_shared/bot_delivery.ts";
 import { automationAccountActive, withinBotHours } from "../_shared/bot_policy.ts";
 import { saveBotAttachment } from "../_shared/bot_media.ts";
@@ -35,6 +35,7 @@ import {requestsHumanNegotiation, HUMAN_NEGOTIATION_REPLY} from '../_shared/huma
 import {parseInstallmentReference,resolveInstallmentReference,continueInstallmentRequest,freshPaymentContext,type InstallmentReference} from '../_shared/bot_installment_context.ts';
 import {conversationSignal,installmentReplyIntent,generalChargesQuestion,GENERAL_CHARGES_REPLY,clarificationReply} from '../_shared/bot_conversation.ts';
 import {DOCUMENT_LABELS,allowedDocumentTypes,normalizeDocumentReview,documentProgress,documentHelp,documentHelpReply,isPaymentReceiptCaption,type DocumentReview} from '../_shared/bot_documents.ts';
+import {promiseRequest,claimsSavedPromise,forecastInstallmentText} from '../_shared/bot_promises.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -822,6 +823,13 @@ serve(async (req) => {
       return new Response(JSON.stringify({status:'human_handoff',reason:'negotiation'}),{headers:corsHeaders});
     }
 
+    const forecastRequest=(messageType==='text'||messageType==='audio')?promiseRequest(incomingText):null;
+    if(forecastRequest?.kind==='human'){
+      if(convoId)await escalateToHuman(supabase,convoId,'Pedido sobre condição de pagamento ou cancelamento: conferir com o cliente');
+      await checkedBotQuery(supabase.from('notifications').insert({user_id:userId,type:'warning',message:`Pedido sobre pagamento na conversa ${convoId}: a equipe deve conferir antes de alterar a previsão.`}));
+      await botSay('Encaminhei seu pedido para a equipe conferir. O bot não autoriza novos prazos, estorna pagamentos ou altera as condições do contrato.');
+      return new Response(JSON.stringify({status:'human_handoff',reason:'payment_forecast_confirmation'}),{headers:corsHeaders});
+    }
     if (sessionWasClosed && (messageType==="text" || messageType==="audio")) {
       // Restore the saved stage, then handle the message that actually reopened it.
       const resumeMenu=/^(?:oi|ola|bom dia|boa tarde|boa noite|menu|inicio|voltei|continuar|continue)[.!?\s]*$/.test(normalizeMenuText(incomingText));
@@ -1286,9 +1294,9 @@ serve(async (req) => {
       const hasOpen = openInstQuick.length > 0;
       const hasPix = !!profile?.pix_key;
       const humanRequested = !!(convoExisting as any)?.needs_human;
-      const clearPaymentContext={pending_payment_installment_id:'',pending_payment_set_at:'',pending_payment_kind:'',pending_payment_amount:0,installment_choice_ids:[],installment_choice_set_at:'',installment_choice_intent:'summary',installment_choice_reference:{},clarification_count:0};
+      const clearPaymentContext={pending_payment_installment_id:'',pending_payment_set_at:'',pending_payment_kind:'',pending_payment_amount:0,installment_choice_ids:[],installment_choice_set_at:'',installment_choice_intent:'summary',installment_choice_reference:{},pending_promise_kind:'',pending_promise_date:'',pending_promise_set_at:'',pending_promise_amount:0,clarification_count:0};
 
-      const respondInstallment = async (reference:InstallmentReference) => {
+      const respondInstallment = async (reference:InstallmentReference,onSelected?:(row:any)=>Promise<Response>,waitingPatch:Record<string,unknown>={}) => {
         const request=continueInstallmentRequest(reference,installmentReplyIntent(txtRaw),mem,now);
         reference=request.reference;
         const replyIntent=request.intent;
@@ -1310,15 +1318,16 @@ serve(async (req) => {
         if(selected.length!==1) {
           const options=selected.slice(0,10);
           await saveContext({...clearQuote,installment_choice_ids:options.map(row=>row.id),installment_choice_set_at:new Date(now).toISOString(),
-            installment_choice_intent:options.length?replyIntent:'summary',installment_choice_reference:options.length?reference:{}});
+            installment_choice_intent:options.length&&!onSelected?replyIntent:'summary',installment_choice_reference:options.length?reference:{},...(options.length?waitingPatch:{})});
           await botSay(options.length
             ? `Encontrei mais de uma parcela. Qual você deseja?\n\n${options.map((row,index)=>`${index+1}. ${label(row)}`).join('\n')}\n\nResponda “escolher 1”, “escolher 2” ou informe o número da parcela e o contrato.${selected.length>10?' Existem outras parcelas; informe também o contrato para localizá-las.':''}`
             : 'Não encontrei uma parcela ativa em aberto com essa referência. Informe o número da parcela e o contrato, ou escreva “consultar parcelas”.');
           return new Response(JSON.stringify({status:options.length?'installment_ambiguous':'installment_not_found'}),{headers:corsHeaders});
         }
         const installment=selected[0],amount=botBalance(installment);
+        if(onSelected)return await onSelected(installment);
         await saveContext({pending_payment_installment_id:installment.id,pending_payment_kind:'payment',pending_payment_amount:amount,
-          pending_payment_set_at:new Date(now).toISOString(),installment_choice_ids:[],installment_choice_set_at:'',installment_choice_intent:'summary',installment_choice_reference:{}});
+          pending_payment_set_at:new Date(now).toISOString(),installment_choice_ids:[],installment_choice_set_at:'',installment_choice_intent:'summary',installment_choice_reference:{},pending_promise_kind:'',pending_promise_date:'',pending_promise_set_at:'',pending_promise_amount:0});
         const detail=`Valor original: ${money(installment.amount)}\nJá recebido: ${money(installment.paid_amount ?? 0)}\nEncargos de atraso: ${money(installment.late_fee ?? 0)}\n*Saldo atualizado: ${money(amount)}*`;
         if(replyIntent==='due_date')await botSay(`A parcela #${installment.installment_number} do contrato ${String(installment.contract_id).slice(0,8)} ${installment.due_date<nowBrDay?'venceu':'vence'} em *${due(installment)}*.`);
         else if(replyIntent==='charges')await botSay(`${label(installment)}\n\n${detail}\nOs encargos seguem as regras do contrato. Se discordar, escreva “atendente” para pedir uma conferência.`);
@@ -1351,41 +1360,85 @@ serve(async (req) => {
         return new Response(JSON.stringify({ status: "receipt_status", review_status: reviewStatus }), { headers: corsHeaders });
       }
 
-      if (/cancelar|desmarcar|esquecer/.test(txtLow) && /promessa|previs[aã]o|combinado|pagamento/.test(txtLow)) {
-        await checkedBotQuery(supabase.from('payment_promises').update({status:'cancelled'})
-          .eq('user_id',userId).eq('client_id',client.id).eq('status','open'));
-        const keptPromises = (Array.isArray(mem.promessas) ? mem.promessas : []).filter((promise: any) => !promise?.data || promise.data < nowBrDay);
-        await checkedBotQuery(supabase.from("clients").update({ bot_memory: serializeMemory({ ...mem, promessas: keptPromises, payment_promise_cancelled_at: new Date().toISOString() }) }).eq("id", client.id).eq('user_id',userId));
-        await checkedBotQuery(supabase.from("audit_logs").insert({ user_id: userId, entity_type: "whatsapp_bot", action: "payment_promise_cancelled", entity_id: client.id, details: { message: txtRaw.slice(0, 200) } }));
-        await botSay(`Certo, ${firstName}. Cancelei a previsão de pagamento anterior. Se quiser informar uma nova data, pode escrever, por exemplo: “pago sexta-feira”.`);
-        return new Response(JSON.stringify({ status: "promise_cancelled" }), { headers: corsHeaders });
+      const loadOpenPromise=async()=>{
+        const {data}=await checkedBotQuery(supabase.from('payment_promises').select('id,source,installment_id,contract_id,promised_for,promised_amount')
+          .eq('user_id',userId).eq('client_id',client.id).eq('status','open').maybeSingle());
+        return data;
+      };
+      const promiseHuman=async()=>{
+        if(convoId)await escalateToHuman(supabase,convoId,'Previsão registrada pela equipe: alteração exclusivamente humana');
+        await checkedBotQuery(supabase.from('notifications').insert({user_id:userId,type:'warning',message:`${client.name}: pediu alteração da previsão registrada pela equipe.`}));
+        await botSay('Essa previsão foi registrada pela equipe. Encaminhei seu pedido para conferência humana, sem alterar o registro.');
+        return new Response(JSON.stringify({status:'human_handoff',reason:'human_owned_promise'}),{headers:corsHeaders});
+      };
+      if(forecastRequest?.kind==='status'){
+        const promise=await loadOpenPromise();
+        await botSay(promise&&promise.promised_for>=nowBrDay
+          ? `Sua previsão de pagamento está registrada para *${promise.promised_for.split('-').reverse().join('/')}*${promise.promised_amount?` (${money(Number(promise.promised_amount))})`:''}. A previsão não altera o vencimento nem as condições do contrato.`
+          : 'Não há previsão ativa para hoje ou uma data futura. Os vencimentos e condições do contrato continuam valendo.');
+        return new Response(JSON.stringify({status:'promise_status'}),{headers:corsHeaders});
       }
-
-      const newPromiseDate = /pag|acert|deposit|transfer|mudar|alterar/.test(txtLow) ? parseNaturalPaymentDate(txtRaw) : null;
-      const changingPromise = /mudar|alterar|corrigir|nova data|na verdade/.test(txtLow);
-      const committingPayment = /\b(?:pago|pagarei|vou pagar|consigo pagar|posso pagar|vou depositar|vou transferir)\b/.test(txtLow);
-      if (newPromiseDate && (changingPromise || committingPayment) && hasOpen && !/(?:s[oó]|somente|apenas)\s+(?:os\s+)?juros/.test(txtLow)) {
-        const promiseReference=parseInstallmentReference(txtRaw,mem,now);
-        const explicitPromiseReference=promiseReference&&(promiseReference.number!==undefined||promiseReference.contract||promiseReference.order);
-        // A date in this message is a promised payment date, not a due-date filter.
-        const selectedPromiseRows=explicitPromiseReference
-          ? resolveInstallmentReference(openInstQuick,{number:promiseReference!.number,contract:promiseReference!.contract,order:promiseReference!.order,invalid:promiseReference!.invalid},mem,nowBrDay,now)
-          : mem.pending_payment_installment_id?resolveInstallmentReference(openInstQuick,{context:true},mem,nowBrDay,now):[];
-        if((explicitPromiseReference||mem.pending_payment_installment_id)&&selectedPromiseRows.length!==1){
-          return await respondInstallment(explicitPromiseReference?{number:promiseReference!.number,contract:promiseReference!.contract,order:promiseReference!.order,invalid:promiseReference!.invalid}:{context:true});
+      if(forecastRequest?.kind==='cancel'){
+        const promise=await loadOpenPromise();
+        if(!promise){await botSay('Não encontrei uma previsão ativa para cancelar. Nenhum pagamento ou vencimento foi alterado.');return new Response(JSON.stringify({status:'promise_not_found'}),{headers:corsHeaders});}
+        if(promise.source!=='bot')return await promiseHuman();
+        const ref=parseInstallmentReference(forecastInstallmentText(txtRaw),mem,now);
+        if(ref&&(ref.number!==undefined||ref.contract||ref.order)){
+          const matches=resolveInstallmentReference(openInstQuick,{number:ref.number,contract:ref.contract,order:ref.order,invalid:ref.invalid},mem,nowBrDay,now);
+          if(!matches.some(row=>row.id===promise.installment_id)){
+            await botSay('A previsão ativa está vinculada a outra parcela. Confira a previsão registrada ou informe a parcela e o contrato corretos.');
+            return new Response(JSON.stringify({status:'promise_reference_mismatch'}),{headers:corsHeaders});
+          }
         }
-        const promisedInstallment=selectedPromiseRows[0];
-        const display = newPromiseDate.split("-").reverse().join("/");
-        const promisedAmount = extractPromisedAmount(txtRaw);
-        const previous = (Array.isArray(mem.promessas) ? mem.promessas : []).filter((promise: any) => !promise?.data || promise.data < nowBrDay);
-        await checkedBotQuery(supabase.from("audit_logs").insert({ user_id: userId, entity_type: "whatsapp_bot", action: changingPromise ? "payment_promise_changed" : "promise_to_pay", entity_id: client.id, details: { promise_date: newPromiseDate, promise_amount: promisedAmount, message: txtRaw.slice(0, 200) } }));
-        if(promisedInstallment)await checkedBotQuery(supabase.from('payment_promises').update({installment_id:promisedInstallment.id,contract_id:promisedInstallment.contract_id,promised_amount:promisedAmount ?? botBalance(promisedInstallment)})
-          .eq('user_id',userId).eq('client_id',client.id).eq('status','open').eq('source','bot').eq('promised_for',newPromiseDate));
-        await checkedBotQuery(supabase.from("clients").update({ bot_memory: serializeMemory({ ...mem,
-          ...(promisedInstallment?{pending_payment_installment_id:promisedInstallment.id,pending_payment_kind:'payment',pending_payment_amount:botBalance(promisedInstallment),pending_payment_set_at:new Date(now).toISOString(),installment_choice_ids:[],installment_choice_set_at:''}:{}),
-          promessas: [{ data: newPromiseDate, valor: promisedAmount, contexto: changingPromise ? "Data corrigida pelo cliente" : "Previsão informada pelo cliente" }, ...previous] }) }).eq("id", client.id).eq('user_id',userId));
-        await botSay(`${changingPromise ? 'Atualizei' : 'Registrei'} sua previsão de pagamento${promisedAmount ? ` de ${money(promisedAmount)}` : ''} para ${display}. Quando pagar, envie o comprovante para conferência.`);
-        return new Response(JSON.stringify({ status: changingPromise ? "promise_changed" : "promise_registered", promise_date: newPromiseDate }), { headers: corsHeaders });
+        const {data:cancelled}=await checkedBotQuery(supabase.from('payment_promises').update({status:'cancelled'})
+          .eq('id',promise.id).eq('user_id',userId).eq('client_id',client.id).eq('source','bot').eq('status','open').select('id'));
+        if(!cancelled?.length)throw Error('promise_cancellation_unavailable');
+        const keptPromises=(Array.isArray(mem.promessas)?mem.promessas:[]).filter((entry:any)=>!entry?.data||entry.data<nowBrDay);
+        await checkedBotQuery(supabase.from('clients').update({bot_memory:serializeMemory({...mem,...clearPaymentContext,promessas:keptPromises,payment_promise_cancelled_at:new Date().toISOString()})}).eq('id',client.id).eq('user_id',userId));
+        await checkedBotQuery(supabase.from('audit_logs').insert({user_id:userId,entity_type:'whatsapp_bot',entity_id:client.id,action:'payment_promise_cancelled',details:{promise_id:promise.id,message:txtRaw.slice(0,200)}}));
+        await botSay('Cancelei a previsão registrada pelo bot. Isso não estorna pagamentos nem muda o vencimento ou as condições do contrato.');
+        return new Response(JSON.stringify({status:'promise_cancelled'}),{headers:corsHeaders});
+      }
+      const saveForecast=async(kind:string,date:string,amount:number|null,row:any)=>{
+        if(parseNaturalPaymentDate(date)!==date){
+          await checkedBotQuery(supabase.from('clients').update({bot_memory:serializeMemory({...mem,...clearPaymentContext})}).eq('id',client.id).eq('user_id',userId));
+          await botSay('Informe uma data válida para hoje ou uma data futura, por exemplo: “vou pagar a parcela 2 amanhã”.');
+          return new Response(JSON.stringify({status:'promise_date_required'}),{headers:corsHeaders});
+        }
+        const existing=await loadOpenPromise();if(existing&&existing.source!=='bot')return await promiseHuman();
+        const promisedAmount=amount ?? (kind==='change'&&existing&&existing.installment_id===row.id?Number(existing.promised_amount)||botBalance(row):botBalance(row));
+        // The trigger binds the selected ID inside this transaction. No follow-up PATCH.
+        const {error}=await supabase.from('audit_logs').insert({user_id:userId,entity_type:'whatsapp_bot',action:kind==='change'?'payment_promise_changed':'promise_to_pay',entity_id:client.id,
+          details:{promise_date:date,promise_amount:promisedAmount,installment_id:row.id,message:txtRaw.slice(0,200)}});
+        if(error?.message?.includes('promise_human_owned'))return await promiseHuman();
+        if(error)throw Error('promise_persistence_unavailable');
+        const saved=await loadOpenPromise();
+        if(!saved||saved.source!=='bot'||saved.installment_id!==row.id||saved.promised_for!==date)throw Error('promise_persistence_unavailable');
+        const previous=(Array.isArray(mem.promessas)?mem.promessas:[]).filter((entry:any)=>!entry?.data||entry.data<nowBrDay);
+        await checkedBotQuery(supabase.from('clients').update({bot_memory:serializeMemory({...mem,...clearPaymentContext,
+          pending_payment_installment_id:row.id,pending_payment_kind:'payment',pending_payment_amount:botBalance(row),pending_payment_set_at:new Date(now).toISOString(),
+          promessas:[{data:date,valor:promisedAmount,installment_id:row.id,contexto:'Previsão informada pelo cliente'},...previous]})}).eq('id',client.id).eq('user_id',userId));
+        await botSay(`${kind==='change'?'Atualizei':'Registrei'} sua previsão de pagamento de ${money(promisedAmount)} para *${date.split('-').reverse().join('/')}*, na parcela #${row.installment_number} do contrato ${String(row.contract_id).slice(0,8)}. A previsão não altera o vencimento nem as condições do contrato. Quando pagar, envie o comprovante para conferência.`);
+        return new Response(JSON.stringify({status:kind==='change'?'promise_changed':'promise_registered',promise_date:date,installment_id:row.id}),{headers:corsHeaders});
+      };
+      if(forecastRequest&&(forecastRequest.kind==='register'||forecastRequest.kind==='change')){
+        if(!forecastRequest.date){
+          await checkedBotQuery(supabase.from('clients').update({bot_memory:serializeMemory({...mem,...clearPaymentContext})}).eq('id',client.id).eq('user_id',userId));
+          await botSay('Informe uma data válida para hoje ou uma data futura, por exemplo: “vou pagar a parcela 2 amanhã”.');
+          return new Response(JSON.stringify({status:'promise_date_required'}),{headers:corsHeaders});
+        }
+        if(!hasOpen){await botSay('Não há parcela ativa com saldo em aberto para registrar uma previsão.');return new Response(JSON.stringify({status:'promise_no_debt'}),{headers:corsHeaders});}
+        const ref=parseInstallmentReference(forecastInstallmentText(txtRaw),mem,now);
+        const selection:InstallmentReference=ref&&(ref.number!==undefined||ref.contract||ref.order)
+          ? {number:ref.number,contract:ref.contract,order:ref.order,invalid:ref.invalid}
+          : mem.pending_payment_installment_id?{context:true}:{};
+        return await respondInstallment(selection,row=>saveForecast(forecastRequest.kind,forecastRequest.date!,forecastRequest.amount,row),
+          {pending_promise_kind:forecastRequest.kind,pending_promise_date:forecastRequest.date,pending_promise_amount:forecastRequest.amount ?? 0,pending_promise_set_at:new Date(now).toISOString()});
+      }
+      const continuationRef=hasTextRequest?parseInstallmentReference(txtRaw,mem,now):null;
+      if(continuationRef&&!continuationRef.list&&installmentReplyIntent(txtRaw)==='summary'&&mem.pending_promise_kind&&freshPaymentContext(mem.pending_promise_set_at,now)){
+        return await respondInstallment(continuationRef,row=>saveForecast(mem.pending_promise_kind,mem.pending_promise_date,mem.pending_promise_amount || null,row),
+          {pending_promise_kind:mem.pending_promise_kind,pending_promise_date:mem.pending_promise_date,pending_promise_amount:mem.pending_promise_amount || 0,pending_promise_set_at:mem.pending_promise_set_at});
       }
 
       // Selection is deterministic, ahead of greeting, FAQ, cooldown and AI.
@@ -2019,7 +2072,7 @@ ${loopSignal.loop ? `⚠️ Respostas repetitivas (sim=${loopSignal.similarity})
 
 ═══ 🎭 OS ÚNICOS 6 CAMINHOS QUE VOCÊ EXECUTA ═══
 ▸ 1) Cliente pede PIX ou aceita pagar agora → envie os dados oficiais e o saldo da parcela confirmada. Não ofereça pagamento em resposta a uma dúvida sobre vencimento ou encargos.
-▸ 2) Cliente indica DATA de pagamento → registre uma previsão (is_promise=true, promise_date). Não chame de acordo nem afirme que mudou o vencimento.
+▸ 2) Previsões de pagamento são gravadas pelo fluxo determinístico antes desta etapa. Aqui, não registre nem anuncie uma previsão salva. Oriente o cliente a informar parcela e data em uma frase explícita, como “vou pagar a parcela 2 amanhã”. Nunca chame previsão de acordo ou alteração de vencimento.
 ▸ 3) Cliente pede desconto/parcelamento/prazo/qualquer condição diferente → NÃO NEGOCIE. needs_human=true, motivo negociação. A equipe continuará por aqui; não prometa prazo de retorno sem confirmação operacional.
 ▸ 4) Cliente diz "já paguei" → se houver comprovante (imagem/PDF): is_receipt=true; informe que a baixa depende de conferência humana. Se NÃO houver: peça o comprovante em imagem ou PDF. Não confirme recebimento de dinheiro por uma mensagem ou cotação.
 ▸ 5) Cliente contesta a dívida, fala em fraude, Procon, advogado, processo → needs_human=true PRIORIDADE ALTA e SUSPENDA a cobrança nessa mensagem.
@@ -2385,16 +2438,12 @@ Ex6 — "queria mais 3 mil emprestado":
       }
     }
 
-    if (result.is_promise) {
-      const promiseDate = parseNaturalPaymentDate(String(result.promise_date || ''));
-      if (promiseDate && openWithBalance.length) {
-        await checkedBotQuery(supabase.from('audit_logs').insert({user_id:userId,entity_type:'whatsapp_bot',entity_id:client.id,action:'promise_to_pay',details:{promise_date:promiseDate,promise_amount:extractPromisedAmount(incomingText),message:incomingText.slice(0,200)}}));
-        result.promise_date = promiseDate;
-      } else {
-        result.is_promise = false;
-        result.promise_date = null;
-        result.reply = 'Informe a data em que pretende pagar, por exemplo: “pago amanhã” ou “pago dia 15”. A previsão precisa ser para hoje ou uma data futura.';
-      }
+    if (result.is_promise || claimsSavedPromise(result.reply)) {
+      result.is_promise = false;
+      result.promise_date = null;
+      result.reply = result.needs_human
+        ? 'Seu pedido precisa de conferência da equipe. Nenhuma previsão foi registrada pelo bot.'
+        : 'Para registrar uma previsão, informe a parcela e uma data válida, por exemplo: “vou pagar a parcela 2 amanhã”. Isso não altera o vencimento nem as condições do contrato.';
     }
 
     if (result.needs_human && !result.is_receipt && convoId) {

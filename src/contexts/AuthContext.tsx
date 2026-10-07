@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { clearOfflineSession, loadOfflineSession, saveOfflineSession } from "@/lib/offlineSession";
 import { withTimeout } from "@/lib/withTimeout";
+import {authFailureMessage,isTemporaryAuthFailure} from '@/lib/authFailure';
 
 export type AuthProfile = Database["public"]["Tables"]["profiles"]["Row"];
 
@@ -75,12 +76,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         return;
       }
 
-      const readProfile = () => Promise.allSettled([
-        withTimeout(supabase.from("profiles").select("*").eq("id", userId).single()),
-        withTimeout(supabase.rpc("is_admin", { _user_id: userId })),
-      ] as const);
+      const readProfile = async () => {
+        const controller=new AbortController();
+        const timer=setTimeout(()=>controller.abort(),10_000);
+        try{return await Promise.allSettled([
+          withTimeout(supabase.from("profiles").select("*").eq("id",userId).abortSignal(controller.signal).single()),
+          withTimeout(supabase.rpc("is_admin",{_user_id:userId}).abortSignal(controller.signal)),
+        ] as const);}finally{clearTimeout(timer);}
+      };
       let [profileSettled, adminSettled] = await readProfile();
       if (!isCurrent()) return;
+      const temporaryError=profileSettled.status==='rejected'?profileSettled.reason:profileSettled.value.error?{...profileSettled.value.error,status:profileSettled.value.status}:null;
+      if(temporaryError&&isTemporaryAuthFailure(temporaryError)&&navigator.onLine){
+        await new Promise(resolve=>setTimeout(resolve,500));
+        if(!isCurrent())return;
+        [profileSettled,adminSettled]=await readProfile();
+      }
+      if(!isCurrent())return;
       if (profileSettled.status === "fulfilled" && profileSettled.value.status === 401) {
         // A stored access token can be rejected while the refresh token is still
         // valid. Renew once, then verify this same account with fresh requests.
@@ -88,7 +100,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const renewed = await withTimeout(supabase.auth.refreshSession());
         if (!isCurrent()) return;
         if (renewed.error || renewed.data.session?.user.id !== userId) {
-          throw new Error("Não foi possível renovar sua sessão.");
+          throw renewed.error || {status:401,message:"Não foi possível renovar sua sessão."};
         }
         [profileSettled, adminSettled] = await readProfile();
       }
@@ -96,7 +108,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const profileResult = profileSettled.status === "fulfilled" ? profileSettled.value : null;
       const adminResult = adminSettled.status === "fulfilled" ? adminSettled.value : null;
       if (profileResult?.error || profileResult?.data?.id !== userId) {
-        throw new Error("Não foi possível carregar seu perfil. Verifique sua conexão e tente novamente.");
+        throw profileSettled.status==='rejected'?profileSettled.reason:profileResult?.error?{...profileResult.error,status:profileResult.status}:new Error('Não foi possível carregar seu perfil. Tente novamente ou entre em contato com o suporte.');
       }
 
       // Online, somente a resposta atual do banco confirma a permissão.
@@ -105,11 +117,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setIsPlatformAdmin(admin);
       saveOfflineSession(userId, profileResult.data, admin);
       profilePhase.current = "ready";
-    } catch {
+    } catch (error) {
       if (!isCurrent()) return;
       setProfile(null);
       setIsPlatformAdmin(false);
-      setAuthError("Não foi possível carregar seu perfil. Verifique sua conexão e tente novamente.");
+      setAuthError(authFailureMessage(error,'Não foi possível carregar seu perfil. Tente novamente ou entre em contato com o suporte.'));
       profilePhase.current = "error";
     } finally {
       if (isCurrent()) setLoading(false);
@@ -170,9 +182,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         if (error) throw error;
         applySession(data.session);
       })
-      .catch(() => {
+      .catch((error) => {
         if (disposed || receivedAuthEvent) return;
-        setAuthError("Não foi possível recuperar sua sessão. Verifique sua conexão e tente novamente.");
+        setAuthError(authFailureMessage(error,'Não foi possível recuperar sua sessão. Tente novamente ou entre novamente.'));
         setLoading(false);
       });
 
@@ -191,7 +203,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (navigator.onLine && userId && profilePhase.current !== "loading") void fetchProfile(userId);
     };
     window.addEventListener("online", reconnect);
-    return () => window.removeEventListener("online", reconnect);
+    const recoverVisible=()=>{if(document.visibilityState==='visible'&&profilePhase.current==='error')reconnect();};
+    window.addEventListener('focus',recoverVisible);
+    document.addEventListener('visibilitychange',recoverVisible);
+    return () => {window.removeEventListener("online",reconnect);window.removeEventListener('focus',recoverVisible);document.removeEventListener('visibilitychange',recoverVisible);};
   }, [fetchProfile]);
 
   const signOut = async () => {

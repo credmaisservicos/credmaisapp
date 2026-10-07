@@ -49,6 +49,7 @@ test("sessão rejeitada na consulta de perfil é renovada sem prender o usuário
 });
 
 test("novo login na mesma conta recupera uma consulta de perfil que falhou", async ({ page }) => {
+  test.setTimeout(45_000);
   await mockBackend(page);
   let unavailable = true;
   await page.route("**/rest/v1/profiles?**", async route => {
@@ -57,7 +58,7 @@ test("novo login na mesma conta recupera uma consulta de perfil que falhou", asy
     } else await route.fallback();
   });
   await login(page);
-  await expect(page.getByRole("heading", { name: "Não foi possível verificar seu acesso", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Não foi possível verificar seu acesso", exact: true })).toBeVisible({timeout:25_000});
   unavailable = false;
   // Navegação interna preserva o provider, como ao entrar novamente na mesma aba.
   await page.evaluate(() => {
@@ -70,6 +71,7 @@ test("novo login na mesma conta recupera uma consulta de perfil que falhou", asy
 });
 
 test("consulta de perfil retoma automaticamente quando a conexão volta", async ({ page }) => {
+  test.setTimeout(45_000);
   await mockBackend(page);
   let unavailable = true;
   await page.route("**/rest/v1/profiles?**", async route => {
@@ -78,7 +80,7 @@ test("consulta de perfil retoma automaticamente quando a conexão volta", async 
     } else await route.fallback();
   });
   await login(page);
-  await expect(page.getByRole("heading", { name: "Não foi possível verificar seu acesso", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Não foi possível verificar seu acesso", exact: true })).toBeVisible({timeout:25_000});
   unavailable = false;
   await page.evaluate(() => { window.dispatchEvent(new Event("online")); });
   await expect(page.getByRole("tab", { name: "Visão geral", exact: true })).toBeVisible();

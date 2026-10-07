@@ -16,7 +16,9 @@ let profilePix:string|null;
 let failPromiseLink=false;
 let failLead=false,failStorage=false,failNotification=false;
 let fixtureMedia:string|null=null;
+let operationalPromise:any=null,failPromiseRead=false,failPromiseVerify=false;
 const json=(v:any,status=200)=>new Response(JSON.stringify(v),{status,headers:{'Content-Type':'application/json'}});
+function seedPromise(overrides:any={}){operationalPromise={id:'promise-test',user_id:owner,client_id:clientId,source:'bot',status:'open',installment_id:installment.id,contract_id:contract.id,promised_for:'2099-01-01',promised_amount:60,...overrides};}
 const rows=(v:any,req:Request)=>json(req.headers.get('Accept')?.includes('vnd.pgrst.object')?v:(v?[v]:[]));
 function reset(){
  calls=[];messages=[];reviews=[];jobs=[];knownClient=true;failSettings=false;ownsLease=true;eventCompleted=false;failHandoff=false;
@@ -26,6 +28,7 @@ function reset(){
  profilePix='pix@example.test';
  failPromiseLink=false;
  failLead=false;failStorage=false;failNotification=false;fixtureMedia=null;
+ operationalPromise=null;failPromiseRead=false;failPromiseVerify=false;
  geminiReply={reply:'Posso orientar sobre suas parcelas e encaminhar pedidos para a equipe.',intent:'duvida',needs_human:false};
  clientMemory=JSON.stringify({service_menu_started:true});failPromise=false;failCancel=false;failContract=false;failReview=false;failMemory=false;geminiStatus=200;portalReceipt=false;
  installment={id:'installment-test',user_id:owner,client_id:clientId,contract_id:'contract-test',amount:100,paid_amount:40,late_fee:0,scheduled_interest:10,status:'pending',due_date:'2099-01-01',installment_number:1,contracts:{status:'active',daily_interest_percent:4}};
@@ -69,8 +72,20 @@ globalThis.fetch=async(input,init)=>{
    return rows(conversation,req);
  }
  if(table==='clients'){if(req.method==='PATCH'&&body.bot_memory){if(failMemory)return json({message:'Unavailable'},503);clientMemory=body.bot_memory;}return rows({id:clientId,user_id:owner,name:'Cliente fictício',phone:'11999999999',bot_memory:clientMemory},req);}
- if(table==='payment_promises'&&req.method==='PATCH')return failCancel||(failPromiseLink&&body.installment_id)?json({message:'Unavailable'},503):new Response(null,{status:204});
- if(table==='audit_logs'&&req.method==='POST'&&['promise_to_pay','payment_promise_changed'].includes(body.action)&&failPromise)return json({message:'Unavailable'},503);
+ if(table==='payment_promises'){
+   if(req.method==='GET')return failPromiseRead?json({message:'Unavailable'},503):rows(operationalPromise?.status==='open'?operationalPromise:null,req);
+   if(req.method==='PATCH'){
+     if(failCancel)return json({message:'Unavailable'},503);
+     const matches=operationalPromise&&['id','user_id','client_id','source','status'].every(key=>!u.searchParams.has(key)||u.searchParams.get(key)===`eq.${operationalPromise[key]}`);
+     if(matches)Object.assign(operationalPromise,body);
+     return json(matches?[{id:operationalPromise.id}]:[]);
+   }
+ }
+ if(table==='audit_logs'&&req.method==='POST'&&['promise_to_pay','payment_promise_changed'].includes(body.action)){
+   if(failPromise||failPromiseLink)return json({message:'Unavailable'},503);
+   const row=[installment,...additionalInstallments].find(row=>row.id===body.details.installment_id);
+   operationalPromise={id:'promise-test',user_id:owner,client_id:clientId,status:'open',source:'bot',installment_id:failPromiseVerify?'wrong-installment':row?.id,contract_id:row?.contract_id,promised_for:body.details.promise_date,promised_amount:body.details.promise_amount};
+ }
  if(table==='whatsapp_messages'){
    if(req.method==='POST'){messages.push(body);return new Response(null,{status:201});}
    if(req.method==='PATCH'){const m=messages.find(m=>u.searchParams.get('wa_message_id')===`eq.${m.wa_message_id}`);if(m)Object.assign(m,body);return new Response(null,{status:204});}
@@ -145,11 +160,11 @@ Deno.test('partial payment proposals require a human without generating a negoti
  assert(jobs.every(j=>!j.text.includes('PIX')));assertEquals(JSON.parse(clientMemory).pending_payment_kind,undefined);
 });
 Deno.test('promise cancellation closes the owner-scoped operational promise before acknowledging',async()=>{
- reset();const {body}=await invoke({conversation:'cancelar promessa de pagamento'});assertEquals(body.status,'promise_cancelled');
+ reset();seedPromise();const {body}=await invoke({conversation:'cancelar promessa de pagamento'});assertEquals(body.status,'promise_cancelled');
  const update=calls.find(c=>c.path.endsWith('/payment_promises')&&c.method==='PATCH');assertEquals(update.body,{status:'cancelled'});assertEquals(update.query.user_id,`eq.${owner}`);assertEquals(update.query.client_id,`eq.${clientId}`);assertEquals(update.query.status,'eq.open');
 });
 Deno.test('failed promise cancellation remains retryable without a false acknowledgement',async()=>{
- reset();failCancel=true;const {response}=await invoke({conversation:'cancelar promessa de pagamento'});assertEquals(response.status,500);assertEquals(jobs.length,0);assertEquals(eventCompleted,false);
+ reset();seedPromise();failCancel=true;const {response}=await invoke({conversation:'cancelar promessa de pagamento'});assertEquals(response.status,500);assertEquals(jobs.length,0);assertEquals(eventCompleted,false);
 });
 Deno.test('new promises materialize the operational amount before the reply',async()=>{
  reset();const {body}=await invoke({conversation:'pago R$ 20.50 amanhã'});assertEquals(body.status,'promise_registered');
@@ -256,6 +271,62 @@ function addParcel(number:number,overrides:any={}){
  additionalInstallments.push(row);return row;
 }
 function paymentQuote(){return JSON.parse(clientMemory);}
+for(const fragment of ['opção 2','parcela 2'])Deno.test(`forecast retains date and amount until the parcel selection: ${fragment}`,async()=>{
+ reset();const row=addParcel(2);
+ assertEquals((await turn('vou pagar R$ 20,50 amanhã','forecast-start')).body.status,'installment_ambiguous');
+ assertEquals(operationalPromise,null);assertEquals(paymentQuote().pending_promise_amount,20.5);
+ const {body}=await turn(fragment,'forecast-selection');assertEquals(body.status,'promise_registered');assertEquals(body.installment_id,row.id);
+ assertEquals(operationalPromise.promised_amount,20.5);assertEquals(operationalPromise.promised_for,body.promise_date);
+ assert(jobs.every(j=>!j.text.includes('000201')));assertEquals(paymentQuote().pending_promise_kind,'');
+});
+Deno.test('forecast retains the parcel number while a contract is being selected',async()=>{
+ reset();addParcel(2);const row=addParcel(2,{id:'forecast-other',contract_id:'bbbb2222'});
+ assertEquals((await turn('vou pagar parcela 2 amanhã','forecast-two-contracts')).body.status,'installment_ambiguous');
+ assertEquals((await turn('contrato bbbb2222','forecast-contract')).body.installment_id,row.id);assertEquals(operationalPromise.installment_id,row.id);
+});
+Deno.test('weekday forecast never defaults to the sixth parcel',async()=>{
+ reset();addParcel(6);const {body}=await turn('vou pagar sexta','forecast-weekday');assertEquals(body.status,'installment_ambiguous');assertEquals(operationalPromise,null);
+});
+for(const input of ['não vou pagar amanhã','posso pagar amanhã?','vou pagar amanhã?','talvez pago amanhã','cancelar pagamento','não cancelar previsão'])Deno.test(`uncertain or refund request remains human-only: ${input}`,async()=>{
+ reset();seedPromise();const before={...operationalPromise};await turn(input,'forecast-not-explicit');
+ assert(conversation.needs_human&&conversation.bot_paused);assertEquals(operationalPromise,before);
+ assertEquals(calls.filter(c=>['promise_to_pay','payment_promise_changed'].includes(c.body.action)).length,0);
+ assert(jobs.every(j=>!j.text.includes('000201')&&!j.text.includes('Registrei')));
+});
+for(const source of ['human','import'])for(const input of ['vou pagar amanhã','cancelar previsão'])Deno.test(`preserve ${source} forecast on ${input}`,async()=>{
+ reset();seedPromise({source});const before={...operationalPromise};const {body}=await turn(input,'forecast-human-owned');assertEquals(body.status,'human_handoff');assertEquals(operationalPromise,before);
+ assert(conversation.needs_human);assertEquals(calls.filter(c=>c.path.endsWith('/payment_promises')&&c.method==='PATCH').length,0);
+});
+Deno.test('cancellation without a current forecast does not claim a successful write',async()=>{
+ reset();assertEquals((await turn('cancelar previsão','forecast-absent')).body.status,'promise_not_found');assertEquals(calls.filter(c=>c.path.endsWith('/payment_promises')&&c.method==='PATCH').length,0);
+});
+Deno.test('cancellation of a different parcel preserves the active forecast',async()=>{
+ reset();addParcel(2);seedPromise();assertEquals((await turn('cancelar previsão parcela 2','forecast-mismatch')).body.status,'promise_reference_mismatch');assertEquals(operationalPromise.status,'open');
+});
+Deno.test('forecast status comes from operational data and not stale memory',async()=>{
+ reset();seedPromise({promised_amount:35});clientMemory=JSON.stringify({service_menu_started:true,promessas:[{data:'2099-12-01',valor:999}]});
+ assertEquals((await turn('qual minha previsão registrada?','forecast-status')).body.status,'promise_status');assert(jobs.some(j=>j.text.includes('35,00')&&j.text.includes('01/01/2099')));assert(jobs.every(j=>!j.text.includes('999')));
+ const read=calls.find(c=>c.path.endsWith('/payment_promises')&&c.method==='GET');assertEquals(read.query.user_id,`eq.${owner}`);assertEquals(read.query.client_id,`eq.${clientId}`);
+});
+for(const failure of ['read','verify'])Deno.test(`forecast ${failure} failure has no false acknowledgement`,async()=>{
+ reset();if(failure==='read')failPromiseRead=true;else failPromiseVerify=true;
+ assertEquals((await turn('vou pagar amanhã','forecast-verify-failure')).response.status,500);assertEquals(jobs.length,0);assertEquals(eventCompleted,false);
+});
+for(const invalidation of ['paid','foreign','expired','date'])Deno.test(`forecast waiting context rejects ${invalidation} selection`,async()=>{
+ reset();const row=addParcel(2);await turn('vou pagar R$ 20,50 amanhã','forecast-before-invalidation');jobs=[];
+ if(invalidation==='paid')row.status='paid';if(invalidation==='foreign')row.user_id='another-owner';
+ if(invalidation==='expired'||invalidation==='date'){const m=paymentQuote();if(invalidation==='expired'){m.pending_promise_set_at='2000-01-01';m.installment_choice_set_at='2000-01-01';}else m.pending_promise_date='2000-01-01';clientMemory=JSON.stringify(m);}
+ const {body}=await turn('opção 2','forecast-invalid-selection');assert(body.status!=='promise_registered');assertEquals(operationalPromise,null);assert(jobs.every(j=>!j.text.includes('Registrei')));
+});
+Deno.test('a date correction keeps the previously confirmed voluntary amount',async()=>{
+ reset();seedPromise({promised_amount:20.5});const {body}=await turn('na verdade vou pagar amanhã','forecast-change');assertEquals(body.status,'promise_changed');assertEquals(operationalPromise.promised_amount,20.5);
+});
+for(const flag of [true,false])Deno.test(`AI cannot claim an unrequested forecast write, is_promise=${flag}`,async()=>{
+ reset();settings.bot_use_ai=true;const keys=['GEMINI_API_KEY','GEMINI_ALLOWED_USER_IDS'],before=keys.map(k=>Deno.env.get(k));Deno.env.set(keys[0],'isolated-gemini-key');Deno.env.set(keys[1],owner);
+ geminiReply={reply:'Registrei sua previsão para amanhã.',intent:'duvida',needs_human:false,is_promise:flag,promise_date:'2099-01-01'};
+ try{await turn('Gostaria de entender melhor minha situação específica antes de decidir.','forecast-ai-claim');assertEquals(operationalPromise,null);assertEquals(calls.filter(c=>['promise_to_pay','payment_promise_changed'].includes(c.body.action)).length,0);assert(jobs.every(j=>!j.text.includes('Registrei')));}
+ finally{keys.forEach((k,i)=>before[i]===undefined?Deno.env.delete(k):Deno.env.set(k,before[i]!));}
+});
 function pixAmount(){
  const code=jobs.map(j=>j.text).join('\n').match(/`(000201[^`]+)`/)?.[1];
  assert(code,'Expected a contractual PIX code');
@@ -384,8 +455,8 @@ Deno.test('starting a loan flow clears the previous installment and does not tre
 for(const explicit of [true,false])Deno.test(`promise follows ${explicit?'explicit':'previously selected'} installment without changing its due date`,async()=>{
  reset();const row=addParcel(2);if(!explicit)await turn('parcela 2','promise-context');
  const {body}=await turn(explicit?'vou pagar parcela 2 amanhã':'vou pagar amanhã','selected-promise');assertEquals(body.status,'promise_registered');
- const update=calls.find(c=>c.path.endsWith('/payment_promises')&&c.method==='PATCH'&&c.body.installment_id);
- assertEquals(update.body,{installment_id:row.id,contract_id:row.contract_id,promised_amount:200});assertEquals(update.query.user_id,`eq.${owner}`);assertEquals(update.query.client_id,`eq.${clientId}`);assertEquals(update.query.status,'eq.open');assertEquals(update.query.source,'eq.bot');assertEquals(update.query.promised_for,`eq.${body.promise_date}`);
+ const audit=calls.find(c=>c.body.action==='promise_to_pay');assertEquals(audit.body.details.installment_id,row.id);assertEquals(audit.body.details.promise_amount,200);assertEquals(operationalPromise.installment_id,row.id);
+ assertEquals(calls.filter(c=>c.path.endsWith('/payment_promises')&&c.method==='PATCH').length,0);
  assertEquals(row.due_date,'2099-02-01');assertEquals(calls.filter(c=>c.path.endsWith('/contract_installments')&&c.method==='PATCH').length,0);
  assertEquals(paymentQuote().pending_payment_installment_id,row.id);assertEquals((await turn('pix','pix-after-promise')).body.installment_id,row.id);
 });

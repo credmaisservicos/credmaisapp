@@ -18,6 +18,10 @@ Deno.test('promise dates use the São Paulo calendar even across UTC midnight',(
   assertEquals(parsePaymentDate('quarta-feira',now),'2026-10-07');
   assertEquals(parsePaymentDate('próxima quarta-feira',now),'2026-10-14');
 });
+Deno.test('installment numbers and counts cannot become promised amounts',()=>{
+ for(const text of ['pago 2 parcelas amanhã','pago 2ª parcela amanhã','pago 2a parcela amanhã','pago parcela 2 amanhã'])assertEquals(extractPaymentAmount(text),null);
+ assertEquals(extractPaymentAmount('pago 2 parcelas R$ 100,50 amanhã'),100.5);
+});
 Deno.test('explicit promise dates reject past dates and impossible calendar days',()=>{
   const now=new Date('2026-10-07T18:00:00Z');
   for(const text of ['31/11/2026','29/02/2027','06/10/2026','2026-10-06','dia 32','qual meu saldo'])assertEquals(parsePaymentDate(text,now),null);

@@ -1,6 +1,6 @@
 import { CredinhoLoader } from "@/components/brand/Credinho";
 import { useEffect, useState } from "react";
-import { Navigate, useLocation } from "react-router-dom";
+import { Link, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { AlertCircle, Lock, CreditCard, Wrench } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -245,6 +245,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
           >
             Tentar novamente
           </button>
+          {authError&&<Link to="/login" className="block text-sm underline py-2">Entrar novamente</Link>}
         </div>
       </div>
     );

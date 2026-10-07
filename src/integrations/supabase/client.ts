@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "./types";
 import { rememberMeStorage } from "./remember";
+import {supabaseFetch} from './transport';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -12,6 +13,7 @@ const clientKey = SUPABASE_PUBLISHABLE_KEY || "missing-anon-key";
 /* NÃ£o lanÃ§ar durante o import: a shell deve conseguir renderizar uma mensagem
  * de configuraÃ§Ã£o/rede em vez de deixar o #root vazio. */
 export const supabase = createClient<Database>(clientUrl, clientKey, {
+  global:{fetch:supabaseFetch},
   auth: {
     storage: rememberMeStorage,
     persistSession: true,

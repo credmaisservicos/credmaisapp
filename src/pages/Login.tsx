@@ -27,6 +27,7 @@ import { useWhiteLabel } from "@/contexts/WhiteLabelContext";
 import { toSafeHttpUrl } from "@/lib/safeUrl";
 import { usePlatformSettings } from "@/hooks/usePlatformSettings";
 import { withTimeout } from "@/lib/withTimeout";
+import {authFailureMessage,isTemporaryAuthFailure} from '@/lib/authFailure';
 
 // ---------- Validação ----------
 const emailSchema = z
@@ -68,8 +69,8 @@ const friendlyAuthError = (err: any): string => {
     return "Muitas tentativas. Aguarde alguns minutos.";
   if (msg.includes("weak password"))
     return "Senha fraca. Use letras e números.";
-  if (msg.includes("network") || msg.includes("failed to fetch"))
-    return "Sem conexão. Verifique sua internet.";
+  if (isTemporaryAuthFailure(err)||err?.status>=500)
+    return authFailureMessage(err);
   return err?.message || "Não foi possível concluir. Tente novamente.";
 };
 

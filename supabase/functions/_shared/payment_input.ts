@@ -10,8 +10,9 @@ export function parsePaymentAmount(value: unknown): number | null {
 }
 
 export function extractPaymentAmount(text: string): number | null {
-  const match=/(?:r\$\s*|pagar(?:\s+s[oó])?\s+|pago\s+|consigo\s+(?:pagar|dar)\s+)(\d[\d.,]*\d|\d)/i.exec(text || '');
-  if(match && /^[/-]\d/.test(text.slice(match.index+match[0].length)))return null;
+  const currency=/r\$\s*(\d[\d.,]*\d|\d)/i.exec(text || '');
+  const match=currency || /(?:pagar(?:\s+s[oó])?\s+|pago\s+|consigo\s+(?:pagar|dar)\s+)(\d[\d.,]*\d|\d)/i.exec(text || '');
+  if(match&&!currency&&/^(?:[/-]\d|[ªºa]|\s*(?:parcelas?|presta[cç][aã]o|presta[cç][oõ]es)\b)/i.test(text.slice(match.index+match[0].length)))return null;
   const amount=match ? parsePaymentAmount(match[1]) : null;
   return amount!=null && amount>0 ? amount : null;
 }

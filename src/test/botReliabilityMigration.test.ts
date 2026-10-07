@@ -32,10 +32,50 @@ beforeAll(async()=>{
     CREATE TABLE whatsapp_conversations(id uuid PRIMARY KEY,user_id uuid,bot_paused boolean DEFAULT false,needs_human boolean DEFAULT false,bot_status text);
     CREATE TABLE whatsapp_scheduled_messages(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),conversation_id uuid,user_id uuid,text text,status text DEFAULT 'pending',
       scheduled_for timestamptz DEFAULT now(),claimed_at timestamptz,attempts integer DEFAULT 0,error text,purpose text DEFAULT 'manual',sent_at timestamptz,created_at timestamptz DEFAULT now(),client_id uuid,installment_id uuid);`);
-  for(const name of ['20260905110000_contract_lifecycle.sql','20260905100000_payment_promises.sql','20260922130000_dynamic_late_fee_tracks_settlement.sql','20261005120000_renew_interest_uses_scheduled_breakdown.sql','20261006120000_guard_contract_completion.sql','20261007093000_bot_delivery_reliability.sql','20261007100000_receipt_review_partial_payments.sql'])await db.exec(migration(name));
+  for(const name of ['20260905110000_contract_lifecycle.sql','20260905100000_payment_promises.sql','20260922130000_dynamic_late_fee_tracks_settlement.sql','20261005120000_renew_interest_uses_scheduled_breakdown.sql','20261006120000_guard_contract_completion.sql','20261007093000_bot_delivery_reliability.sql','20261007100000_receipt_review_partial_payments.sql','20261007153000_bot_promise_selection_atomic.sql'])await db.exec(migration(name));
 },30_000);
 beforeEach(async()=>{await db.exec('RESET ROLE;SET test.auth_role=service_role;TRUNCATE contracts,transactions,profits,audit_logs,payment_promises,whatsapp_event_claims,whatsapp_response_windows,whatsapp_scheduled_messages,whatsapp_conversations,whatsapp_receipt_reviews CASCADE;');});
 afterAll(async()=>{await db?.close();});
+const forecast=(details:Record<string,unknown>,action='promise_to_pay')=>db.query('INSERT INTO audit_logs VALUES($1,$2,$1,$3,$4)',[owner,'whatsapp_bot',action,details]);
+it.each(['paid','cancelled','foreign_owner','foreign_client','foreign_contract_owner','foreign_contract_client','closed_contract','missing','past','invalid_date','missing_date','zero','negative','bad_uuid'])('selected forecast rejects %s atomically',async(scenario)=>{
+ await seed();
+ if(scenario==='paid')await db.exec("UPDATE contract_installments SET paid_amount=100,status='paid'");
+ if(scenario==='cancelled')await db.exec("UPDATE contract_installments SET status='cancelled'");
+ if(scenario==='foreign_owner')await db.query('UPDATE contract_installments SET user_id=$1',[other]);
+ if(scenario==='foreign_client')await db.query('UPDATE contract_installments SET client_id=$1',[other]);
+ if(scenario==='foreign_contract_owner')await db.query('UPDATE contracts SET user_id=$1',[other]);
+ if(scenario==='foreign_contract_client')await db.query('UPDATE contracts SET client_id=$1',[other]);
+ if(scenario==='closed_contract')await db.exec("UPDATE contracts SET status='cancelled'");
+ const selected=scenario==='missing'?id(99):scenario==='bad_uuid'?'bad-uuid':id(11);
+ await expect(forecast({installment_id:selected,promise_date:scenario==='past'?'2000-01-01':scenario==='invalid_date'?'2099-02-31':scenario==='missing_date'?null:'2099-01-01',promise_amount:scenario==='zero'?0:scenario==='negative'?-10:20.5})).rejects.toThrow();
+ expect(Number(await scalar('SELECT count(*) FROM audit_logs'))).toBe(0);
+ expect(Number(await scalar('SELECT count(*) FROM payment_promises'))).toBe(0);
+ expect(Number(await scalar('SELECT count(*) FROM transactions'))).toBe(0);
+});
+it.each(['human','import'])('bot cannot overwrite a %s forecast through an audit trigger',async(source)=>{
+ await seed();await db.query('INSERT INTO payment_promises(user_id,client_id,installment_id,contract_id,promised_for,promised_amount,source) VALUES($1,$1,$2,$3,$4,35,$5)',[owner,id(11),id(10),'2099-01-01',source]);
+ await expect(forecast({installment_id:id(11),promise_date:'2099-01-02',promise_amount:20.5})).rejects.toThrow(/promise_human_owned/);
+ expect(await scalar('SELECT source FROM payment_promises')).toBe(source);
+ expect(Number(await scalar('SELECT promised_amount FROM payment_promises'))).toBe(35);
+ expect(await scalar('SELECT promised_for::text FROM payment_promises')).toBe('2099-01-01');
+ expect(Number(await scalar('SELECT count(*) FROM audit_logs'))).toBe(0);
+});
+it('selected fee-only debt can receive a forecast without creating financial entries',async()=>{
+ await seed(100,10);await forecast({installment_id:id(11),promise_date:'2099-01-01',promise_amount:10});
+ expect(await scalar('SELECT installment_id FROM payment_promises')).toBe(id(11));
+ expect(Number(await scalar('SELECT promised_amount FROM payment_promises'))).toBe(10);
+ expect(Number(await scalar('SELECT count(*) FROM transactions'))).toBe(0);
+ expect(Number(await scalar('SELECT count(*) FROM profits'))).toBe(0);
+ expect(await scalar('SELECT due_date::text FROM contract_installments')).toBe(String(await scalar('SELECT (current_date+30)::text')));
+});
+it('changing the chosen forecast replaces the same operational row with the confirmed amount',async()=>{
+ await seed();await forecast({installment_id:id(11),promise_date:'2099-01-01',promise_amount:20.5});
+ const promiseId=await scalar('SELECT id FROM payment_promises');
+ await forecast({installment_id:id(11),promise_date:'2099-01-02',promise_amount:20.5},'payment_promise_changed');
+ expect(await scalar('SELECT id FROM payment_promises')).toBe(promiseId);
+ expect(Number(await scalar('SELECT count(*) FROM payment_promises'))).toBe(1);
+ expect(Number(await scalar('SELECT promised_amount FROM payment_promises'))).toBe(20.5);
+});
 async function scalar(query:string,args:any[]=[]){return Object.values((await db.query(query,args)).rows[0])[0];}
 async function seed(paid=0,fee=0){
   await db.query("INSERT INTO contracts(id,user_id,client_id,status) VALUES($1,$2,$2,'active')",[id(10),owner]);
@@ -214,8 +254,7 @@ it('partial receipt preserves the promise and full settlement fulfills it',async
 it('a promise linked to the selected installment is fulfilled only when that installment is paid',async()=>{
  await seed(40);
  await db.query("INSERT INTO contract_installments(id,contract_id,user_id,client_id,installment_number,amount,due_date,status,paid_amount,late_fee) VALUES($1,$2,$3,$3,2,200,current_date+60,'pending',50,10)",[id(14),id(10),owner]);
- await db.query('INSERT INTO audit_logs VALUES($1,$2,$1,$3,$4)',[owner,'whatsapp_bot','promise_to_pay',{promise_date:'2099-01-01'}]);
- await db.query("UPDATE payment_promises SET installment_id=$1,contract_id=$2,promised_amount=160 WHERE user_id=$3 AND client_id=$3 AND status='open' AND source='bot' AND promised_for='2099-01-01'",[id(14),id(10),owner]);
+ await db.query('INSERT INTO audit_logs VALUES($1,$2,$1,$3,$4)',[owner,'whatsapp_bot','promise_to_pay',{promise_date:'2099-01-01',installment_id:id(14),promise_amount:160}]);
  expect(await scalar('SELECT installment_id FROM payment_promises')).toBe(id(14));expect(Number(await scalar('SELECT promised_amount FROM payment_promises'))).toBe(160);
  await db.query('SELECT pay_installment($1::uuid,100,true)',[id(11)]);
  expect(await scalar('SELECT status FROM payment_promises')).toBe('open');

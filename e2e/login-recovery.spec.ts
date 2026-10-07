@@ -15,7 +15,7 @@ const b64 = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("bas
 // self-hosted — e os testes passam a bater no backend real sem perceber.
 const supabaseOrigin = new URL(process.env.VITE_SUPABASE_URL || "https://supabase-not-configured.invalid").origin;
 
-async function mockBackend(page: Page, failFirstProfile = false) {
+async function mockBackend(page: Page, failFirstProfile: boolean|'temporary' = false) {
   let profileReads = 0;
   await page.routeWebSocket("**", socket => socket.close());
   await page.route(`${supabaseOrigin}/**`, async route => {
@@ -31,7 +31,7 @@ async function mockBackend(page: Page, failFirstProfile = false) {
       const isAuthProfile = url.searchParams.get("select") === "*";
       if (isAuthProfile) profileReads++;
       if (failFirstProfile && isAuthProfile && profileReads === 1) {
-        await route.fulfill({ status: 400, json: { message: "Falha simulada ao consultar perfil" } });
+        await route.fulfill({ status: failFirstProfile==='temporary'?503:400, json: { message: "Falha simulada ao consultar perfil" } });
         return;
       }
       body = profile;
@@ -67,4 +67,9 @@ test("perfil com falha permite tentar novamente e abrir o dashboard", async ({ p
   await page.getByRole("button", { name: "Tentar novamente" }).click();
   await expect(page.getByRole("tab", { name: "Visão geral", exact: true })).toBeVisible();
   expect(reads()).toBe(2);
+});
+test('uma falha temporária do perfil se recupera automaticamente no login',async({page})=>{
+ const reads=await mockBackend(page,'temporary');await login(page);
+ await expect(page.getByRole('tab',{name:'Visão geral',exact:true})).toBeVisible();
+ expect(reads()).toBe(2);await expect(page.getByText('Não foi possível verificar seu acesso')).toHaveCount(0);
 });
