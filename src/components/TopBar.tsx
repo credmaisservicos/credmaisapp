@@ -80,7 +80,7 @@ const TopBar = ({ onSearchClick, onQuickPayment }: TopBarProps) => {
 
   return (
     <header
-      className="app-topbar sticky top-0 z-40 border-b border-white/[.08] bg-background/85 backdrop-blur-2xl shadow-[0_12px_35px_-28px_rgba(0,0,0,.9)]"
+      className="app-topbar sticky top-0 z-40 border-b border-white/8 bg-background/85 backdrop-blur-2xl shadow-[0_12px_35px_-28px_rgba(0,0,0,.9)]"
       style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
     >
       <div className="h-16 lg:h-[72px] flex items-center justify-between px-3 lg:px-7 gap-2 lg:gap-4">
@@ -89,13 +89,13 @@ const TopBar = ({ onSearchClick, onQuickPayment }: TopBarProps) => {
           onClick={() => navigate("/perfil")}
           className="flex items-center gap-2 min-w-0 max-w-[45%] active:scale-95 transition-transform"
         >
-          <div className="relative w-9 h-9 rounded-full bg-gradient-to-br from-primary/25 to-primary/5 flex items-center justify-center ring-1 ring-primary/25 shrink-0 shadow-sm">
+          <div className="relative w-9 h-9 rounded-full bg-linear-to-br from-primary/25 to-primary/5 flex items-center justify-center ring-1 ring-primary/25 shrink-0 shadow-xs">
             {profile?.avatar_url ? (
               <img src={profile.avatar_url} alt="" className="w-9 h-9 rounded-full object-cover" />
             ) : (
               <User size={16} className="text-primary" />
             )}
-            <span className="absolute -bottom-0 -right-0 w-2.5 h-2.5 rounded-full bg-success border-2 border-background" />
+            <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-success border-2 border-background" />
           </div>
           <div className="text-left min-w-0">
             <p className="text-[10px] text-muted-foreground font-medium leading-none tracking-wide uppercase">Olá</p>
@@ -106,7 +106,7 @@ const TopBar = ({ onSearchClick, onQuickPayment }: TopBarProps) => {
         <button
           data-tour="topbar-search"
           onClick={onSearchClick}
-          className="group flex min-w-0 w-11 lg:w-[240px] xl:w-[300px] shrink items-center justify-center lg:justify-start gap-2.5 px-3 lg:px-4 h-11 rounded-xl bg-white/[.035] border border-white/10 text-sm text-muted-foreground hover:text-foreground hover:border-white/20 hover:bg-white/[.06] hover:shadow-[0_0_0_4px_hsl(0_0%_100%/.025)] transition-all duration-300"
+          className="group flex min-w-0 w-11 lg:w-[240px] xl:w-[300px] shrink items-center justify-center lg:justify-start gap-2.5 px-3 lg:px-4 h-11 rounded-xl bg-white/[.035] border border-white/10 text-sm text-muted-foreground hover:text-foreground hover:border-white/20 hover:bg-white/6 hover:shadow-[0_0_0_4px_hsl(0_0%_100%/.025)] transition-all duration-300"
         >
           <Search size={15} className="text-muted-foreground/60 group-hover:text-primary transition-colors" />
           <span className="hidden lg:inline truncate text-[13px] flex-1 text-left">Buscar clientes, contratos...</span>
@@ -120,7 +120,7 @@ const TopBar = ({ onSearchClick, onQuickPayment }: TopBarProps) => {
 
       {/* Financial indicators — grupo unificado */}
       {!isMobile && (
-        <div className="hidden xl:flex shrink-0 items-center gap-1.5 p-1 rounded-full bg-muted/25 border border-border/30 backdrop-blur-sm">
+        <div className="hidden xl:flex shrink-0 items-center gap-1.5 p-1 rounded-full bg-muted/25 border border-border/30 backdrop-blur-xs">
           <button
             onClick={() => navigate("/carteira")}
             className="group flex items-center gap-2 pl-2 pr-3.5 h-8 rounded-full hover:bg-primary/10 transition-all duration-200"
@@ -331,7 +331,7 @@ const UserMenu = ({ profile, theme, toggleTheme, onSignOut, navigate, isAdmin }:
         aria-label="Menu do usuário"
         aria-haspopup="menu"
         aria-expanded={open}
-        className="relative w-9 h-9 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center text-sm font-bold text-primary ring-1 ring-primary/20 hover:ring-2 hover:ring-primary/40 transition-all duration-200 micro-bounce"
+        className="relative w-9 h-9 rounded-full bg-linear-to-br from-primary/20 to-primary/5 flex items-center justify-center text-sm font-bold text-primary ring-1 ring-primary/20 hover:ring-2 hover:ring-primary/40 transition-all duration-200 micro-bounce"
       >
         {profile?.avatar_url ? (
           <img src={profile.avatar_url} alt="" className="w-9 h-9 rounded-full object-cover" />

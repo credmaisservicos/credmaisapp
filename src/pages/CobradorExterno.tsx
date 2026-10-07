@@ -231,7 +231,7 @@ const CobradorExterno = () => {
   const fmt = (v: number) => safeNumber(v).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
   const now = new Date();
   const portalLogo = portal?.branding?.portal_logo_url || portal?.branding?.company_logo_url || defaultLogo;
-  const inputCls = "w-full px-4 py-2.5 rounded-xl bg-card border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all";
+  const inputCls = "w-full px-4 py-2.5 rounded-xl bg-card border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all";
 
   // Filter assignments by search
   const filteredAssignments = useMemo(() => {
@@ -317,7 +317,7 @@ const CobradorExterno = () => {
         {showProfile && (
           <div className="rounded-2xl border border-primary/20 bg-card p-6 space-y-4 animate-fade-in shadow-lg">
             <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center text-2xl font-bold text-primary border border-primary/10">
+              <div className="w-16 h-16 rounded-2xl bg-linear-to-br from-primary/20 to-primary/5 flex items-center justify-center text-2xl font-bold text-primary border border-primary/10">
                 {collectorData.name?.charAt(0)?.toUpperCase()}
               </div>
               <div>
@@ -410,7 +410,7 @@ const CobradorExterno = () => {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar cliente por nome, telefone ou CPF..."
-            className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-card border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all"
+            className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-card border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all"
           />
           {search && (
             <button type="button" onClick={() => setSearch("")} aria-label="Limpar busca" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
@@ -429,7 +429,7 @@ const CobradorExterno = () => {
               <button type="button" key={t.key} onClick={() => setTab(t.key)}
               className={`flex items-center gap-1.5 px-4 py-2 rounded-t-xl text-sm font-medium transition-colors ${
                 tab === t.key
-                  ? "bg-card border border-b-0 border-border text-foreground -mb-[1px]"
+                  ? "bg-card border border-b-0 border-border text-foreground -mb-px"
                   : "text-muted-foreground hover:text-foreground"
               }`}>
               {t.label}
@@ -478,7 +478,7 @@ const CobradorExterno = () => {
                     onClick={() => setExpandedClient(isExpanded ? null : a.client_id)}
                     className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-accent/20 transition-colors"
                   >
-                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center text-sm font-bold text-primary border border-primary/10 shrink-0">
+                    <div className="w-11 h-11 rounded-xl bg-linear-to-br from-primary/20 to-primary/5 flex items-center justify-center text-sm font-bold text-primary border border-primary/10 shrink-0">
                       {a.clients?.name?.charAt(0)?.toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">

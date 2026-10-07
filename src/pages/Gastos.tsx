@@ -212,7 +212,7 @@ const Gastos = () => {
     return acc;
   }, {} as Record<string, any[]>);
 
-  const inputCls = "w-full px-4 py-3 rounded-2xl bg-card border border-border text-foreground placeholder:text-muted-foreground text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary/50 outline-none transition-all";
+  const inputCls = "w-full px-4 py-3 rounded-2xl bg-card border border-border text-foreground placeholder:text-muted-foreground text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary/50 outline-hidden transition-all";
 
   return (
     <div className="space-y-4 sm:space-y-5 animate-fade-in">
@@ -248,7 +248,7 @@ const Gastos = () => {
               <TrendingDown size={14} className="text-destructive" />
             </div>
           </div>
-          <p className="text-base sm:text-lg font-bold leading-tight text-destructive tabular-nums break-words">R$ {fmt(totalAll)}</p>
+          <p className="text-base sm:text-lg font-bold leading-tight text-destructive tabular-nums wrap-break-word">R$ {fmt(totalAll)}</p>
           <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">Total Geral</p>
         </div>
         <div className="min-w-0 rounded-xl border border-border bg-card/60 p-3 sm:p-4">
@@ -257,7 +257,7 @@ const Gastos = () => {
               <Calendar size={14} className="text-primary" />
             </div>
           </div>
-          <p className="text-base sm:text-lg font-bold leading-tight text-foreground tabular-nums break-words">R$ {fmt(currentMonthTotal)}</p>
+          <p className="text-base sm:text-lg font-bold leading-tight text-foreground tabular-nums wrap-break-word">R$ {fmt(currentMonthTotal)}</p>
           <div className="flex items-center gap-1.5 mt-0.5">
             <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Este Mês</p>
             {prevMonthTotal > 0 && (
@@ -275,7 +275,7 @@ const Gastos = () => {
               <Receipt size={14} className="text-foreground" />
             </div>
           </div>
-          <p className="text-base sm:text-lg font-bold leading-tight text-foreground tabular-nums break-words">R$ {fmt(todayTotal)}</p>
+          <p className="text-base sm:text-lg font-bold leading-tight text-foreground tabular-nums wrap-break-word">R$ {fmt(todayTotal)}</p>
           <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">Hoje</p>
         </div>
         <div className="min-w-0 rounded-xl border border-border bg-card/60 p-3 sm:p-4">
@@ -310,7 +310,7 @@ const Gastos = () => {
                   <div
                     className={`w-full rounded-lg transition-all duration-500 cursor-pointer ${
                       isCurrentMonth
-                        ? "bg-gradient-to-t from-destructive/80 to-destructive/40"
+                        ? "bg-linear-to-t from-destructive/80 to-destructive/40"
                         : "bg-destructive/20 hover:bg-destructive/30"
                     }`}
                     style={{ height: `${heightPct}%` }}
@@ -429,7 +429,7 @@ const Gastos = () => {
           <div className="max-h-[500px] overflow-y-auto">
             {Object.entries(grouped).map(([dateStr, items]: [string, any[]]) => (
               <div key={dateStr}>
-                <div className="flex items-center gap-2 px-4 py-2.5 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold sticky top-0 bg-card/95 backdrop-blur-sm z-[5] border-b border-border/50">
+                <div className="flex items-center gap-2 px-4 py-2.5 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold sticky top-0 bg-card/95 backdrop-blur-xs z-5 border-b border-border/50">
                   <Calendar size={10} /> {dateStr}
                   <span className="text-destructive font-bold ml-auto text-xs normal-case">
                     −R$ {fmt(items.reduce((s: number, e: any) => s + safeNumber(e.amount), 0))}

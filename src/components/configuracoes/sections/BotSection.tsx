@@ -39,7 +39,7 @@ const BotSection = ({ ctx }: SectionProps) => {
                 onClick={() => setForm({ ...form, bot_enabled: !form.bot_enabled })}
                 className={`relative w-12 h-7 rounded-full transition-colors duration-300 ${form.bot_enabled ? "bg-primary" : "bg-muted"}`}
               >
-                <span className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-300 ${form.bot_enabled ? "left-[26px]" : "left-1"}`} />
+                <span className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-xs transition-transform duration-300 ${form.bot_enabled ? "left-[26px]" : "left-1"}`} />
               </button>
               <div>
                 <span className="text-sm font-medium text-foreground">{form.bot_enabled ? "Bot Ativado" : "Bot Desativado"}</span>
@@ -390,7 +390,7 @@ const BotSection = ({ ctx }: SectionProps) => {
                           onClick={() => setForm({ ...form, [opt.key]: !form[opt.key] })}
                           className={`relative w-10 h-6 rounded-full transition-colors duration-300 shrink-0 ${(form[opt.key] as boolean) ? "bg-primary" : "bg-muted"}`}
                         >
-                          <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-300 ${(form[opt.key] as boolean) ? "left-[18px]" : "left-0.5"}`} />
+                          <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-xs transition-transform duration-300 ${(form[opt.key] as boolean) ? "left-[18px]" : "left-0.5"}`} />
                         </button>
                         <div>
                           <span className="text-xs font-medium text-foreground">{opt.label}</span>

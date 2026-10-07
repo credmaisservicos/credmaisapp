@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
+import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import { writeWebReleaseCatalog } from "./scripts/web-release-catalog.mjs";
 
@@ -12,7 +13,7 @@ export default defineConfig({
       overlay: false,
     },
   },
-  plugins: [react(), {
+  plugins: [react(), tailwindcss(), {
     name: "credmais-web-release-catalog",
     async writeBundle(options) {
       if (options.dir) await writeWebReleaseCatalog(options.dir);

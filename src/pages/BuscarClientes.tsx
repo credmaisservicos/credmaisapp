@@ -147,7 +147,7 @@ const BuscarClientes = () => {
               inputMode={isCpf ? "numeric" : "text"}
               maxLength={isCpf ? 18 : 120}
               placeholder={isCpf ? "000.000.000-00 ou 00.000.000/0000-00" : "Digite o nome..."}
-              className={`w-full pl-9 pr-3 py-2.5 rounded-2xl bg-card border text-foreground text-sm focus:outline-none transition-colors ${
+              className={`w-full pl-9 pr-3 py-2.5 rounded-2xl bg-card border text-foreground text-sm focus:outline-hidden transition-colors ${
                 validationError || (liveCpfValidation && !liveCpfValidation.ok)
                   ? "border-destructive focus:border-destructive ring-2 ring-destructive/20"
                   : cpfNotFound

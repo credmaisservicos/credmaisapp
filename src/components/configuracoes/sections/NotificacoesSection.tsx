@@ -29,7 +29,7 @@ const NotificacoesSection = ({ ctx }: SectionProps) => {
                 onClick={() => setForm({ ...form, push_notifications_enabled: !form.push_notifications_enabled })}
                 className={`relative w-12 h-7 rounded-full transition-colors duration-300 ${form.push_notifications_enabled ? "bg-success" : "bg-muted"}`}
               >
-                <span className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-300 ${form.push_notifications_enabled ? "left-[26px]" : "left-1"}`} />
+                <span className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-xs transition-transform duration-300 ${form.push_notifications_enabled ? "left-[26px]" : "left-1"}`} />
               </button>
               <div>
                 <span className="text-sm font-medium text-foreground">{form.push_notifications_enabled ? "Ativadas" : "Desativadas"}</span>

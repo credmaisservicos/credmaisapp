@@ -58,10 +58,10 @@ const InstallmentRowInner = ({
 
   const tone = isOverdue ? "danger" : isPaid ? "ok" : (daysDiff === 0 ? "warn" : "neutral");
   const rowBg =
-    isSel ? "border-primary/40 bg-primary/[0.06] ring-1 ring-primary/20" :
-    tone === "danger" ? "border-destructive/25 bg-gradient-to-r from-destructive/[0.06] via-card to-card" :
-    tone === "warn" ? "border-amber-500/30 bg-gradient-to-r from-amber-500/[0.06] via-card to-card" :
-    isPaid ? "border-success/15 bg-success/[0.03] opacity-90" :
+    isSel ? "border-primary/40 bg-primary/6 ring-1 ring-primary/20" :
+    tone === "danger" ? "border-destructive/25 bg-linear-to-r from-destructive/6 via-card to-card" :
+    tone === "warn" ? "border-amber-500/30 bg-linear-to-r from-amber-500/6 via-card to-card" :
+    isPaid ? "border-success/15 bg-success/3 opacity-90" :
     "border-border/70 bg-card/50 hover:bg-card";
   const badgeStyle =
     tone === "danger" ? "bg-destructive/12 text-destructive ring-destructive/25" :
@@ -145,7 +145,7 @@ const InstallmentRowInner = ({
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onWhatsApp(inst); }}
-              className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-lg bg-gradient-to-br from-success to-success/85 text-success-foreground text-xs font-semibold hover:shadow-md hover:shadow-success/30 transition-all active:scale-95 focus-ring"
+              className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-lg bg-linear-to-br from-success to-success/85 text-success-foreground text-xs font-semibold hover:shadow-md hover:shadow-success/30 transition-all active:scale-95 focus-ring"
               title="Cobrar via WhatsApp" aria-label="Cobrar via WhatsApp"
             >
               <MessageSquare size={13} /> <span className="collection-action-label hidden sm:inline">WhatsApp</span>

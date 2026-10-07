@@ -69,9 +69,9 @@ const Ferramentas = () => (
           to={path}
           className="group relative overflow-hidden rounded-2xl border border-border bg-card p-5 card-hover"
         >
-          <div className={`absolute inset-0 bg-gradient-to-br ${tone} opacity-40 group-hover:opacity-70 transition-opacity pointer-events-none`} />
+          <div className={`absolute inset-0 bg-linear-to-br ${tone} opacity-40 group-hover:opacity-70 transition-opacity pointer-events-none`} />
           <div className="relative flex items-start justify-between">
-            <div className={`w-11 h-11 rounded-xl bg-background/60 backdrop-blur ring-1 flex items-center justify-center ${tone.split(" ").filter(c => c.startsWith("ring-") || c.startsWith("text-")).join(" ")}`}>
+            <div className={`w-11 h-11 rounded-xl bg-background/60 backdrop-blur-sm ring-1 flex items-center justify-center ${tone.split(" ").filter(c => c.startsWith("ring-") || c.startsWith("text-")).join(" ")}`}>
               <Icon size={20} />
             </div>
             <ArrowUpRight

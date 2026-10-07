@@ -13,7 +13,7 @@ const Privacidade = () => {
   }, []);
 
   const Section = ({ icon: Icon, title, children }: any) => (
-    <motion.section initial={{ opacity: 0, y: reducedMotion ? 0 : 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-60px" }} className="space-y-3 rounded-[1.75rem] border border-white/10 bg-white/[.045] p-6 md:p-8">
+    <motion.section initial={{ opacity: 0, y: reducedMotion ? 0 : 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-60px" }} className="space-y-3 rounded-[1.75rem] border border-white/10 bg-white/4.5 p-6 md:p-8">
       <div className="flex items-center gap-2.5">
         <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
           <Icon size={16} className="text-[#64b5ff]" />

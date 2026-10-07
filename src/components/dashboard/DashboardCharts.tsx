@@ -32,7 +32,7 @@ const fmtBRL = (v: number) =>
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-xl border border-border/60 bg-background/95 backdrop-blur px-3 py-2 shadow-xl">
+    <div className="rounded-xl border border-border/60 bg-background/95 backdrop-blur-sm px-3 py-2 shadow-xl">
       <p className="text-[11px] font-semibold text-foreground mb-1">{label}</p>
       {payload.map((p: any) => (
         <div key={p.dataKey} className="flex items-center gap-2 text-[11px]">

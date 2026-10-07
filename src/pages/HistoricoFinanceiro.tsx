@@ -196,7 +196,7 @@ export default function HistoricoFinanceiro() {
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-slate-500/20 to-slate-500/5 border border-slate-500/20 flex items-center justify-center">
+          <div className="w-12 h-12 rounded-2xl bg-linear-to-br from-slate-500/20 to-slate-500/5 border border-slate-500/20 flex items-center justify-center">
             <Archive className="text-slate-400" size={22} />
           </div>
           <div className="min-w-0">
@@ -209,7 +209,7 @@ export default function HistoricoFinanceiro() {
       </div>
 
       {/* Seletor de período */}
-      <div className="rounded-2xl border border-border/50 bg-card/40 backdrop-blur p-4 space-y-3">
+      <div className="rounded-2xl border border-border/50 bg-card/40 backdrop-blur-sm p-4 space-y-3">
         <div className="flex items-center gap-2 text-xs uppercase tracking-wider font-bold text-muted-foreground">
           <CalendarRange size={14} />
           Período
@@ -364,7 +364,7 @@ function KPI({
         </div>
         <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{label}</span>
       </div>
-      <p className={`break-words text-lg font-black tabular-nums sm:text-xl ${map.text}`}>{value}</p>
+      <p className={`wrap-break-word text-lg font-black tabular-nums sm:text-xl ${map.text}`}>{value}</p>
     </div>
   );
 }

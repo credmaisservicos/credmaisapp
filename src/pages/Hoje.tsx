@@ -351,7 +351,7 @@ const Hoje = () => {
     <section className="space-y-4 sm:space-y-5" aria-labelledby="hoje-title">
       <a
         href="#hoje-cobrancas"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-3 focus:py-2 focus:rounded-lg focus:bg-primary focus:text-primary-foreground focus:text-xs focus:font-bold"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-100 focus:px-3 focus:py-2 focus:rounded-lg focus:bg-primary focus:text-primary-foreground focus:text-xs focus:font-bold"
       >
         Pular para cobranças prioritárias
       </a>
@@ -362,7 +362,7 @@ const Hoje = () => {
       <header className="relative overflow-hidden rounded-2xl border border-border/60 bg-card/65 shadow-[0_18px_50px_-38px_rgba(0,0,0,.9)] backdrop-blur-xl">
         <div className="pointer-events-none absolute inset-0 opacity-70" aria-hidden="true">
           <div className="absolute -top-24 -left-16 w-72 h-72 rounded-full bg-primary/[.07] blur-3xl" />
-          <div className="absolute inset-x-6 bottom-0 h-px bg-gradient-to-r from-transparent via-border/60 to-transparent" />
+          <div className="absolute inset-x-6 bottom-0 h-px bg-linear-to-r from-transparent via-border/60 to-transparent" />
         </div>
 
         <div className="relative px-4 sm:px-6 py-4 sm:py-5 flex items-start sm:items-center justify-between gap-4 flex-wrap sm:flex-nowrap">
@@ -426,7 +426,7 @@ const Hoje = () => {
                   </span>
                 </div>
                 <p className="text-[13px] sm:text-[15px] text-muted-foreground/50 font-semibold tabular-nums leading-none">R$</p>
-                <p className="mt-0.5 text-lg sm:text-2xl font-extrabold text-foreground leading-none tracking-tight tabular-nums break-words">
+                <p className="mt-0.5 text-lg sm:text-2xl font-extrabold text-foreground leading-none tracking-tight tabular-nums wrap-break-word">
                   {fmtBRL(k.value)}
                 </p>
                 <p className="mt-2 text-[11px] text-muted-foreground/80 truncate flex items-center gap-1.5">
@@ -500,15 +500,15 @@ const Hoje = () => {
       <section aria-label="Resumo da operação" className="grid grid-cols-2 xl:grid-cols-4 gap-2.5">
         {[
           { label: "Lucro hoje", value: data?.profitToday || 0, helper: "resultado confirmado", Icon: TrendingUp, tone: "text-success bg-success/10 ring-success/20" },
-          { label: "A receber no mês", value: data?.aReceberMonth || 0, helper: "parcelas pendentes", Icon: CalendarDays, tone: "text-foreground bg-white/[.06] ring-white/10" },
+          { label: "A receber no mês", value: data?.aReceberMonth || 0, helper: "parcelas pendentes", Icon: CalendarDays, tone: "text-foreground bg-white/6 ring-white/10" },
           { label: "Lucro no mês", value: data?.profitMonth || 0, helper: "resultado realizado", Icon: Wallet, tone: "text-success bg-success/10 ring-success/20" },
-          { label: "Pagamentos recentes", value: data?.paidRecent?.length || 0, helper: "últimas baixas", Icon: History, tone: "text-muted-foreground bg-white/[.04] ring-white/10", count: true },
+          { label: "Pagamentos recentes", value: data?.paidRecent?.length || 0, helper: "últimas baixas", Icon: History, tone: "text-muted-foreground bg-white/4 ring-white/10", count: true },
         ].map((item) => (
           <article key={item.label} className="min-w-0 rounded-xl border border-white/10 bg-card/55 p-3 sm:p-4 backdrop-blur-xl">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-[10px] font-bold uppercase tracking-[.14em] text-muted-foreground truncate">{item.label}</p>
-                <p className="mt-2 text-base sm:text-xl font-extrabold tabular-nums text-foreground break-words">
+                <p className="mt-2 text-base sm:text-xl font-extrabold tabular-nums text-foreground wrap-break-word">
                 {item.count ? item.value : `R$ ${fmtBRL(safeNumber(item.value))}`}
                 </p>
                 <p className="mt-1 text-[11px] text-muted-foreground">{item.helper}</p>
@@ -653,14 +653,14 @@ const Hoje = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <section className="rounded-2xl border border-white/10 bg-card/55 overflow-hidden" aria-labelledby="agenda-title">
-          <div className="px-4 py-3 border-b border-white/[.08] flex items-center justify-between">
+          <div className="px-4 py-3 border-b border-white/8 flex items-center justify-between">
             <div>
               <h2 id="agenda-title" className="text-sm font-bold text-foreground">Próximos 7 dias</h2>
               <p className="text-[11px] text-muted-foreground">Agenda prevista de recebimentos</p>
             </div>
             <CalendarDays size={16} className="text-muted-foreground" />
           </div>
-          <div className="divide-y divide-white/[.06] max-h-72 overflow-y-auto">
+          <div className="divide-y divide-white/6 max-h-72 overflow-y-auto">
             {(data?.agenda || []).length === 0 && <p className="p-6 text-center text-xs text-muted-foreground">Nenhum vencimento nos próximos dias.</p>}
             {(data?.agenda || []).map((day: any) => (
               <button key={day.date} onClick={() => navigate("/cobrancas")} className="w-full px-4 py-3 flex items-center justify-between gap-3 text-left hover:bg-white/[.035] transition-colors">
@@ -675,14 +675,14 @@ const Hoje = () => {
         </section>
 
         <section className="rounded-2xl border border-white/10 bg-card/55 overflow-hidden" aria-labelledby="recentes-title">
-          <div className="px-4 py-3 border-b border-white/[.08] flex items-center justify-between">
+          <div className="px-4 py-3 border-b border-white/8 flex items-center justify-between">
             <div>
               <h2 id="recentes-title" className="text-sm font-bold text-foreground">Pagamentos recentes</h2>
               <p className="text-[11px] text-muted-foreground">Últimas baixas confirmadas</p>
             </div>
             <History size={16} className="text-muted-foreground" />
           </div>
-          <div className="divide-y divide-white/[.06] max-h-72 overflow-y-auto">
+          <div className="divide-y divide-white/6 max-h-72 overflow-y-auto">
             {(data?.paidRecent || []).length === 0 && <p className="p-6 text-center text-xs text-muted-foreground">Nenhum pagamento recente.</p>}
             {(data?.paidRecent || []).map((payment: any) => (
               <button key={payment.id} onClick={() => navigate(`/clientes/${payment.client_id}`)} className="w-full px-4 py-3 flex items-center justify-between gap-3 text-left hover:bg-white/[.035] transition-colors">

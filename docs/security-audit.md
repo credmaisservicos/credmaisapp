@@ -1,37 +1,35 @@
 # Auditoria das dependências — 2026-10-07
 
-`npm audit` passou de 11 para 5 alertas. `npm run audit:production` passou com
-zero vulnerabilidades. Os cinco alertas restantes derivam da mesma biblioteca
-`braces@3.0.3`, usada pelas ferramentas de compilação do Tailwind 3.
+`npm run audit` e `npm run audit:production` passaram com zero vulnerabilidades.
+Os cinco alertas altos de desenvolvimento foram eliminados pela remoção da
+cadeia de `braces`, sem ocultar ou ignorar o aviso.
 
-## Correções aplicadas e verificadas
+## Alterações
 
-- `postcss-selector-parser@7.1.6` substitui as versões vulneráveis utilizadas
-  pelo Tailwind e pelo plugin de tipografia. O build e os testes da interface
-  verificam a compatibilidade com os seletores e as classes do aplicativo.
-- `uuid@11.1.1` substitui a versão vulnerável usada por `xcode`. O parser do
-  projeto Xcode, a geração de identificadores e `cap sync ios` foram verificados.
+- Tailwind atualizado de 3.4.17 para 4.3.3 com o plugin oficial
+  `@tailwindcss/vite`. `braces`, `chokidar`, `micromatch` e `fast-glob` não
+  constam mais da árvore instalada.
+- Tema, fontes, cores, raios e animações migrados da configuração TypeScript
+  para o CSS. Classes atualizadas para preservar sombras, foco e filtros.
+- Espaçamentos entre irmãos mantêm a posição usada pelo Tailwind 3, inclusive
+  em formulários com campos ocultos. Testes verificam essa regra, cores de
+  marca definidas em elementos internos e o desfoque dos cards translúcidos.
+- `tailwind-merge` atualizado para 3.6.0, compatível com as classes do Tailwind 4.
+- Configuração PostCSS e dependências que ficaram sem uso removidas. O override
+  antigo de `postcss-selector-parser` também foi retirado.
+- O override de `uuid@11.1.1` para `xcode` foi preservado.
+- CI passou a auditar todas as dependências, incluindo as de desenvolvimento.
 
-As versões corrigidas estão fixadas em `overrides` e no lockfile. Não foi
-aplicada a sugestão de downgrade do Capacitor ou de migração automática para
-Tailwind 4.
+## Verificação
 
-Referências: [PostCSS](https://github.com/advisories/GHSA-rj75-hqrm-r3gf)
-e [UUID](https://github.com/advisories/GHSA-w5hq-g745-h8pq).
+Build de produção, tipos, lint, testes do aplicativo e de interface são
+executados antes da publicação. A comparação de 18 capturas em celular e
+desktop inclui login, instalação, página pública, painel, cadastro de cliente,
+cobranças, configurações e chat, com backend simulado.
 
-## Dependência sem correção publicada
+O Tailwind 4 exige navegadores modernos: Safari 16.4+, Chrome 111+ e Firefox
+128+. Os assets gerados não dependem das bibliotecas de compilação removidas.
 
-O aviso [GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm)
-afeta `braces <=3.0.3` e não informa uma versão corrigida. O registro npm ainda
-publica 3.0.3 como a versão mais recente na data desta verificação.
-
-`braces` propaga os alertas a `chokidar`, `micromatch`, `fast-glob` e `tailwindcss`.
-A cadeia é de desenvolvimento: seus padrões vêm dos arquivos e da configuração
-do projeto. Ela não é enviada no JavaScript do app nem recebe dados de clientes
-durante o uso do site. Não houve remoção do aviso nem uso de uma versão fictícia
-para silenciar a auditoria.
-
-Antes de compilar, mantenha fontes e padrões de glob sob controle do repositório.
-Acompanhe uma correção de `braces` ou planeje uma migração homologada do Tailwind.
-A avaliação deve ser refeita se a compilação passar a consumir padrões ou fontes
-fornecidos por usuários externos.
+Referências: [aviso original de braces](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm),
+[migração oficial do Tailwind](https://tailwindcss.com/docs/upgrade-guide) e
+[compatibilidade do tailwind-merge](https://github.com/dcastil/tailwind-merge).

@@ -279,7 +279,7 @@ const SupportInbox = () => {
         <button type="button" onClick={() => setActiveTicket(null)} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
           <ChevronLeft size={16} /> Voltar para lista
         </button>
-        <div className="rounded-2xl border border-border/40 bg-card/60 backdrop-blur-sm overflow-hidden">
+        <div className="rounded-2xl border border-border/40 bg-card/60 backdrop-blur-xs overflow-hidden">
           <div className="p-5 border-b border-border/40">
             <div className="flex items-start justify-between gap-3 mb-3">
               <div className="flex-1 min-w-0">
@@ -330,7 +330,7 @@ const SupportInbox = () => {
           </div>
 
           {(activeTicket.ai_triaged_at || activeTicket.ai_suggested_reply) && (
-            <div className="px-5 py-4 border-b border-border/40 bg-gradient-to-br from-primary/5 to-purple-500/5">
+            <div className="px-5 py-4 border-b border-border/40 bg-linear-to-br from-primary/5 to-purple-500/5">
               <div className="flex items-center gap-2 mb-2">
                 <Sparkles size={14} className="text-primary" />
                 <span className="text-[10px] font-bold uppercase tracking-wider text-primary">Triagem IA</span>
@@ -393,7 +393,7 @@ const SupportInbox = () => {
                         {relativeDate(m.created_at)}
                       </span>
                     </div>
-                    <p className="text-sm whitespace-pre-wrap break-words">{m.message}</p>
+                    <p className="text-sm whitespace-pre-wrap wrap-break-word">{m.message}</p>
                   </div>
                 </div>
               );

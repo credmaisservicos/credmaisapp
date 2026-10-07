@@ -887,7 +887,7 @@ const Cobrancas = () => {
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-xs uppercase tracking-widest text-muted-foreground font-medium">Cobranças</p>
-              <h1 className="text-display text-xl font-semibold tracking-[-0.025em] text-foreground sm:text-2xl">
+              <h1 className="text-display text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
                 Total a Receber
               </h1>
               <div className="flex items-baseline gap-2 mt-1">
@@ -903,7 +903,7 @@ const Cobrancas = () => {
             </div>
           </div>
 
-          <div className="collections-hero-actions grid grid-cols-1 gap-2 sm:grid-cols-2 lg:min-w-[21rem]">
+          <div className="collections-hero-actions grid grid-cols-1 gap-2 sm:grid-cols-2 lg:min-w-84">
             {stats.overdue > 0 && selected.size === 0 && (
               <button onClick={() => handleBulk("whatsapp")} className="collections-primary-action btn-premium">
                 <MessageSquare size={14} /> Cobrar atrasadas ({stats.overdue})
@@ -956,7 +956,7 @@ const Cobrancas = () => {
                 const [h, m] = e.target.value.split(":").map(Number);
                 saveReminderTime(h || 0, m || 0, reminderSettings.bot_auto_send);
               }}
-              className="px-3 py-1.5 rounded-xl bg-muted/40 border border-border text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
+              className="px-3 py-1.5 rounded-xl bg-muted/40 border border-border text-sm text-foreground focus:outline-hidden focus:ring-1 focus:ring-primary/40"
             />
             <button
               onClick={() => saveReminderTime(reminderSettings.bot_send_hour ?? 9, reminderSettings.bot_send_minute ?? 0, !reminderSettings.bot_auto_send)}
@@ -1076,7 +1076,7 @@ const Cobrancas = () => {
                   placeholder="Buscar por cliente, parcela # ou valor…"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="h-11 w-full rounded-xl border border-border/50 bg-background/60 pl-11 pr-11 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground/50 focus:border-primary/40 focus:ring-2 focus:ring-primary/10"
+                  className="h-11 w-full rounded-xl border border-border/50 bg-background/60 pl-11 pr-11 text-sm text-foreground outline-hidden transition-colors placeholder:text-muted-foreground/50 focus:border-primary/40 focus:ring-2 focus:ring-primary/10"
                 />
                 <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
                   {search ? (
@@ -1096,7 +1096,7 @@ const Cobrancas = () => {
                     name="collections_sort"
                     value={sort}
                     onChange={(e) => setSort(e.target.value as SortKey)}
-                    className="w-full appearance-none pl-8 pr-8 h-11 rounded-xl text-xs font-semibold bg-background/60 text-foreground border border-border/50 hover:border-primary/30 focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer"
+                    className="w-full appearance-none pl-8 pr-8 h-11 rounded-xl text-xs font-semibold bg-background/60 text-foreground border border-border/50 hover:border-primary/30 focus:outline-hidden focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer"
                     title={`Ordenar por: ${sortLabel}`}
                     aria-label="Ordenar por"
                   >
@@ -1305,8 +1305,8 @@ const Cobrancas = () => {
               : dueInfo.tone === "ok" ? "bg-success"
               : "bg-primary";
             const cardTint =
-              dueInfo.tone === "danger" ? "bg-destructive/[0.025]"
-              : dueInfo.tone === "warn" ? "bg-amber-500/[0.025]"
+              dueInfo.tone === "danger" ? "bg-destructive/2.5"
+              : dueInfo.tone === "warn" ? "bg-amber-500/2.5"
               : "bg-card/60";
             const copyPhone = async () => {
               try { await navigator.clipboard.writeText(phoneDigits || rawPhone); toast({ title: "Telefone copiado" }); } catch {}
@@ -1398,12 +1398,12 @@ const Cobrancas = () => {
                       const paidPctValue = agg.grossExpected > 0 ? Math.round(((agg.paidAmount || 0) / agg.grossExpected) * 100) : 0;
                       return (
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                          <div className="rounded-xl border border-border/60 bg-background/50 backdrop-blur px-3 py-2.5 hover:border-primary/30 transition-colors">
+                          <div className="rounded-xl border border-border/60 bg-background/50 backdrop-blur-sm px-3 py-2.5 hover:border-primary/30 transition-colors">
                             <p className="text-[9px] uppercase tracking-wide text-muted-foreground font-semibold inline-flex items-center gap-1"><Wallet size={10} /> Emprestado</p>
                             <p className="text-sm font-bold text-foreground tabular-nums mt-1">R$ {fmt(agg.loaned)}</p>
                             {avgTicket > 0 && <p className="text-[9px] text-muted-foreground mt-0.5 tabular-nums">ticket R$ {fmt(avgTicket)}</p>}
                           </div>
-                          <div className="rounded-xl border border-border/60 bg-background/50 backdrop-blur px-3 py-2.5 hover:border-primary/30 transition-colors">
+                          <div className="rounded-xl border border-border/60 bg-background/50 backdrop-blur-sm px-3 py-2.5 hover:border-primary/30 transition-colors">
                             <p className="text-[9px] uppercase tracking-wide text-muted-foreground font-semibold inline-flex items-center gap-1"><Layers size={10} /> Parcelas pagas</p>
                             <p className="text-sm font-bold tabular-nums mt-1">
                               <span className="text-success">{paidCount}</span>
@@ -1413,20 +1413,20 @@ const Cobrancas = () => {
                             <p className="text-[9px] text-success/80 mt-0.5 tabular-nums font-semibold">recebido R$ {fmt(agg.paidAmount)}</p>
                             <p className="text-[9px] text-muted-foreground tabular-nums">a receber R$ {fmt(Math.max(0, agg.grossExpected - agg.paidAmount))}</p>
                           </div>
-                          <div className="rounded-xl border border-success/25 bg-success/[0.055] px-3 py-2.5">
+                          <div className="rounded-xl border border-success/25 bg-success/5.5 px-3 py-2.5">
                             <p className="text-[9px] uppercase tracking-wide text-success/80 font-semibold inline-flex items-center gap-1"><TrendingUp size={10} /> Lucro previsto</p>
                             <p className="text-sm font-bold text-success tabular-nums mt-1">R$ {fmt(expectedProfit)}</p>
                             <p className="text-[9px] text-success/80 mt-0.5 tabular-nums">já rendeu R$ {fmt(realizedProfit)}</p>
                             {agg.loaned > 0 && <p className="text-[9px] text-muted-foreground tabular-nums">ROI final {Math.round((expectedProfit / agg.loaned) * 100)}%</p>}
                           </div>
                           {agg.overdueCount > 0 ? (
-                            <div className="rounded-xl border border-destructive/25 bg-destructive/[0.055] px-3 py-2.5">
+                            <div className="rounded-xl border border-destructive/25 bg-destructive/5.5 px-3 py-2.5">
                               <p className="text-[9px] uppercase tracking-wide text-destructive/90 font-semibold inline-flex items-center gap-1"><AlertTriangle size={10} /> {agg.overdueCount} atrasada{agg.overdueCount === 1 ? "" : "s"}</p>
                               <p className="text-sm font-bold text-foreground tabular-nums mt-1">R$ {fmt(agg.overdueAmount)}</p>
                               <p className="text-[10px] font-semibold text-destructive tabular-nums">c/ multa R$ {fmt(agg.overdueAmount + agg.overdueFees)}</p>
                             </div>
                           ) : (
-                            <div className="rounded-xl border border-success/25 bg-success/[0.055] px-3 py-2.5">
+                            <div className="rounded-xl border border-success/25 bg-success/5.5 px-3 py-2.5">
                               <p className="text-[9px] uppercase tracking-wide text-success/80 font-semibold inline-flex items-center gap-1"><CheckCircle size={10} /> Situação</p>
                               <p className="text-sm font-bold text-success mt-1">Em dia</p>
                               <p className="text-[9px] text-success/70 mt-0.5">nenhum atraso</p>
@@ -1444,7 +1444,7 @@ const Cobrancas = () => {
                       </div>
                       <div className="relative h-2 rounded-full bg-muted/40 overflow-hidden">
                         <div
-                          className={`h-full rounded-full transition-all bg-gradient-to-r ${progressPct >= 80 ? "from-success to-success/70" : progressPct >= 40 ? "from-primary to-primary/70" : "from-amber-500 to-amber-400"}`}
+                          className={`h-full rounded-full transition-all bg-linear-to-r ${progressPct >= 80 ? "from-success to-success/70" : progressPct >= 40 ? "from-primary to-primary/70" : "from-amber-500 to-amber-400"}`}
                           style={{ width: `${Math.max(2, progressPct)}%` }}
                         />
                         {[25, 50, 75].map((m) => (
@@ -1581,7 +1581,7 @@ const Cobrancas = () => {
                         setBulkPreview((prev) => prev ? { ...prev, groups: prev.groups.map((gr, i) => i === idx ? { ...gr, message: v } : gr) } : prev);
                       }}
                       rows={10}
-                      className="w-full px-4 py-3 text-xs bg-background border-0 rounded-b-2xl resize-y font-mono outline-none"
+                      className="w-full px-4 py-3 text-xs bg-background border-0 rounded-b-2xl resize-y font-mono outline-hidden"
                     />
                   ) : (
                     <pre className="px-4 py-3 text-xs whitespace-pre-wrap text-foreground/90 font-sans">{g.message}</pre>
@@ -1710,7 +1710,7 @@ const Cobrancas = () => {
                     type="date"
                     value={cobrarAteDate}
                     onChange={(e) => { setCobrarAteDate(e.target.value); setCobrarAteSelected(new Set()); }}
-                    className="px-3 py-1.5 rounded-xl bg-muted/40 border border-border text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
+                    className="px-3 py-1.5 rounded-xl bg-muted/40 border border-border text-sm text-foreground focus:outline-hidden focus:ring-1 focus:ring-primary/40"
                   />
                   {[
                     { label: "Hoje", days: 0 },
@@ -1808,7 +1808,7 @@ const Cobrancas = () => {
 
               {/* Footer */}
               {items.length > 0 && (
-                <div className="collection-date-footer px-5 py-3 border-t border-border bg-card/95 backdrop-blur flex items-center justify-between gap-3 shrink-0">
+                <div className="collection-date-footer px-5 py-3 border-t border-border bg-card/95 backdrop-blur-sm flex items-center justify-between gap-3 shrink-0">
                   <div className="min-w-0">
                     <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{selItems.length > 0 ? `${selItems.length} selecionada(s)` : "Todas as parcelas"}</p>
                     <p className="money-fit truncate text-base font-bold text-foreground">R$ {fmt(selItems.length > 0 ? selSum : totalAll)}</p>

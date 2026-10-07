@@ -78,7 +78,7 @@ const ModulosSection = ({ ctx }: SectionProps) => {
                           <p className="text-[11px] text-muted-foreground">{desc}</p>
                         </div>
                         <div className={`w-10 h-6 rounded-full relative transition-colors shrink-0 ${enabled ? "bg-primary" : "bg-muted"}`}>
-                          <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${enabled ? "translate-x-[18px]" : "translate-x-0.5"}`} />
+                          <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${enabled ? "translate-x-[18px]" : "translate-x-0.5"}`} />
                         </div>
                       </button>
                     );

@@ -51,7 +51,7 @@ const DialogContent = React.forwardRef<
       {/* Handle visual no mobile pra indicar drawer */}
       <div className="sm:hidden mx-auto w-10 h-1 rounded-full bg-muted-foreground/30 -mt-1 mb-1" aria-hidden="true" />
       {children}
-      <DialogPrimitive.Close className="absolute right-4 top-4 rounded-md p-1.5 opacity-70 ring-offset-background transition-opacity hover:opacity-100 hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 sm:p-1 flex items-center justify-center">
+      <DialogPrimitive.Close className="absolute right-4 top-4 rounded-md p-1.5 opacity-70 ring-offset-background transition-opacity hover:opacity-100 hover:bg-accent focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 sm:p-1 flex items-center justify-center">
         <X className="h-4 w-4" />
         <span className="sr-only">Fechar</span>
       </DialogPrimitive.Close>

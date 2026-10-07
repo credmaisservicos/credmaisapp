@@ -154,14 +154,14 @@ const MobileBottomNav = ({ onQuickPayment }: MobileBottomNavProps) => {
       {showMore && (
         <>
           <div
-            className="fixed inset-0 bg-background/70 backdrop-blur-sm z-[28] animate-fade-in"
+            className="fixed inset-0 bg-background/70 backdrop-blur-xs z-28 animate-fade-in"
             onClick={() => setShowMore(false)}
           />
           <div
             role="dialog"
             aria-modal="true"
             aria-label="Menu completo"
-            className="mobile-more-sheet fixed left-0 right-0 z-[31] px-3 pb-2 animate-slide-up"
+            className="mobile-more-sheet fixed left-0 right-0 z-31 px-3 pb-2 animate-slide-up"
             style={{ bottom: "calc(4.75rem + env(safe-area-inset-bottom, 0px))" }}
           >
             <div className="glass-strong rounded-2xl border border-border/40 max-h-[72vh] flex flex-col shadow-2xl overflow-hidden">
@@ -174,7 +174,7 @@ const MobileBottomNav = ({ onQuickPayment }: MobileBottomNavProps) => {
                     onClick={() => go("/perfil")}
                     className="flex items-center gap-3 min-w-0 flex-1 text-left active:scale-[.98] transition-transform"
                   >
-                    <span className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/25 to-primary/5 ring-1 ring-primary/25 flex items-center justify-center shrink-0 overflow-hidden">
+                    <span className="w-10 h-10 rounded-full bg-linear-to-br from-primary/25 to-primary/5 ring-1 ring-primary/25 flex items-center justify-center shrink-0 overflow-hidden">
                       {profile?.avatar_url ? (
                         <img src={profile.avatar_url} alt="" className="w-10 h-10 object-cover" />
                       ) : (
@@ -198,7 +198,7 @@ const MobileBottomNav = ({ onQuickPayment }: MobileBottomNavProps) => {
                 </div>
 
                 {/* Busca dentro do menu */}
-                <label className="mt-3 flex items-center gap-2 h-10 px-3 rounded-xl bg-white/[.05] border border-white/10 focus-within:border-primary/50 transition-colors">
+                <label className="mt-3 flex items-center gap-2 h-10 px-3 rounded-xl bg-white/5 border border-white/10 focus-within:border-primary/50 transition-colors">
                   <Search size={14} className="text-muted-foreground shrink-0" />
                   <input
                     value={query}
@@ -207,7 +207,7 @@ const MobileBottomNav = ({ onQuickPayment }: MobileBottomNavProps) => {
                     aria-label="Buscar no menu"
                     name="menu-search"
                     autoComplete="off"
-                    className="flex-1 min-w-0 bg-transparent text-[13px] text-foreground placeholder:text-muted-foreground/70 outline-none"
+                    className="flex-1 min-w-0 bg-transparent text-[13px] text-foreground placeholder:text-muted-foreground/70 outline-hidden"
                   />
                   {query && (
                     <button type="button" onClick={() => setQuery("")} aria-label="Limpar busca" className="p-1 rounded-md text-muted-foreground">
@@ -286,7 +286,7 @@ const MobileBottomNav = ({ onQuickPayment }: MobileBottomNavProps) => {
       {/* FAB - Ações rápidas */}
       {showFab && (
         <div
-          className="fixed inset-0 z-[28] bg-background/40 backdrop-blur-sm animate-fade-in"
+          className="fixed inset-0 z-28 bg-background/40 backdrop-blur-xs animate-fade-in"
           onClick={() => setShowFab(false)}
         />
       )}

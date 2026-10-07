@@ -196,7 +196,7 @@ export default function InvestidorDetalhe() {
       {/* Identidade */}
       <header className="flex flex-wrap items-start justify-between gap-4 rounded-2xl border border-border/70 bg-card/70 p-5">
         <div className="flex items-start gap-4">
-          <span className="inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/25 to-primary/5 ring-1 ring-primary/30">
+          <span className="inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-primary/25 to-primary/5 ring-1 ring-primary/30">
             <Landmark className="h-6 w-6 text-primary" />
           </span>
           <div className="min-w-0">

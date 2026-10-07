@@ -41,7 +41,7 @@ const Sobre = () => {
         {/* Stats strip */}
         <div className="mt-6 grid grid-cols-3 gap-3 max-w-md mx-auto">
           {stats.map((s, i) => (
-            <div key={s.label} className="rounded-2xl bg-card/60 border border-border/40 p-3 backdrop-blur" style={{ animationDelay: `${i * 80}ms` }}>
+            <div key={s.label} className="rounded-2xl bg-card/60 border border-border/40 p-3 backdrop-blur-sm" style={{ animationDelay: `${i * 80}ms` }}>
               <s.icon size={14} className="text-primary mx-auto mb-1" />
               <p className="text-base font-bold text-foreground">{s.value}</p>
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{s.label}</p>

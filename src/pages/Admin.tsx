@@ -542,7 +542,7 @@ const Admin = () => {
             placeholder="Buscar por nome ou email..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-input/80 border border-border/50 text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+            className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-input/80 border border-border/50 text-foreground placeholder:text-muted-foreground text-sm focus:outline-hidden focus:ring-1 focus:ring-ring"
           />
         </div>
         {selected.size > 0 && (
@@ -629,7 +629,7 @@ const Admin = () => {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center text-sm font-semibold text-foreground overflow-hidden flex-shrink-0">
+                          <div className="w-9 h-9 rounded-full bg-linear-to-br from-primary/30 to-primary/10 flex items-center justify-center text-sm font-semibold text-foreground overflow-hidden shrink-0">
                             {u.avatar_url ? (
                               <img src={u.avatar_url} alt="" className="w-full h-full object-cover" />
                             ) : (
@@ -784,7 +784,7 @@ const Admin = () => {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center text-foreground font-semibold overflow-hidden">
+              <div className="w-10 h-10 rounded-full bg-linear-to-br from-primary/30 to-primary/10 flex items-center justify-center text-foreground font-semibold overflow-hidden">
                 {detailUser?.avatar_url ? (
                   <img src={detailUser.avatar_url} alt="" className="w-full h-full object-cover" />
                 ) : (
@@ -851,7 +851,7 @@ const Admin = () => {
             autoFocus
             aria-label="Mensagem para o usuário"
             placeholder="Digite a mensagem que o usuário receberá..."
-            className="w-full px-3 py-2 rounded-lg bg-input border border-border text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+            className="w-full px-3 py-2 rounded-lg bg-input border border-border text-sm focus:outline-hidden focus:ring-1 focus:ring-ring"
           />
           <p className="text-right text-xs text-muted-foreground">{notifyMsg.length}/1000</p>
           <DialogFooter>
@@ -1085,7 +1085,7 @@ const KpiCard = ({
   icon: Icon, label, value, tone,
 }: { icon: any; label: string; value: number; tone: keyof typeof toneMap }) => (
   <div className="rounded-2xl border border-border bg-card p-4 hover:border-primary/30 transition-colors">
-    <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${toneMap[tone]} flex items-center justify-center mb-2`}>
+    <div className={`w-9 h-9 rounded-xl bg-linear-to-br ${toneMap[tone]} flex items-center justify-center mb-2`}>
       <Icon size={16} />
     </div>
     <p className="text-xs text-muted-foreground">{label}</p>

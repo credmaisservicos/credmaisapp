@@ -139,16 +139,16 @@ const QRCodePage = () => {
   return (
     <div className="qr-studio-page max-w-6xl mx-auto space-y-6 pb-12">
       {/* Hero */}
-      <div className="qr-studio-hero relative overflow-hidden rounded-3xl border border-border/60 bg-gradient-to-br from-primary/15 via-card to-card p-6 sm:p-8 animate-fade-in">
+      <div className="qr-studio-hero relative overflow-hidden rounded-3xl border border-border/60 bg-linear-to-br from-primary/15 via-card to-card p-6 sm:p-8 animate-fade-in">
         <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-primary/20 blur-3xl pointer-events-none" />
         <div className="absolute -bottom-16 -left-10 w-64 h-64 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
         <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-lg shadow-primary/30">
+            <div className="w-14 h-14 rounded-2xl bg-linear-to-br from-primary to-primary/60 flex items-center justify-center shadow-lg shadow-primary/30">
               <QrCode size={26} className="text-primary-foreground" />
             </div>
             <div className="min-w-0">
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-background/60 backdrop-blur-sm border border-border/50 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-background/60 backdrop-blur-xs border border-border/50 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                 <Sparkles size={11} className="text-primary" />
                 QR Studio
               </div>
@@ -211,7 +211,7 @@ const QRCodePage = () => {
                     }`}
                   >
                     <div
-                      className={`absolute inset-0 bg-gradient-to-br ${p.accent} opacity-60 pointer-events-none`}
+                      className={`absolute inset-0 bg-linear-to-br ${p.accent} opacity-60 pointer-events-none`}
                     />
                     <div className="relative">
                       <div className="flex items-start justify-between gap-2">
@@ -258,7 +258,7 @@ const QRCodePage = () => {
                     onKeyDown={(e) => e.key === "Enter" && inputUrl && setUrl(inputUrl)}
                     placeholder="https://exemplo.com/pagina"
                     aria-label="URL para gerar o QR Code"
-                    className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+                    className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-hidden"
                   />
                 </div>
                 <button
@@ -452,7 +452,7 @@ const QRCodePage = () => {
               <div className="flex flex-col items-center justify-center text-center p-10 min-h-[420px]">
                 <div className="relative mb-5">
                   <div className="absolute inset-0 rounded-3xl bg-primary/20 blur-2xl" />
-                  <div className="relative w-20 h-20 rounded-3xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20 flex items-center justify-center">
+                  <div className="relative w-20 h-20 rounded-3xl bg-linear-to-br from-primary/20 to-primary/5 border border-primary/20 flex items-center justify-center">
                     <QrCode size={36} className="text-primary/70" />
                   </div>
                 </div>

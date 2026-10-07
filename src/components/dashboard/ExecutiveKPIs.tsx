@@ -148,7 +148,7 @@ const ExecutiveKPIs = ({ contracts, installments }: Props) => {
         })}
       </div>
 
-      <Card className="p-5 rounded-2xl bg-gradient-to-br from-card via-card to-primary/5 border-primary/20">
+      <Card className="p-5 rounded-2xl bg-linear-to-br from-card via-card to-primary/5 border-primary/20">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
           <div>
             <h4 className="text-sm font-bold">Projeção de caixa · próximos 90 dias</h4>
@@ -170,7 +170,7 @@ const ExecutiveKPIs = ({ contracts, installments }: Props) => {
               <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">{b.label}</p>
               <p className="mt-1 text-lg font-bold tabular-nums">{fmt(b.value)}</p>
               <div className="mt-3 h-2 bg-muted rounded-full overflow-hidden">
-                <div className={`h-full bg-gradient-to-r ${b.color}`} style={{ width: `${(b.value / maxCash) * 100}%` }} />
+                <div className={`h-full bg-linear-to-r ${b.color}`} style={{ width: `${(b.value / maxCash) * 100}%` }} />
               </div>
             </div>
           ))}

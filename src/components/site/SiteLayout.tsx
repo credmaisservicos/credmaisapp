@@ -16,7 +16,7 @@ export function Grain() {
   return (
     <div
       aria-hidden
-      className="pointer-events-none fixed inset-0 z-[1] opacity-[0.055] mix-blend-soft-light"
+      className="pointer-events-none fixed inset-0 z-1 opacity-[0.055] mix-blend-soft-light"
       style={{
         backgroundImage:
           "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E\")",
@@ -61,7 +61,7 @@ export function SiteHeader() {
             >
               {n.label}
               {pathname === n.to && (
-                <span className="absolute inset-x-4 -bottom-[1px] h-px bg-[#f5bd59]" />
+                <span className="absolute inset-x-4 -bottom-px h-px bg-[#f5bd59]" />
               )}
             </Link>
           ))}
@@ -97,7 +97,7 @@ export function SiteHeader() {
                 key={n.to}
                 to={n.to}
                 onClick={() => setOpen(false)}
-                className="flex items-center justify-between border-b border-white/[0.06] py-4 text-[15px] text-white/80"
+                className="flex items-center justify-between border-b border-white/6 py-4 text-[15px] text-white/80"
               >
                 {n.label}
                 <span className="text-[#f5bd59]">↗</span>
@@ -154,7 +154,7 @@ export function SiteFooter() {
           </div>
         </div>
       </div>
-      <div className="mx-auto mt-12 flex w-full max-w-[1160px] flex-col gap-2 border-t border-white/[0.06] pt-6 text-[11px] text-white/60 sm:flex-row sm:justify-between">
+      <div className="mx-auto mt-12 flex w-full max-w-[1160px] flex-col gap-2 border-t border-white/6 pt-6 text-[11px] text-white/60 sm:flex-row sm:justify-between">
         <a
           href="https://focussdev.art/"
           target="_blank"
@@ -215,7 +215,7 @@ export function Card({ children, className = "" }: { children: React.ReactNode; 
       viewport={{ once: true, margin: "-60px" }}
       transition={{ duration: reducedMotion ? 0 : .65, ease: [0.16, 1, .3, 1] }}
       whileHover={reducedMotion ? undefined : { y: -6 }}
-      className={`relative rounded-[1.75rem] border border-white/[0.11] bg-white/[0.045] p-6 shadow-[0_24px_70px_rgba(0,0,0,.24)] backdrop-blur-xl transition-colors hover:border-[#f5bd59]/45 md:p-8 ${className}`}
+      className={`relative rounded-[1.75rem] border border-white/11 bg-white/4.5 p-6 shadow-[0_24px_70px_rgba(0,0,0,.24)] backdrop-blur-xl transition-colors hover:border-[#f5bd59]/45 md:p-8 ${className}`}
     >
       {children}
     </motion.div>

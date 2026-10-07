@@ -76,7 +76,7 @@ export default function NarrativeHero({
   const nada = safeTotalLent === 0 && safeCapitalOnStreet === 0;
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-white/[.08] bg-card/55 p-5 backdrop-blur-xl animate-fade-in md:p-6">
+    <div className="overflow-hidden rounded-2xl border border-white/8 bg-card/55 p-5 backdrop-blur-xl animate-fade-in md:p-6">
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.35fr_1fr] lg:gap-8">
         {/* ─── Coluna narrativa ─── */}
         <div className="space-y-5">
@@ -193,7 +193,7 @@ export default function NarrativeHero({
         </div>
 
         {/* ─── Coluna saúde da carteira ─── */}
-        <div className="rounded-3xl border border-border/40 bg-card/50 backdrop-blur p-5 space-y-5">
+        <div className="rounded-3xl border border-border/40 bg-card/50 backdrop-blur-sm p-5 space-y-5">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
               Saúde da carteira
@@ -212,8 +212,8 @@ export default function NarrativeHero({
               <div
                 className={`h-full rounded-full transition-all duration-700 ${
                   healthy
-                    ? "bg-gradient-to-r from-success/70 to-success"
-                    : "bg-gradient-to-r from-destructive/70 to-destructive"
+                    ? "bg-linear-to-r from-success/70 to-success"
+                    : "bg-linear-to-r from-destructive/70 to-destructive"
                 }`}
                 style={{ width: `${Math.max(4, healthPct)}%` }}
               />
@@ -231,7 +231,7 @@ export default function NarrativeHero({
               </div>
               <div className="h-1.5 rounded-full bg-muted/40 overflow-hidden">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-success/60 to-success transition-all duration-700"
+                  className="h-full rounded-full bg-linear-to-r from-success/60 to-success transition-all duration-700"
                   style={{ width: `${returnedPct}%` }}
                 />
               </div>
@@ -277,7 +277,7 @@ function MiniStat({
   }[tone];
 
   return (
-    <div className={`rounded-2xl border border-border/40 bg-background/40 backdrop-blur p-3 ring-1 ${toneMap.ring} hover:-translate-y-0.5 transition-transform`}>
+    <div className={`rounded-2xl border border-border/40 bg-background/40 backdrop-blur-sm p-3 ring-1 ${toneMap.ring} hover:-translate-y-0.5 transition-transform`}>
       <div className="flex items-center gap-2 mb-1.5">
         <div className={`w-7 h-7 rounded-lg ${toneMap.bg} flex items-center justify-center`}>
           <Icon size={13} className={toneMap.text} />

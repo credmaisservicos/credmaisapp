@@ -36,7 +36,7 @@ const Planos = () => {
 
       <button
         onClick={() => navigate("/")}
-        className="fixed top-6 left-6 z-20 flex items-center gap-2 px-4 py-2 rounded-full bg-white/[0.04] border border-white/10 text-white/60 hover:text-white hover:bg-white/[0.08] transition-all backdrop-blur-md"
+        className="fixed top-6 left-6 z-20 flex items-center gap-2 px-4 py-2 rounded-full bg-white/4 border border-white/10 text-white/60 hover:text-white hover:bg-white/8 transition-all backdrop-blur-md"
       >
         <ArrowLeft size={16} />
         <span className="text-sm">Voltar</span>
@@ -48,7 +48,7 @@ const Planos = () => {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/[0.05] border border-white/10 text-xs text-white/60 uppercase tracking-widest mb-6"
+            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs text-white/60 uppercase tracking-widest mb-6"
           >
             <Sparkles size={12} className="text-amber-400" />
             Dois planos · sem fidelidade
@@ -90,7 +90,7 @@ const Planos = () => {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ delay: i * 0.1 }}
-              className="p-6 rounded-2xl bg-white/[0.03] border border-white/10 backdrop-blur-md"
+              className="p-6 rounded-2xl bg-white/3 border border-white/10 backdrop-blur-md"
             >
               <div className="w-10 h-10 rounded-xl bg-amber-400/10 flex items-center justify-center mb-4">
                 <b.icon size={18} className="text-amber-400" />
@@ -112,11 +112,11 @@ const Planos = () => {
             {faqs.map((faq, i) => (
               <div
                 key={i}
-                className="rounded-2xl bg-white/[0.03] border border-white/10 overflow-hidden"
+                className="rounded-2xl bg-white/3 border border-white/10 overflow-hidden"
               >
                 <button
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                  className="w-full px-6 py-5 flex items-center justify-between text-left hover:bg-white/[0.02] transition"
+                  className="w-full px-6 py-5 flex items-center justify-between text-left hover:bg-white/2 transition"
                 >
                   <span className="font-medium text-white pr-4">{faq.q}</span>
                   <span className={`text-amber-400 text-xl transition-transform ${openFaq === i ? "rotate-45" : ""}`}>+</span>

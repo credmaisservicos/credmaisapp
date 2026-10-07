@@ -80,7 +80,7 @@ class ErrorBoundaryInner extends Component<Props, State> {
 
     return (
       <div className="min-h-[60vh] flex items-center justify-center p-6">
-        <div className="max-w-md w-full rounded-2xl border border-destructive/30 bg-card/60 backdrop-blur p-6 text-center space-y-4">
+        <div className="max-w-md w-full rounded-2xl border border-destructive/30 bg-card/60 backdrop-blur-sm p-6 text-center space-y-4">
           <div className="mx-auto w-12 h-12 rounded-full bg-destructive/10 text-destructive flex items-center justify-center">
             <AlertTriangle size={22} />
           </div>

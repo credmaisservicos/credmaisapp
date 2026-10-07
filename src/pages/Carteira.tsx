@@ -359,7 +359,7 @@ const Carteira = () => {
   return (
     <div className="space-y-5 md:space-y-6">
       {/* HERO — Saldo destacado */}
-      <div className="rounded-2xl border border-white/[.08] bg-card/65 p-5 shadow-[0_18px_50px_-36px_rgba(0,0,0,.9)] animate-fade-in md:p-6">
+      <div className="rounded-2xl border border-white/8 bg-card/65 p-5 shadow-[0_18px_50px_-36px_rgba(0,0,0,.9)] animate-fade-in md:p-6">
         <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
           <div className="flex items-start gap-4">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10">
@@ -405,7 +405,7 @@ const Carteira = () => {
         </div>
 
         {/* Composição do saldo em uma linha */}
-        <div className="mt-5 grid grid-cols-2 gap-2.5 border-t border-white/[.06] pt-5 text-xs md:grid-cols-3 xl:grid-cols-6">
+        <div className="mt-5 grid grid-cols-2 gap-2.5 border-t border-white/6 pt-5 text-xs md:grid-cols-3 xl:grid-cols-6">
           {[
             { label: "Aportes", value: totalCapital, color: "text-primary", dot: "bg-primary" },
             { label: "Lucros", value: totalLucros, color: "text-success", dot: "bg-success" },
@@ -718,7 +718,7 @@ const Carteira = () => {
               const net = tot.in - tot.out;
               return (
                 <div key={date}>
-                  <div className="sticky top-0 z-[5] flex items-center justify-between border-b border-border/60 bg-card/95 px-4 py-2.5 backdrop-blur sm:px-5">
+                  <div className="sticky top-0 z-5 flex items-center justify-between border-b border-border/60 bg-card/95 px-4 py-2.5 backdrop-blur-sm sm:px-5">
                     <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                       <Calendar size={11} /> {date}
                     </span>

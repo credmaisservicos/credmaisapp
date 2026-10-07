@@ -492,7 +492,7 @@ const PortalCliente = () => {
             /* ═══════════ TELA PÓS-LOGOUT ═══════════ */
             <section className="portal-card relative w-full max-w-md p-8 md:p-10">
               <div className="space-y-6 text-center">
-                <div className="relative mx-auto flex h-24 w-24 items-center justify-center rounded-3xl bg-gradient-to-br from-success/25 to-primary/15 shield-pulse">
+                <div className="relative mx-auto flex h-24 w-24 items-center justify-center rounded-3xl bg-linear-to-br from-success/25 to-primary/15 shield-pulse">
                   <BadgeCheck size={44} className="text-success" strokeWidth={2.4} />
                 </div>
                 <div>
@@ -501,7 +501,7 @@ const PortalCliente = () => {
                     Sua sessão foi finalizada com segurança. Todos os dados de acesso deste navegador foram apagados.
                   </p>
                 </div>
-                <div className="space-y-2 rounded-2xl border border-white/5 bg-white/[0.02] p-4 text-left text-xs text-white/70">
+                <div className="space-y-2 rounded-2xl border border-white/5 bg-white/2 p-4 text-left text-xs text-white/70">
                   <p className="flex items-start gap-2">
                     <Lock className="mt-0.5 shrink-0 text-primary" size={14} />
                     <span>Cookies e credenciais locais foram removidos.</span>
@@ -524,7 +524,7 @@ const PortalCliente = () => {
                   {logoUrl ? (
                     <img src={logoUrl} alt="Logotipo" width={64} height={64} className="h-16 w-16 rounded-2xl object-cover shadow-lg ring-1 ring-primary/35" />
                   ) : (
-                    <div className="relative flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-primary/40 to-info/20 shield-pulse">
+                    <div className="relative flex h-20 w-20 items-center justify-center rounded-3xl bg-linear-to-br from-primary/40 to-info/20 shield-pulse">
                       <Shield size={38} className="text-white" strokeWidth={2.2} />
                     </div>
                   )}
@@ -608,7 +608,7 @@ const PortalCliente = () => {
                     { icon: Shield, label: "Acesso protegido" },
                     { icon: BadgeCheck, label: "LGPD" },
                   ].map(({ icon: I, label }) => (
-                    <div key={label} className="flex flex-col items-center gap-1.5 rounded-xl border border-white/5 bg-white/[0.02] px-2 py-3 text-center">
+                    <div key={label} className="flex flex-col items-center gap-1.5 rounded-xl border border-white/5 bg-white/2 px-2 py-3 text-center">
                       <I size={14} className="text-primary" />
                       <span className="text-[10px] font-semibold uppercase tracking-wider text-white/60">{label}</span>
                     </div>
@@ -641,7 +641,7 @@ const PortalCliente = () => {
                 {logoUrl ? (
                   <img src={logoUrl} alt="Logotipo" width={56} height={56} className="h-14 w-14 shrink-0 rounded-2xl border border-primary/25 object-cover" />
                 ) : (
-                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/30 to-info/10 border border-white/10">
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-primary/30 to-info/10 border border-white/10">
                     <User className="text-white" size={26} />
                   </div>
                 )}
@@ -785,7 +785,7 @@ const PortalCliente = () => {
                 <div className="mt-3">
                   <div className="h-3 w-full overflow-hidden rounded-full bg-white/5">
                     <div
-                      className="h-full rounded-full bg-gradient-to-r from-primary via-info to-success transition-all duration-700"
+                      className="h-full rounded-full bg-linear-to-r from-primary via-info to-success transition-all duration-700"
                       style={{ width: `${progressPct}%` }}
                     />
                   </div>
@@ -836,8 +836,8 @@ const PortalCliente = () => {
                     title={`Mostrar parcelas: ${t.label.toLowerCase()}`}
                     className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-all ${
                       active
-                        ? "bg-gradient-to-r from-primary to-info text-white shadow-lg shadow-primary/30"
-                        : "border border-white/10 bg-white/[0.02] text-white/60 hover:text-white hover:border-white/20"
+                        ? "bg-linear-to-r from-primary to-info text-white shadow-lg shadow-primary/30"
+                        : "border border-white/10 bg-white/2 text-white/60 hover:text-white hover:border-white/20"
                     }`}
                   >
                     <t.icon size={14} />
@@ -1020,23 +1020,23 @@ const PortalCliente = () => {
       />
 
       {signingContract && (
-        <div className="fixed inset-0 z-[110] flex items-end justify-center bg-black/80 p-4 backdrop-blur-sm sm:items-center" role="dialog" aria-modal="true" onClick={() => !signatureLoading && setSigningContract(null)}>
+        <div className="fixed inset-0 z-110 flex items-end justify-center bg-black/80 p-4 backdrop-blur-xs sm:items-center" role="dialog" aria-modal="true" onClick={() => !signatureLoading && setSigningContract(null)}>
           <div className="portal-card max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-3xl p-6" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between">
               <div><p className="text-[10px] font-bold uppercase tracking-widest text-primary">Assinatura eletrônica</p><h3 className="mt-1 text-xl font-bold text-white">Contrato {String(signingContract.id || "").slice(0, 8).toUpperCase()}</h3></div>
               <button onClick={() => setSigningContract(null)} className="rounded-full p-2 text-white/50 hover:bg-white/5" aria-label="Fechar"><X size={18} /></button>
             </div>
-            <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-white/70">
+            <div className="mt-4 rounded-2xl border border-white/10 bg-white/3 p-4 text-sm text-white/70">
               <p><strong className="text-white">Capital:</strong> {money(signingContract.capital)}</p>
               <p><strong className="text-white">Total:</strong> {money(signingContract.total_amount)}</p>
               <p><strong className="text-white">Condição:</strong> {safeNumber(signingContract.num_installments)}x de {money(signingContract.installment_amount)} · juros de {safeNumber(signingContract.interest_rate)}%</p>
               <p><strong className="text-white">Início:</strong> {date(signingContract.start_date)}</p>
             </div>
             <div className="mt-4 space-y-3">
-              <div><label htmlFor="portal-signer-name" className="mb-1 block text-xs font-semibold text-white/60">Nome completo</label><input id="portal-signer-name" name="signer_name" autoComplete="name" value={signerName} onChange={(e) => setSignerName(e.target.value)} className="h-11 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white outline-none focus:border-primary" /></div>
-              <div><label htmlFor="portal-signer-cpf" className="mb-1 block text-xs font-semibold text-white/60">Confirme seu CPF</label><input id="portal-signer-cpf" name="signer_cpf" autoComplete="off" value={signerCpf} onChange={(e) => setSignerCpf(formatCpf(e.target.value))} inputMode="numeric" className="h-11 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white outline-none focus:border-primary" placeholder="000.000.000-00" /></div>
+              <div><label htmlFor="portal-signer-name" className="mb-1 block text-xs font-semibold text-white/60">Nome completo</label><input id="portal-signer-name" name="signer_name" autoComplete="name" value={signerName} onChange={(e) => setSignerName(e.target.value)} className="h-11 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white outline-hidden focus:border-primary" /></div>
+              <div><label htmlFor="portal-signer-cpf" className="mb-1 block text-xs font-semibold text-white/60">Confirme seu CPF</label><input id="portal-signer-cpf" name="signer_cpf" autoComplete="off" value={signerCpf} onChange={(e) => setSignerCpf(formatCpf(e.target.value))} inputMode="numeric" className="h-11 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white outline-hidden focus:border-primary" placeholder="000.000.000-00" /></div>
             </div>
-            <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 p-3 text-xs text-white/70"><input type="checkbox" name="signature_accepted" aria-label="Aceitar os termos e assinar eletronicamente" checked={signatureAccepted} onChange={(e) => setSignatureAccepted(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[var(--portal-primary)]" /><span>Li e concordo com os valores, vencimentos e condições deste contrato. Confirmo que este aceite representa minha assinatura eletrônica.</span></label>
+            <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 p-3 text-xs text-white/70"><input type="checkbox" name="signature_accepted" aria-label="Aceitar os termos e assinar eletronicamente" checked={signatureAccepted} onChange={(e) => setSignatureAccepted(e.target.checked)} className="mt-0.5 h-4 w-4 accent-(--portal-primary)" /><span>Li e concordo com os valores, vencimentos e condições deste contrato. Confirmo que este aceite representa minha assinatura eletrônica.</span></label>
             <button onClick={signContract} disabled={signatureLoading || !signatureAccepted || onlyDigits(signerCpf).length !== 11 || signerName.trim().length < 3} className="mt-4 w-full rounded-xl bg-primary px-4 py-3 text-sm font-bold text-white disabled:opacity-40">{signatureLoading ? "Registrando assinatura..." : "Assinar contrato"}</button>
           </div>
         </div>
@@ -1045,7 +1045,7 @@ const PortalCliente = () => {
       {/* ═══════════ MODAL DE AJUDA ═══════════ */}
       {helpOpen && (
         <div
-          className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center bg-black/70 p-4 backdrop-blur-sm overflow-y-auto overscroll-contain"
+          className="fixed inset-0 z-100 flex items-start sm:items-center justify-center bg-black/70 p-4 backdrop-blur-xs overflow-y-auto overscroll-contain"
           onClick={() => setHelpOpen(false)}
           role="dialog"
           aria-modal="true"
@@ -1065,7 +1065,7 @@ const PortalCliente = () => {
             </button>
 
             <div className="mb-5 flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/30 to-info/10 border border-white/10">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-linear-to-br from-primary/30 to-info/10 border border-white/10">
                 <HelpCircle className="text-primary" size={22} />
               </div>
               <div>
@@ -1075,7 +1075,7 @@ const PortalCliente = () => {
             </div>
 
             <div className="space-y-4">
-              <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-4">
+              <div className="rounded-2xl border border-white/5 bg-white/2 p-4">
                 <p className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-white/50">
                   <RefreshCw size={11} /> Como entrar novamente
                 </p>
@@ -1087,7 +1087,7 @@ const PortalCliente = () => {
                 </ol>
               </div>
 
-              <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-4">
+              <div className="rounded-2xl border border-white/5 bg-white/2 p-4">
                 <p className="mb-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-white/50">
                   <MessageCircle size={11} /> Fale com o credor
                 </p>
@@ -1127,7 +1127,7 @@ const PortalCliente = () => {
                             </a>
                             <a
                               href={`tel:${contact.phone}`}
-                              className="flex items-center justify-between rounded-xl border border-white/5 bg-white/[0.02] px-4 py-3 text-sm text-white transition-colors hover:bg-white/5"
+                              className="flex items-center justify-between rounded-xl border border-white/5 bg-white/2 px-4 py-3 text-sm text-white transition-colors hover:bg-white/5"
                             >
                               <span className="flex items-center gap-2">
                                 <Phone size={15} className="text-primary" /> Telefone
@@ -1139,7 +1139,7 @@ const PortalCliente = () => {
                         {contact.email && (
                           <a
                             href={`mailto:${contact.email}?subject=${encodeURIComponent("Ajuda com acesso ao portal")}`}
-                            className="flex items-center justify-between rounded-xl border border-white/5 bg-white/[0.02] px-4 py-3 text-sm text-white transition-colors hover:bg-white/5"
+                            className="flex items-center justify-between rounded-xl border border-white/5 bg-white/2 px-4 py-3 text-sm text-white transition-colors hover:bg-white/5"
                           >
                             <span className="flex items-center gap-2">
                               <Mail size={15} className="text-primary" /> E-mail

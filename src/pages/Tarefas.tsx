@@ -160,7 +160,7 @@ const Tarefas = () => {
               <p className="text-muted-foreground text-sm mt-0.5">Organize suas tarefas diárias.</p>
             </div>
           </div>
-          <span className="text-xs text-muted-foreground bg-card/70 border border-border/40 rounded-xl px-3 py-1.5 backdrop-blur">
+          <span className="text-xs text-muted-foreground bg-card/70 border border-border/40 rounded-xl px-3 py-1.5 backdrop-blur-sm">
             <Calendar size={12} className="inline mr-1" />{today}
           </span>
         </div>

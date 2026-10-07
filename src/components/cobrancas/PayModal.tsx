@@ -81,7 +81,7 @@ const PayModal = ({ inst, fee, alreadyPaid, remaining, daysLate, onCancel, onCon
   return (
     <ModalPortal>
     <div
-      className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center bg-background/80 backdrop-blur-sm"
+      className="fixed inset-0 z-90 flex items-end sm:items-center justify-center bg-background/80 backdrop-blur-xs"
       onClick={onCancel}
     >
       <div
@@ -158,10 +158,10 @@ const PayModal = ({ inst, fee, alreadyPaid, remaining, daysLate, onCancel, onCon
           >
             Quitar total
           </button>
-          
+
           {canPayInterestOnly && <button type="button"
             onClick={() => setMode("interest_only")}
-            className={`min-w-0 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-sm ${
+            className={`min-w-0 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-xs ${
               mode === "interest_only" ? "bg-amber-500 text-white border-amber-600" : "border border-border text-muted-foreground hover:bg-accent"
             }`}
           >
@@ -233,7 +233,7 @@ const PayModal = ({ inst, fee, alreadyPaid, remaining, daysLate, onCancel, onCon
               <label htmlFor="interest-next-due" className="block text-xs font-semibold text-foreground mb-1.5">Novo vencimento</label>
               <input id="interest-next-due" type="date" value={nextDueDate} min={todayLocalISO()}
                 onChange={(e) => setNextDueDate(e.target.value)}
-                className="w-full rounded-lg border border-primary/25 bg-primary/10 px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/25" />
+                className="w-full rounded-lg border border-primary/25 bg-primary/10 px-3 py-2 text-sm text-foreground focus:outline-hidden focus:border-primary/60 focus:ring-2 focus:ring-primary/25" />
               <button type="button" onClick={() => setNextDueDate(automaticNextDue)} className="mt-1.5 text-[11px] font-semibold text-primary hover:underline">
                 Usar próxima data automática: {formatBR(automaticNextDue)}
               </button>
@@ -268,7 +268,7 @@ const PayModal = ({ inst, fee, alreadyPaid, remaining, daysLate, onCancel, onCon
                 inputMode="decimal"
                 value={raw}
                 onChange={(e) => setRaw(e.target.value.replace(/[^\d,.]/g, ""))}
-                className="flex-1 bg-transparent outline-none text-foreground text-base font-semibold"
+                className="flex-1 bg-transparent outline-hidden text-foreground text-base font-semibold"
                 placeholder="0,00"
               />
             </div>

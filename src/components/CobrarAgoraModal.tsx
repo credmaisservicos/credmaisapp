@@ -167,7 +167,7 @@ const CobrarAgoraModal = ({ open, onClose, title = "Cobrar agora", installments 
   return (
     <>
       <div
-        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] animate-fade-in"
+        className="fixed inset-0 bg-black/60 backdrop-blur-xs z-60 animate-fade-in"
         onClick={onClose}
         aria-hidden="true"
       />
@@ -176,11 +176,11 @@ const CobrarAgoraModal = ({ open, onClose, title = "Cobrar agora", installments 
         role="dialog"
         aria-modal="true"
         aria-labelledby="cobrar-agora-title"
-        className="fixed inset-x-0 top-[5vh] mx-auto w-[calc(100vw-1rem)] sm:w-full max-w-2xl z-[61] px-0 sm:px-4 animate-scale-in"
+        className="fixed inset-x-0 top-[5vh] mx-auto w-[calc(100vw-1rem)] sm:w-full max-w-2xl z-61 px-0 sm:px-4 animate-scale-in"
       >
         <div className="rounded-2xl border border-border bg-card shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
           {/* Header */}
-          <div className="flex items-center gap-3 px-4 py-3.5 border-b border-border sticky top-0 bg-card/95 backdrop-blur z-10 shrink-0">
+          <div className="flex items-center gap-3 px-4 py-3.5 border-b border-border sticky top-0 bg-card/95 backdrop-blur-sm z-10 shrink-0">
             <div className="w-8 h-8 rounded-lg bg-primary/15 text-primary flex items-center justify-center">
               <CheckCircle2 size={15} />
             </div>
@@ -193,7 +193,7 @@ const CobrarAgoraModal = ({ open, onClose, title = "Cobrar agora", installments 
             <button
               onClick={onClose}
               aria-label="Fechar"
-              className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary"
             >
               <X size={14} />
             </button>
@@ -287,7 +287,7 @@ const CobrarAgoraModal = ({ open, onClose, title = "Cobrar agora", installments 
                       role="radio"
                       aria-checked={active}
                       onClick={() => setMethod(m.id)}
-                      className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+                      className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary ${
                         active
                           ? "border-primary bg-primary/10 ring-1 ring-primary/30"
                           : "border-border/40 bg-muted/20 hover:bg-accent/20"
@@ -321,7 +321,7 @@ const CobrarAgoraModal = ({ open, onClose, title = "Cobrar agora", installments 
                 <button
                   onClick={() => setStep(1)}
                   disabled={busy}
-                  className="px-3 py-2 rounded-lg border border-border/50 text-xs font-semibold text-foreground hover:bg-accent/30 transition-colors flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className="px-3 py-2 rounded-lg border border-border/50 text-xs font-semibold text-foreground hover:bg-accent/30 transition-colors flex items-center gap-1.5 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary"
                 >
                   <ArrowLeft size={12} /> Voltar
                 </button>
@@ -330,7 +330,7 @@ const CobrarAgoraModal = ({ open, onClose, title = "Cobrar agora", installments 
                 <button
                   onClick={() => setStep(2)}
                   disabled={selected.size === 0}
-                  className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-card"
+                  className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-1.5 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-card"
                 >
                   Continuar <ArrowRight size={12} />
                 </button>
@@ -338,7 +338,7 @@ const CobrarAgoraModal = ({ open, onClose, title = "Cobrar agora", installments 
                 <button
                   onClick={confirm}
                   disabled={busy || selected.size === 0}
-                  className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-card"
+                  className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-1.5 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-card"
                 >
                   {busy ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
                   Confirmar recebimento

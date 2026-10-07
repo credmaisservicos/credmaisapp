@@ -313,7 +313,7 @@ const QuickPaymentModal = ({ open, onClose }: Props) => {
   return (
     <>
       <div
-        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] animate-fade-in"
+        className="fixed inset-0 bg-black/60 backdrop-blur-xs z-60 animate-fade-in"
         onClick={onClose}
         aria-hidden="true"
       />
@@ -322,10 +322,10 @@ const QuickPaymentModal = ({ open, onClose }: Props) => {
         role="dialog"
         aria-modal="true"
         aria-labelledby="quick-pay-title"
-        className="fixed inset-x-0 top-[5vh] mx-auto w-[calc(100vw-1rem)] sm:w-full max-w-2xl z-[61] px-0 sm:px-4 animate-scale-in"
+        className="fixed inset-x-0 top-[5vh] mx-auto w-[calc(100vw-1rem)] sm:w-full max-w-2xl z-61 px-0 sm:px-4 animate-scale-in"
       >
         <div className="rounded-2xl border border-border bg-card shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
-          <div className="flex items-center gap-3 px-4 py-3.5 border-b border-border sticky top-0 bg-card/95 backdrop-blur z-10 shrink-0">
+          <div className="flex items-center gap-3 px-4 py-3.5 border-b border-border sticky top-0 bg-card/95 backdrop-blur-sm z-10 shrink-0">
             <Receipt size={16} className="text-primary" />
             <div className="flex-1">
               <h2 id="quick-pay-title" className="text-xs font-bold text-foreground">Registrar pagamento</h2>
@@ -364,7 +364,7 @@ const QuickPaymentModal = ({ open, onClose }: Props) => {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Nome do cliente ou CPF..."
-                className="w-full h-10 pl-9 pr-9 rounded-xl bg-muted/30 border border-border/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                className="w-full h-10 pl-9 pr-9 rounded-xl bg-muted/30 border border-border/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/50"
               />
               {query && (
                 <button onClick={() => setQuery("")} aria-label="Limpar busca" className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-accent text-muted-foreground">
@@ -481,7 +481,7 @@ const QuickPaymentModal = ({ open, onClose }: Props) => {
                         onChange={(e) => setPartialValue(e.target.value)}
                         onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handlePartial(inst); } }}
                         placeholder="0,00"
-                        className="w-full h-8 pl-8 pr-2 rounded-md bg-primary/10 border border-primary/25 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                        className="w-full h-8 pl-8 pr-2 rounded-md bg-primary/10 border border-primary/25 text-sm text-foreground focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/50"
                       />
                     </div>
                     <span className="text-[10px] text-muted-foreground">de R$ {fmtBRL(dueNow)}</span>
@@ -513,7 +513,7 @@ const QuickPaymentModal = ({ open, onClose }: Props) => {
                           value={interestNextDueDate}
                           min={todayLocalISO()}
                           onChange={(e) => setInterestNextDueDate(e.target.value)}
-                          className="rounded-md border border-primary/30 bg-primary/10 px-2 py-1 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/25"
+                          className="rounded-md border border-primary/30 bg-primary/10 px-2 py-1 text-foreground focus:outline-hidden focus:ring-2 focus:ring-primary/25"
                         />
                       </label>
                     )}

@@ -150,9 +150,9 @@ const Dashboard = () => {
   ];
 
   const toneMap: Record<string, { text: string; bg: string; border: string }> = {
-    danger:  { text: "text-destructive", bg: "bg-destructive/[.06]", border: "border-destructive/20" },
-    warning: { text: "text-warning",     bg: "bg-warning/[.06]",     border: "border-warning/20" },
-    info:    { text: "text-info",        bg: "bg-info/[.06]",        border: "border-info/20" },
+    danger:  { text: "text-destructive", bg: "bg-destructive/6", border: "border-destructive/20" },
+    warning: { text: "text-warning",     bg: "bg-warning/6",     border: "border-warning/20" },
+    info:    { text: "text-info",        bg: "bg-info/6",        border: "border-info/20" },
   };
 
   return (
@@ -160,7 +160,7 @@ const Dashboard = () => {
       {/* ─── HERO — saudação + ações principais ─── */}
       <section className="credinho-banner credinho-dashboard-banner p-5 md:p-7">
         <CredinhoBannerArt priority />
-        <div className="pointer-events-none absolute -right-16 -top-24 -z-10 h-72 w-72 rounded-full border-[24px] border-white/[.06]" />
+        <div className="pointer-events-none absolute -right-16 -top-24 -z-10 h-72 w-72 rounded-full border-24 border-white/6" />
         <div className="pointer-events-none absolute right-20 top-10 -z-10 h-2 w-2 rounded-full bg-orange-300 shadow-[0_0_18px_6px_rgba(251,146,60,.65)]" />
         <div className="credinho-dashboard-copy relative flex flex-col gap-5">
           <div className="space-y-2 min-w-0">
@@ -183,7 +183,7 @@ const Dashboard = () => {
             <button
               onClick={() => refetchDash()}
               disabled={isFetching}
-              className="flex items-center gap-2 rounded-xl border border-white/[.16] bg-white/[.08] px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-white/[.14] disabled:opacity-60"
+              className="flex items-center gap-2 rounded-xl border border-white/16 bg-white/8 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-white/[.14] disabled:opacity-60"
               title={dataUpdatedAt ? `Atualizado às ${new Date(dataUpdatedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : "Atualizar painel"}
             >
               <RefreshCw size={13} className={isFetching ? "animate-spin" : ""} />
@@ -199,14 +199,14 @@ const Dashboard = () => {
             )}
             <button
               onClick={() => navigate("/tv")}
-              className="flex items-center gap-2 rounded-xl border border-white/[.16] bg-white/[.08] px-3.5 py-2 text-xs font-medium text-white transition-colors hover:bg-white/[.14]"
+              className="flex items-center gap-2 rounded-xl border border-white/16 bg-white/8 px-3.5 py-2 text-xs font-medium text-white transition-colors hover:bg-white/[.14]"
             >
               <Activity size={13} className="text-primary" />
               Modo TV
             </button>
             <button
               onClick={() => navigate("/clientes/novo")}
-              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#e3a33e] via-[#ffdc91] to-[#e3a33e] px-4 py-2 text-xs font-bold text-[#201a10] shadow-lg shadow-amber-950/20 transition-colors hover:brightness-110"
+              className="flex items-center gap-2 rounded-xl bg-linear-to-r from-[#e3a33e] via-[#ffdc91] to-[#e3a33e] px-4 py-2 text-xs font-bold text-[#201a10] shadow-lg shadow-amber-950/20 transition-colors hover:brightness-110"
             >
               <Plus size={14} strokeWidth={2.5} />
               Novo
@@ -215,19 +215,19 @@ const Dashboard = () => {
         </div>
 
         {/* Quick actions inline */}
-        <div className="relative mt-5 grid grid-cols-2 gap-2.5 border-t border-white/[.06] pt-5 md:grid-cols-4 md:gap-3">
+        <div className="relative mt-5 grid grid-cols-2 gap-2.5 border-t border-white/6 pt-5 md:grid-cols-4 md:gap-3">
           {quickActions.map((a, i) => (
             <button
               key={a.label}
               onClick={() => navigate(a.path)}
-              className="group flex min-w-0 items-center gap-2.5 rounded-xl border border-white/[.12] bg-white/[.08] p-3 text-left text-white transition-colors hover:border-orange-300/40 hover:bg-white/[.14] md:p-3.5"
+              className="group flex min-w-0 items-center gap-2.5 rounded-xl border border-white/12 bg-white/8 p-3 text-left text-white transition-colors hover:border-orange-300/40 hover:bg-white/[.14] md:p-3.5"
               style={{ animationDelay: `${i * 50}ms` }}
             >
               <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-background/60 ${a.iconColor}`}>
                 <a.icon size={16} strokeWidth={2.2} />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-[13px] md:text-sm font-semibold text-foreground leading-tight break-words">{a.label}</p>
+                <p className="text-[13px] md:text-sm font-semibold text-foreground leading-tight wrap-break-word">{a.label}</p>
                 <p className="text-[9px] md:text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">Abrir →</p>
               </div>
             </button>
@@ -321,7 +321,7 @@ const Dashboard = () => {
             ].map((item, i) => (
               <div
                 key={item.label}
-                className="rounded-2xl border border-border/30 bg-card/40 backdrop-blur p-4 flex items-center gap-3 hover:bg-card/60 hover:border-border/50 transition-all duration-300 animate-fade-in"
+                className="rounded-2xl border border-border/30 bg-card/40 backdrop-blur-sm p-4 flex items-center gap-3 hover:bg-card/60 hover:border-border/50 transition-all duration-300 animate-fade-in"
                 style={{ animationDelay: `${(i + 4) * 60}ms` }}
               >
                 <div className={`w-11 h-11 rounded-2xl ${item.bg} flex items-center justify-center shrink-0`}>
@@ -355,7 +355,7 @@ const Dashboard = () => {
                   <div key={i} className="flex-1 flex flex-col items-center gap-2 group">
                     <span className="text-[10px] font-bold text-primary tabular-nums opacity-0 group-hover:opacity-100 transition">{w.count}</span>
                     <div
-                      className={`w-full rounded-t-lg transition-all duration-700 ${w.count > 0 ? 'bg-gradient-to-t from-primary/70 to-primary/30 group-hover:from-primary group-hover:to-primary/60' : 'bg-muted/30'}`}
+                      className={`w-full rounded-t-lg transition-all duration-700 ${w.count > 0 ? 'bg-linear-to-t from-primary/70 to-primary/30 group-hover:from-primary group-hover:to-primary/60' : 'bg-muted/30'}`}
                       style={{ height: `${Math.max(6, (w.count / metrics.maxActivity) * 72)}px`, animationDelay: `${i * 80}ms` }}
                     />
                     <span className="text-[10px] text-muted-foreground font-medium capitalize">{w.day}</span>
@@ -393,7 +393,7 @@ const Dashboard = () => {
                           <span className="text-xs font-bold text-primary shrink-0 tabular-nums">{pct.toFixed(0)}%</span>
                         </div>
                         <div className="h-2 rounded-full bg-muted/40 overflow-hidden">
-                          <div className="h-full rounded-full transition-all duration-700 ease-out bg-gradient-to-r from-primary/60 to-primary" style={{ width: `${pct}%` }} />
+                          <div className="h-full rounded-full transition-all duration-700 ease-out bg-linear-to-r from-primary/60 to-primary" style={{ width: `${pct}%` }} />
                         </div>
                         <p className="text-[10px] text-muted-foreground tabular-nums">
                           R$ {fmt(currentAmount)} / R$ {fmt(targetAmount)}

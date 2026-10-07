@@ -293,7 +293,7 @@ const Lucros = () => {
     return acc;
   }, {} as Record<string, any[]>), [filtered]);
 
-  const inputCls = "w-full px-4 py-3 rounded-2xl bg-card border border-border text-foreground placeholder:text-muted-foreground text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary/50 outline-none transition-all";
+  const inputCls = "w-full px-4 py-3 rounded-2xl bg-card border border-border text-foreground placeholder:text-muted-foreground text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary/50 outline-hidden transition-all";
 
   const allVisibleIds = useMemo(() => filtered.map((p: any) => p.id), [filtered]);
   const allSelected = allVisibleIds.length > 0 && allVisibleIds.every(id => selected.has(id));
@@ -337,7 +337,7 @@ const Lucros = () => {
               <p className="text-xs uppercase tracking-widest text-muted-foreground font-medium">Lucros</p>
               <h1 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">Total acumulado</h1>
               <div className="flex items-baseline gap-2 mt-1">
-                <span className="max-w-full text-3xl sm:text-4xl font-bold text-success tracking-tight tabular-nums break-words">R$ {fmt(totalAll)}</span>
+                <span className="max-w-full text-3xl sm:text-4xl font-bold text-success tracking-tight tabular-nums wrap-break-word">R$ {fmt(totalAll)}</span>
               </div>
               <p className="text-xs text-muted-foreground mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
                 <span className="flex items-center gap-1"><Sparkles size={12} className="text-success" /> {profits.length} lançamento(s)</span>
@@ -385,7 +385,7 @@ const Lucros = () => {
               )}
             </div>
             <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{s.label}</p>
-            <p className={`text-base sm:text-lg font-bold mt-1 leading-tight tabular-nums break-words ${s.color}`}>R$ {fmt(s.value)}</p>
+            <p className={`text-base sm:text-lg font-bold mt-1 leading-tight tabular-nums wrap-break-word ${s.color}`}>R$ {fmt(s.value)}</p>
             <p className="text-[10px] text-muted-foreground mt-0.5">{s.hint}</p>
           </div>
         ))}
@@ -431,9 +431,9 @@ const Lucros = () => {
                     <div
                       className={`w-full rounded-t-lg transition-all duration-500 cursor-pointer ${
                         isCurrentMonth
-                          ? "bg-gradient-to-t from-success to-success/40 shadow-[0_0_20px_hsl(var(--success)/0.4)]"
+                          ? "bg-linear-to-t from-success to-success/40 shadow-[0_0_20px_hsl(var(--success)/0.4)]"
                           : isBest
-                          ? "bg-gradient-to-t from-warning/70 to-warning/30"
+                          ? "bg-linear-to-t from-warning/70 to-warning/30"
                           : "bg-success/20 hover:bg-success/30"
                       } h-full`}
                     />
@@ -469,7 +469,7 @@ const Lucros = () => {
                       <span className="font-semibold text-success shrink-0 tabular-nums">R$ {fmt(val)}</span>
                     </div>
                     <div className="h-1.5 rounded-full bg-muted/40 overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-success/60 to-success rounded-full" style={{ width: `${pct}%` }} />
+                      <div className="h-full bg-linear-to-r from-success/60 to-success rounded-full" style={{ width: `${pct}%` }} />
                     </div>
                   </div>
                 );
@@ -623,7 +623,7 @@ const Lucros = () => {
           <div className="max-h-[500px] overflow-y-auto">
             {Object.entries(grouped).map(([dateStr, items]: [string, any[]]) => (
               <div key={dateStr}>
-                <div className="flex items-center gap-2 px-4 py-2.5 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold sticky top-0 bg-card/95 backdrop-blur-sm z-[5] border-b border-border/50">
+                <div className="flex items-center gap-2 px-4 py-2.5 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold sticky top-0 bg-card/95 backdrop-blur-xs z-5 border-b border-border/50">
                   <Calendar size={10} /> {dateStr}
                   <span className="text-success font-bold ml-auto text-xs normal-case">
                     +R$ {fmt(items.reduce((s: number, p: any) => s + safeNumber(p.amount), 0))}

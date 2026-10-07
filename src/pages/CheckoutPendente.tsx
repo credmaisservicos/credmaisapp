@@ -54,7 +54,7 @@ export default function CheckoutPendente() {
 
   return (
     <div className="min-h-dvh bg-black text-white flex items-center justify-center px-6">
-      <div className="max-w-md w-full text-center p-10 rounded-3xl bg-white/[0.04] border border-white/10 backdrop-blur-xl">
+      <div className="max-w-md w-full text-center p-10 rounded-3xl bg-white/4 border border-white/10 backdrop-blur-xl">
         <Credinho pose={approved && !checkError ? "results" : "thinking"} className="mx-auto w-[110px]" />
         <div className="w-20 h-20 rounded-full bg-yellow-500/15 border border-yellow-400/30 flex items-center justify-center mx-auto mb-6">
           {approved ? <CheckCircle2 size={40} className="text-emerald-400" /> : checkError ? <AlertCircle size={40} className="text-red-400" /> : <Clock size={40} className="text-yellow-400" />}
@@ -64,7 +64,7 @@ export default function CheckoutPendente() {
           Estamos aguardando a confirmação do <strong>{brand}</strong>. Assim que aprovado, você receberá
           um e-mail com o link de acesso — Pix costuma levar segundos, boleto até 2 dias úteis.
         </p>
-        <div className="flex items-center justify-center gap-2 text-xs text-white/50 bg-white/[0.03] border border-white/10 rounded-xl py-3 px-4 mb-8">
+        <div className="flex items-center justify-center gap-2 text-xs text-white/50 bg-white/3 border border-white/10 rounded-xl py-3 px-4 mb-8">
           {checkError ? <AlertCircle size={14} className="text-red-300" /> : <Loader2 size={14} className="text-amber-300 animate-spin" />}
           {checkError ? "Não foi possível confirmar agora; tentaremos novamente." : "Verificando status a cada 6 segundos..."}
         </div>

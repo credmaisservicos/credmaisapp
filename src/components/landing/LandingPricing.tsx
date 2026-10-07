@@ -72,9 +72,9 @@ const LandingPricing = () => {
                 {plan.items.map((item) => (
                   <li key={item.label} className="flex items-start gap-3 text-sm">
                     {item.on ? (
-                      <Check size={16} className="text-primary mt-0.5 flex-shrink-0" />
+                      <Check size={16} className="text-primary mt-0.5 shrink-0" />
                     ) : (
-                      <Minus size={16} className="text-muted-foreground/60 mt-0.5 flex-shrink-0" />
+                      <Minus size={16} className="text-muted-foreground/60 mt-0.5 shrink-0" />
                     )}
                     <span className={item.on ? "text-foreground" : "text-muted-foreground/70 line-through"}>
                       {item.label}

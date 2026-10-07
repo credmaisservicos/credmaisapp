@@ -19,7 +19,7 @@ export default function PlanosSite() {
     >
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {PLAN_LIST.map((plan) => (
-          <Card key={plan.tier} className={plan.highlight ? "border-[#A46A19]/60 bg-[#A46A19]/[0.06]" : ""}>
+          <Card key={plan.tier} className={plan.highlight ? "border-[#A46A19]/60 bg-[#A46A19]/6" : ""}>
             {plan.highlight && (
               <div className="mb-4 inline-flex rounded-full bg-[#A46A19] px-3 py-1 text-[10px] uppercase tracking-widest text-white">
                 Mais completo

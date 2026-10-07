@@ -277,7 +277,7 @@ export default function Investidores() {
         </section>
 
         {/* Toolbar */}
-        <div className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-card/50 p-3 backdrop-blur md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-card/50 p-3 backdrop-blur-sm md:flex-row md:items-center md:justify-between">
           <div className="relative flex-1 md:max-w-sm">
             <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -299,7 +299,7 @@ export default function Investidores() {
                 onClick={() => setFilter(f.k)}
                 className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
                   filter === f.k
-                    ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                    ? "border-primary bg-primary text-primary-foreground shadow-xs"
                     : "border-border bg-background/40 text-muted-foreground hover:text-foreground hover:border-primary/40"
                 }`}
               >
@@ -309,7 +309,7 @@ export default function Investidores() {
             ))}
             <div className="ml-1 flex items-center gap-1 rounded-full border border-border bg-background/40 px-2 py-1 text-xs">
               <ArrowUpDown size={12} className="text-muted-foreground" />
-              <select name="investors-sort" aria-label="Ordenar investidores" value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} className="bg-transparent text-xs font-medium outline-none">
+              <select name="investors-sort" aria-label="Ordenar investidores" value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} className="bg-transparent text-xs font-medium outline-hidden">
                 <option value="total">Maior saldo</option>
                 <option value="prox">Próximo vencimento</option>
                 <option value="name">Nome (A→Z)</option>
@@ -371,11 +371,11 @@ export default function Investidores() {
               return (
                 <article
                   key={inv.id}
-                  className={`group relative min-w-0 overflow-hidden rounded-2xl border bg-card/70 backdrop-blur-sm transition-colors ${
+                  className={`group relative min-w-0 overflow-hidden rounded-2xl border bg-card/70 backdrop-blur-xs transition-colors ${
                     s.state === "overdue" ? "border-destructive/30" : "border-border/70"
                   }`}
                 >
-                  <div className={`h-[3px] w-full bg-gradient-to-r ${accentGrad}`} />
+                  <div className={`h-[3px] w-full bg-linear-to-r ${accentGrad}`} />
                   <div className="p-4 sm:p-5 space-y-4">
                     {/* Head — avatar + identity */}
                     <div className="flex items-start gap-3">
@@ -421,7 +421,7 @@ export default function Investidores() {
                       <div className="flex items-end justify-between gap-2">
                         <div className="min-w-0">
                           <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">Saldo a receber</p>
-                          <p className={`text-xl sm:text-2xl font-black tabular-nums leading-tight mt-0.5 break-words ${s.state === "overdue" ? "text-destructive" : "text-foreground"}`}>
+                          <p className={`text-xl sm:text-2xl font-black tabular-nums leading-tight mt-0.5 wrap-break-word ${s.state === "overdue" ? "text-destructive" : "text-foreground"}`}>
                             {brl(s.saldo)}
                           </p>
                         </div>
@@ -456,7 +456,7 @@ export default function Investidores() {
                       </div>
                       <div className="relative h-2 overflow-hidden rounded-full bg-muted/50">
                         <div
-                          className={`h-full rounded-full transition-all bg-gradient-to-r ${
+                          className={`h-full rounded-full transition-all bg-linear-to-r ${
                             s.pct >= 80 ? "from-success to-success/70" : s.pct >= 40 ? "from-primary to-primary/70" : "from-amber-500 to-amber-400"
                           }`}
                           style={{ width: `${Math.max(s.pct > 0 ? 4 : 0, s.pct)}%` }}
@@ -469,7 +469,7 @@ export default function Investidores() {
                       <button
                         onClick={() => darBaixa(inv.id)}
                         disabled={s.count === 0}
-                        className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-gradient-to-br from-primary to-primary/85 px-3 py-2.5 text-xs font-bold text-primary-foreground transition-all hover:shadow-md hover:shadow-primary/30 active:scale-[0.98] focus-ring disabled:opacity-40"
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-linear-to-br from-primary to-primary/85 px-3 py-2.5 text-xs font-bold text-primary-foreground transition-all hover:shadow-md hover:shadow-primary/30 active:scale-[0.98] focus-ring disabled:opacity-40"
                       >
                         <DollarSign size={13} /> Dar baixa
                       </button>
@@ -685,11 +685,11 @@ export function KpiCard({ icon: Icon, label, value, tone, hint }: { icon: any; l
     violet: "from-violet-500/20 to-violet-500/5 text-violet-300",
   };
   return (
-    <div className={`min-w-0 rounded-xl border border-white/10 bg-gradient-to-br ${tones[tone]} p-3 sm:p-4`}>
+    <div className={`min-w-0 rounded-xl border border-white/10 bg-linear-to-br ${tones[tone]} p-3 sm:p-4`}>
       <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest opacity-80">
         <Icon className="h-3.5 w-3.5" /> {label}
       </div>
-      <p className="mt-2 font-mono text-base sm:text-xl font-bold leading-tight text-foreground break-words">{value}</p>
+      <p className="mt-2 font-mono text-base sm:text-xl font-bold leading-tight text-foreground wrap-break-word">{value}</p>
       {hint && <p className="mt-1 text-[10px] text-muted-foreground">{hint}</p>}
     </div>
   );
@@ -848,7 +848,7 @@ export function PayLoanDialog({ loanId, loan, onClose, onPaid }: { loanId: strin
       <DialogContent className="w-[calc(100vw-1.5rem)] max-w-sm">
         <DialogHeader><DialogTitle>Registrar pagamento</DialogTitle></DialogHeader>
         <div className="grid gap-3">
-          <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3 text-center">
+          <div className="rounded-xl border border-white/5 bg-white/2 p-3 text-center">
             <p className="text-xs uppercase text-muted-foreground">Saldo devedor</p>
             <p className="font-mono text-2xl font-bold">{brl(saldo)}</p>
           </div>

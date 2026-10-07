@@ -209,8 +209,8 @@ const GlobalSearch = ({ open, onClose }: { open: boolean; onClose: () => void })
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] animate-fade-in" onClick={onClose} />
-      <div className="fixed top-[12%] left-1/2 -translate-x-1/2 w-full max-w-xl z-[61] px-4 animate-scale-in">
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-60 animate-fade-in" onClick={onClose} />
+      <div className="fixed top-[12%] left-1/2 -translate-x-1/2 w-full max-w-xl z-61 px-4 animate-scale-in">
         <div className="rounded-2xl border border-border bg-card shadow-2xl overflow-hidden">
           <div className="flex items-center gap-3 px-4 py-3.5 border-b border-border">
             <Search size={16} className={`transition-colors ${loading ? "text-primary animate-pulse" : "text-muted-foreground"}`} />
@@ -220,7 +220,7 @@ const GlobalSearch = ({ open, onClose }: { open: boolean; onClose: () => void })
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Buscar ações, clientes, contratos, páginas..."
-              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-hidden"
             />
             {query && (
               <button onClick={() => setQuery("")} className="p-1 rounded-md hover:bg-accent text-muted-foreground transition-colors" aria-label="Limpar busca">

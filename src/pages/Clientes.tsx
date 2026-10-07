@@ -415,7 +415,7 @@ const Clientes = () => {
           { label: "Com atraso", value: stats.overdue, color: "text-destructive", filter: "overdue" as const },
         ].map(s => (
           <button key={s.label} onClick={() => s.filter === "overdue" ? setSort("overdue") : setStatusFilter(s.filter)}
-            className={`rounded-2xl border p-4 text-left transition-colors sm:p-5 ${(s.filter === "overdue" ? sort === "overdue" : statusFilter === s.filter) ? "border-primary/25 bg-primary/[.055]" : "border-white/[.08] bg-card/35 hover:bg-card/55"}`}>
+            className={`rounded-2xl border p-4 text-left transition-colors sm:p-5 ${(s.filter === "overdue" ? sort === "overdue" : statusFilter === s.filter) ? "border-primary/25 bg-primary/5.5" : "border-white/8 bg-card/35 hover:bg-card/55"}`}>
             <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">{s.label}</p>
             <p className={`text-2xl font-bold mt-1 ${s.color}`}>{s.value}</p>
           </button>
@@ -425,7 +425,7 @@ const Clientes = () => {
       {/* Search bar + view toggle */}
       <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 basis-[12rem] min-w-0">
+          <div className="relative flex-1 basis-48 min-w-0">
             <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
               id="clients-search"
@@ -437,7 +437,7 @@ const Clientes = () => {
               placeholder="Buscar por nome, CPF, telefone ou email…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-xl border border-border/20 bg-card/40 py-3.5 pl-11 pr-28 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-primary/35 focus:ring-1 focus:ring-primary/30"
+              className="w-full rounded-xl border border-border/20 bg-card/40 py-3.5 pl-11 pr-28 text-sm text-foreground outline-hidden transition-colors placeholder:text-muted-foreground/40 focus:border-primary/35 focus:ring-1 focus:ring-primary/30"
             />
             <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
               {search ? (
@@ -506,7 +506,7 @@ const Clientes = () => {
                   aria-label="Ordenar clientes"
                   value={sort}
                   onChange={(e) => setSort(e.target.value as SortKey)}
-                  className="px-3 py-1.5 rounded-xl text-xs font-medium bg-muted/30 text-foreground border border-border/10 focus:outline-none focus:ring-1 focus:ring-primary/40"
+                  className="px-3 py-1.5 rounded-xl text-xs font-medium bg-muted/30 text-foreground border border-border/10 focus:outline-hidden focus:ring-1 focus:ring-primary/40"
                 >
                   <option value="recent">Mais recentes</option>
                   <option value="name">Nome (A → Z)</option>
@@ -680,7 +680,7 @@ const Clientes = () => {
 
       {/* ─── Import CSV Modal ──────────────────────────────── */}
       {importOpen && (
-        <div className="fixed inset-0 z-[90] bg-black/60 flex items-start sm:items-center justify-center p-4 overflow-y-auto overscroll-contain" onClick={() => { setImportOpen(false); setImportPreview(null); }}>
+        <div className="fixed inset-0 z-90 bg-black/60 flex items-start sm:items-center justify-center p-4 overflow-y-auto overscroll-contain" onClick={() => { setImportOpen(false); setImportPreview(null); }}>
           <div className="bg-card border border-border rounded-2xl max-w-3xl w-full sm:max-h-[90dvh] my-auto overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="px-5 py-4 border-b border-border flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -714,7 +714,7 @@ const Clientes = () => {
                 </div>
                 <div className="flex-1 overflow-auto">
                   <table className="w-full min-w-[640px] text-xs">
-                    <thead className="sticky top-0 bg-muted/60 backdrop-blur z-10">
+                    <thead className="sticky top-0 bg-muted/60 backdrop-blur-sm z-10">
                       <tr>
                         <th className="text-left px-3 py-2 font-semibold text-muted-foreground">#</th>
                         <th className="text-left px-3 py-2 font-semibold text-muted-foreground">Nome</th>

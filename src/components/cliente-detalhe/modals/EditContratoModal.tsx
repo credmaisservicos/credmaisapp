@@ -21,7 +21,7 @@ const DAILY_MODES: { v: "mon-fri" | "mon-sat" | "mon-sun"; label: string }[] = [
 export default function EditContratoModal({ form, setForm, regen, setRegen, saving, onClose, onSave }: Props) {
   return (
     <ModalPortal>
-      <div className="fixed inset-0 z-[90] flex items-center justify-center overflow-y-auto overscroll-contain bg-background/80 p-3 backdrop-blur-sm" onClick={onClose}>
+      <div className="fixed inset-0 z-90 flex items-center justify-center overflow-y-auto overscroll-contain bg-background/80 p-3 backdrop-blur-xs" onClick={onClose}>
         <div className="my-auto max-h-[92dvh] w-full max-w-lg overflow-y-auto overscroll-contain rounded-2xl border border-border bg-card p-6 space-y-4" role="dialog" aria-modal="true" aria-labelledby="edit-contract-title" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <h2 id="edit-contract-title" className="text-lg font-bold text-foreground">Editar Empréstimo</h2>

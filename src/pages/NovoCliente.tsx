@@ -95,7 +95,7 @@ type Frequency = "monthly" | "weekly" | "daily" | "biweekly" | "custom";
 type DailyMode = "mon-fri" | "mon-sat" | "mon-sun";
 
 
-const INPUT = "w-full px-3.5 py-2.5 rounded-2xl bg-card border border-border text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:border-ring transition-all duration-150";
+const INPUT = "w-full px-3.5 py-2.5 rounded-2xl bg-card border border-border text-foreground placeholder:text-muted-foreground text-sm focus:outline-hidden focus:border-ring transition-all duration-150";
 const SELECT = `${INPUT} appearance-none cursor-pointer pr-10 hover:border-primary/50 focus:ring-2 focus:ring-primary/15`;
 
 const NovoCliente = () => {
@@ -903,7 +903,7 @@ const NovoCliente = () => {
           <div className="page-hero-icon">
             <User size={22} />
           </div>
-          <div className="flex-1 min-w-[9rem]">
+          <div className="flex-1 min-w-36">
             <h1 className="text-lg font-bold text-foreground sm:text-xl">
               {isNewContractOnly ? `Novo Contrato${existingClient?.name ? ` — ${existingClient.name}` : ""}` : "Cadastrar Novo Cliente"}
             </h1>
@@ -965,7 +965,7 @@ const NovoCliente = () => {
               <h2 className="text-sm font-semibold text-foreground">Identificação</h2>
             </div>
             <div className="flex items-start gap-5">
-              <div className="relative flex-shrink-0">
+              <div className="relative shrink-0">
                 <div className="w-16 h-16 rounded-2xl border-2 border-dashed border-border flex items-center justify-center text-muted-foreground bg-muted/30 overflow-hidden">
                   {avatarPreview ? <img src={avatarPreview} alt="" className="w-16 h-16 object-cover" /> : <User size={24} />}
                 </div>
@@ -1121,7 +1121,7 @@ const NovoCliente = () => {
           {/* Modo & Frequência */}
           {/* Duplicate from previous */}
           {pastContracts.length > 0 && (
-            <div className="rounded-2xl border border-white/[.08] bg-card/45 p-4 sm:p-5">
+            <div className="rounded-2xl border border-white/8 bg-card/45 p-4 sm:p-5">
               <div className="mb-4 flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl bg-primary/15 border border-primary/25 flex items-center justify-center">
                   <History size={14} className="text-primary" />
@@ -1136,7 +1136,7 @@ const NovoCliente = () => {
                   <button
                     key={c.id}
                     onClick={() => duplicateFrom(c)}
-                    className="group shrink-0 rounded-xl border border-white/[.08] bg-white/[0.025] px-3.5 py-2.5 text-left transition-colors hover:border-primary/35 hover:bg-primary/[.06]"
+                    className="group shrink-0 rounded-xl border border-white/8 bg-white/2.5 px-3.5 py-2.5 text-left transition-colors hover:border-primary/35 hover:bg-primary/6"
                   >
                     <p className="text-xs font-bold text-foreground truncate max-w-[150px] group-hover:text-primary transition-colors">{(c.clients as any)?.name || "—"}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">R$ {safeNumber(c.capital).toLocaleString("pt-BR")} · {c.num_installments || 0}x · {safeNumber(c.interest_rate)}%</p>
@@ -1145,7 +1145,7 @@ const NovoCliente = () => {
               </div>
             </div>
           )}
-          <div className="rounded-3xl border border-white/[.10] bg-white/[.025] shadow-[0_24px_70px_-45px_rgba(0,0,0,.95)] backdrop-blur-xl">
+          <div className="rounded-3xl border border-white/10 bg-white/2.5 shadow-[0_24px_70px_-45px_rgba(0,0,0,.95)] backdrop-blur-xl">
             <div className="flex items-center justify-between gap-3 p-4 sm:p-5">
               <div>
                 <p className="text-base font-semibold text-foreground">Tipo de empréstimo</p>
@@ -1202,7 +1202,7 @@ const NovoCliente = () => {
                       if (m.v === "installments" && (parseInt(numInstallments) || 0) < 2) setNumInstallments("2");
                       setLoanJourneyStep(2);
                     }}
-                      className={`group flex min-h-[88px] items-center gap-3 rounded-xl border p-4 text-left transition-colors ${active ? "border-primary bg-primary/[.05]" : "border-border bg-background/40 hover:border-primary/40 hover:bg-muted/30"}`}>
+                      className={`group flex min-h-[88px] items-center gap-3 rounded-xl border p-4 text-left transition-colors ${active ? "border-primary bg-primary/5" : "border-border bg-background/40 hover:border-primary/40 hover:bg-muted/30"}`}>
                       <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground group-hover:text-foreground"}`}>
                         <m.Icon size={18} />
                       </div>
@@ -1257,7 +1257,7 @@ const NovoCliente = () => {
                 const active = frequency === f.v;
                 return (
                   <button key={f.v} onClick={() => { setFrequency(f.v); setLoanJourneyStep(f.v === "daily" ? 2 : 3); }}
-                    className={`group flex flex-col items-center gap-1.5 rounded-xl border p-3 transition-colors ${active ? "border-primary/45 bg-primary/[.07]" : "border-white/[.08] bg-white/[0.02] hover:border-primary/30 hover:bg-primary/[.04]"}`}>
+                    className={`group flex flex-col items-center gap-1.5 rounded-xl border p-3 transition-colors ${active ? "border-primary/45 bg-primary/[.07]" : "border-white/8 bg-white/2 hover:border-primary/30 hover:bg-primary/4"}`}>
                     <div className={`relative w-9 h-9 rounded-xl flex items-center justify-center transition-all ${active ? "bg-primary/25 border border-primary/40" : "bg-muted/40 border border-white/5 group-hover:bg-primary/10"}`}>
                       <f.Icon size={16} className={active ? "text-primary" : "text-muted-foreground group-hover:text-primary"} />
                     </div>
@@ -1276,7 +1276,7 @@ const NovoCliente = () => {
                   const active = dailyMode === d.v;
                   return (
                     <button key={d.v} onClick={() => { setDailyMode(d.v); setLoanJourneyStep(3); }}
-                      className={`rounded-xl border p-2.5 text-xs font-bold transition-colors ${active ? "border-primary/45 bg-primary/[.08] text-primary" : "border-white/[.08] bg-white/[0.02] text-muted-foreground hover:border-primary/30 hover:text-foreground"}`}>
+                      className={`rounded-xl border p-2.5 text-xs font-bold transition-colors ${active ? "border-primary/45 bg-primary/8 text-primary" : "border-white/8 bg-white/2 text-muted-foreground hover:border-primary/30 hover:text-foreground"}`}>
                       {d.label}
                     </button>
                   );
@@ -1286,7 +1286,7 @@ const NovoCliente = () => {
           </div>
           )}
           {(showFullLoanForm || loanJourneyStep >= 3) && (
-            <div className="flex flex-col gap-3 rounded-2xl border border-success/25 bg-success/[.05] p-4 sm:flex-row sm:items-center">
+            <div className="flex flex-col gap-3 rounded-2xl border border-success/25 bg-success/5 p-4 sm:flex-row sm:items-center">
               <Check size={18} className="shrink-0 text-success" />
               <div className="flex-1"><p className="text-xs font-bold text-foreground">Frequência definida</p><p className="text-xs text-muted-foreground">{frequency === "daily" ? `Diário (${dailyMode === "mon-fri" ? "segunda a sexta" : dailyMode === "mon-sat" ? "segunda a sábado" : "todos os dias"})` : frequency === "weekly" ? "Semanal" : frequency === "biweekly" ? "Quinzenal" : frequency === "monthly" ? "Mensal" : "Datas programadas manualmente"}</p></div>
               <button type="button" onClick={() => setLoanJourneyStep(2)} className="rounded-xl border border-border px-3 py-2 text-xs font-bold text-foreground hover:bg-muted">Alterar frequência</button>
@@ -1298,7 +1298,7 @@ const NovoCliente = () => {
 
           {/* Valores & Datas */}
           {(showFullLoanForm || loanJourneyStep >= 3) && (
-          <div className="rounded-2xl border border-white/[.08] bg-card/45">
+          <div className="rounded-2xl border border-white/8 bg-card/45">
             <div className="flex items-center justify-between gap-3 p-4 sm:p-5">
               <div>
                 <p className="text-sm font-bold text-foreground">3 — Valores e vencimentos</p>
@@ -1306,7 +1306,7 @@ const NovoCliente = () => {
               </div>
               <button type="button" onClick={() => setLoanJourneyStep(2)} className="rounded-lg border border-border px-2.5 py-1 text-xs font-bold text-muted-foreground">Voltar</button>
             </div>
-            <div className="space-y-7 border-t border-white/[.06] p-4 sm:p-6">
+            <div className="space-y-7 border-t border-white/6 p-4 sm:p-6">
 
             <div className="space-y-5">
               {/* Capital em destaque */}
@@ -1325,7 +1325,7 @@ const NovoCliente = () => {
                     onChange={(e) => handleCapitalChange(e.target.value)}
                     onBlur={() => markTouched("capital")}
                     placeholder="0,00"
-                    className={`w-full rounded-xl border bg-card py-3 pl-14 pr-5 text-xl font-bold text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 font-display sm:text-2xl ${touched.capital && loanErrors.capital ? "border-destructive/60" : "border-border"}`}
+                    className={`w-full rounded-xl border bg-card py-3 pl-14 pr-5 text-xl font-bold text-foreground outline-hidden transition-colors placeholder:text-muted-foreground/40 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 font-display sm:text-2xl ${touched.capital && loanErrors.capital ? "border-destructive/60" : "border-border"}`}
                     inputMode="numeric"
                     aria-invalid={!!(touched.capital && loanErrors.capital)}
                   />
@@ -1351,7 +1351,7 @@ const NovoCliente = () => {
                     <div className="relative">
                       <Percent size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
                       <input id="loan-taxaJuros" aria-label="Taxa de juros" type="number" value={taxaJuros} onChange={(e) => setTaxaJuros(e.target.value)} onBlur={() => markTouched("taxa")} placeholder="10"
-                        className={`w-full bg-card border rounded-xl py-3 pl-10 pr-4 text-lg font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all ${touched.taxa && loanErrors.taxa ? "border-destructive/60" : "border-border"}`}
+                        className={`w-full bg-card border rounded-xl py-3 pl-10 pr-4 text-lg font-semibold text-foreground focus:outline-hidden focus:ring-2 focus:ring-primary/40 transition-all ${touched.taxa && loanErrors.taxa ? "border-destructive/60" : "border-border"}`}
                         aria-invalid={!!(touched.taxa && loanErrors.taxa)} min={0} max={100} step="0.01" />
                     </div>
                     <div className="flex flex-wrap gap-1.5">
@@ -1380,7 +1380,7 @@ const NovoCliente = () => {
                         }}
                         onBlur={() => markTouched("parcela")}
                         placeholder="0,00"
-                        className={`w-full bg-card border rounded-xl py-3 pl-10 pr-4 text-lg font-semibold text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all ${touched.parcela && loanErrors.parcela ? "border-destructive/60" : "border-border"}`}
+                        className={`w-full bg-card border rounded-xl py-3 pl-10 pr-4 text-lg font-semibold text-foreground placeholder:text-muted-foreground/40 focus:outline-hidden focus:ring-2 focus:ring-primary/40 transition-all ${touched.parcela && loanErrors.parcela ? "border-destructive/60" : "border-border"}`}
                         inputMode="numeric"
                         aria-invalid={!!(touched.parcela && loanErrors.parcela)}
                       />
@@ -1402,7 +1402,7 @@ const NovoCliente = () => {
                   </label>
                   <input id="loan-numInstallments" aria-label="Número de parcelas" type="number" value={numInstallments} onChange={(e) => setNumInstallments(e.target.value)} onBlur={() => markTouched("n")}
                     placeholder={loanMode === "bullet" ? `Ex: 3 ${periodLabel}s` : loanMode === "percentage" && valueMode === "rate" ? "Auto" : "10"}
-                    className={`w-full bg-card border rounded-xl py-3 px-4 text-lg font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all ${touched.n && loanErrors.n ? "border-destructive/60" : "border-border"}`}
+                    className={`w-full bg-card border rounded-xl py-3 px-4 text-lg font-semibold text-foreground focus:outline-hidden focus:ring-2 focus:ring-primary/40 transition-all ${touched.n && loanErrors.n ? "border-destructive/60" : "border-border"}`}
                     inputMode="numeric" aria-invalid={!!(touched.n && loanErrors.n)} min={1} max={360} step={1} />
                   <div className="flex flex-wrap gap-1.5">
                     {(loanMode === "bullet" ? [1, 2, 3, 6, 12] : [4, 6, 8, 10, 12, 24]).map(v => (
@@ -1444,7 +1444,7 @@ const NovoCliente = () => {
                                   next[i] = e.target.value;
                                   setCustomDates(next);
                                 }}
-                                className="flex-1 bg-white/5 border border-white/10 rounded-lg py-2 px-3 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 [color-scheme:dark]"
+                                className="flex-1 bg-white/5 border border-white/10 rounded-lg py-2 px-3 text-foreground text-sm focus:outline-hidden focus:ring-2 focus:ring-primary/40 scheme-dark"
                               />
                             </div>
                           ))}
@@ -1462,7 +1462,7 @@ const NovoCliente = () => {
                   {loanMode !== "bullet" && <div className="space-y-3">
                     <label htmlFor="loan-startDate" className="block text-sm font-medium text-foreground/90 ml-1">Data Início</label>
                     <input id="loan-startDate" aria-label="Data Início" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl py-4 px-4 text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-all [color-scheme:dark]" />
+                      className="w-full bg-white/5 border border-white/10 rounded-xl py-4 px-4 text-foreground focus:outline-hidden focus:ring-2 focus:ring-blue-500/40 transition-all scheme-dark" />
                     <div className="flex gap-2">
                       {[
                         { label: "Hoje", days: 0 },
@@ -1510,7 +1510,7 @@ const NovoCliente = () => {
                       }
                       onChange={(e) => setFirstDueDate(e.target.value)}
                       disabled={autoFirstDue}
-                      className={`w-full border rounded-xl py-4 px-4 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all [color-scheme:dark] ${autoFirstDue ? "bg-white/[0.02] border-white/5 text-muted-foreground cursor-not-allowed" : "bg-white/5 border-white/10"}`}
+                      className={`w-full border rounded-xl py-4 px-4 text-foreground focus:outline-hidden focus:ring-2 focus:ring-primary/40 transition-all scheme-dark ${autoFirstDue ? "bg-white/2 border-white/5 text-muted-foreground cursor-not-allowed" : "bg-white/5 border-white/10"}`}
                     />
                     {!autoFirstDue && (
                       <div className="flex gap-1.5 flex-wrap">
@@ -1965,7 +1965,7 @@ const NovoCliente = () => {
       )}
 
       {/* ═══ NAV BAR ═══ */}
-      <div className="mobile-dock sticky bottom-3 z-10 flex items-center justify-between gap-2 rounded-2xl border border-border bg-card/95 p-3 backdrop-blur sm:p-4">
+      <div className="mobile-dock sticky bottom-3 z-10 flex items-center justify-between gap-2 rounded-2xl border border-border bg-card/95 p-3 backdrop-blur-sm sm:p-4">
         <button
           type="button"
           onClick={() => {

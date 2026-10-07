@@ -89,7 +89,7 @@ const ClientErrorsPanel = () => {
                     </Badge>
                   )}
                 </div>
-                <p className="text-xs text-foreground/90 mt-1 break-words">{e.mensagem}</p>
+                <p className="text-xs text-foreground/90 mt-1 wrap-break-word">{e.mensagem}</p>
               </div>
               <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
                 {formatBRDateTime(typeof e.ultima === "string" ? e.ultima : null) || "data indisponível"}

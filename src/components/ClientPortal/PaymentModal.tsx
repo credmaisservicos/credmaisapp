@@ -165,7 +165,7 @@ export const PaymentModal = ({ isOpen, onOpenChange, installment, ownerProfile, 
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-3 backdrop-blur-sm"
+      className="fixed inset-0 z-100 flex items-center justify-center bg-black/70 p-3 backdrop-blur-xs"
       onClick={() => onOpenChange(false)}
       role="dialog"
       aria-modal="true"
@@ -239,7 +239,7 @@ export const PaymentModal = ({ isOpen, onOpenChange, installment, ownerProfile, 
                 </div>
 
                 <div className="flex flex-col items-center gap-3 py-2">
-                  <div className="bg-white p-3 rounded-2xl border border-border shadow-sm">
+                  <div className="bg-white p-3 rounded-2xl border border-border shadow-xs">
                     {pixPayload ? (
                       <QRCodeSVG value={pixPayload} size={160} level="M" includeMargin={false} />
                     ) : (

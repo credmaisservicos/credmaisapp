@@ -658,7 +658,7 @@ const Chat = () => {
             </div>
             <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-muted/30 border border-border/40">
               <Search size={13} className="text-muted-foreground" />
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar..." aria-label="Buscar canais ou pessoas" className="min-w-0 flex-1 bg-transparent text-xs outline-none" />
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar..." aria-label="Buscar canais ou pessoas" className="min-w-0 flex-1 bg-transparent text-xs outline-hidden" />
             </div>
             <div className="grid grid-cols-3 gap-1 p-0.5 bg-muted/30 rounded-xl">
               {(["channels", "dms", "people"] as const).map((t) => {
@@ -667,7 +667,7 @@ const Chat = () => {
                   <button
                     key={t}
                     onClick={() => setTab(t)}
-                    className={`relative px-2 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition ${tab === t ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                    className={`relative px-2 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition ${tab === t ? "bg-card text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"}`}
                   >
                     {t === "channels" ? "Canais" : t === "dms" ? "DMs" : "Pessoas"}
                     {tabUnread > 0 && (
@@ -850,7 +850,7 @@ const Chat = () => {
         ) : (
           <>
             {/* Header */}
-            <div className="h-14 px-3 lg:px-4 border-b border-border flex items-center justify-between gap-3 bg-card/50 backdrop-blur-sm">
+            <div className="h-14 px-3 lg:px-4 border-b border-border flex items-center justify-between gap-3 bg-card/50 backdrop-blur-xs">
               <div className="flex items-center gap-2 min-w-0">
                 {isMobile && (
                   <button type="button" onClick={() => setShowSidebar(true)} aria-label="Voltar para lista de conversas" className="p-1.5 rounded-lg hover:bg-muted/50">
@@ -920,7 +920,7 @@ const Chat = () => {
                   value={inThreadSearch}
                   onChange={(e) => setInThreadSearch(e.target.value)}
                   placeholder="Buscar mensagens nesta conversa..."
-                  className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60"
+                  className="flex-1 bg-transparent text-sm outline-hidden placeholder:text-muted-foreground/60"
                 />
                 {inThreadSearch && (
                   <span className="text-[10px] text-muted-foreground font-semibold">{visibleMessages.length} resultado{visibleMessages.length !== 1 ? "s" : ""}</span>
@@ -1009,7 +1009,7 @@ const Chat = () => {
                             <div className={`relative inline-block max-w-[85%] ${m.is_pinned ? "ring-1 ring-warning/40" : ""} ${
                               !m.is_deleted && (m.type === "text" || m.type === "audio")
                                 ? mine
-                                  ? "bg-primary text-primary-foreground rounded-2xl rounded-tr-sm px-3 py-2 shadow-sm"
+                                  ? "bg-primary text-primary-foreground rounded-2xl rounded-tr-sm px-3 py-2 shadow-xs"
                                   : "bg-muted/60 text-foreground rounded-2xl rounded-tl-sm px-3 py-2"
                                 : ""
                             }`}>
@@ -1028,7 +1028,7 @@ const Chat = () => {
                                 </a>
                               ) : (
                                 <>
-                                  <p className={`text-sm whitespace-pre-wrap break-words leading-relaxed ${mine ? "text-primary-foreground" : "text-foreground"}`}>
+                                  <p className={`text-sm whitespace-pre-wrap wrap-break-word leading-relaxed ${mine ? "text-primary-foreground" : "text-foreground"}`}>
                                     {renderText(m.content)}
                                   </p>
                                   {m.edited_at && (
@@ -1196,7 +1196,7 @@ const Chat = () => {
                       onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } if (e.key === "Escape") { setEditingMsg(null); setInput(""); } }}
                       placeholder={editingMsg ? "Editar mensagem..." : `Mensagem em ${currentChannel ? `#${currentChannel.name}` : dmOther?.name || ""}...`}
                       rows={1}
-                      className="flex-1 resize-none bg-primary/10 border border-primary/30 rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/25 max-h-32"
+                      className="flex-1 resize-none bg-primary/10 border border-primary/30 rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/70 focus:outline-hidden focus:border-primary/60 focus:ring-2 focus:ring-primary/25 max-h-32"
                     />
                     {input.trim() ? (
                       <button type="button" onClick={send} disabled={sending || !input.trim()} aria-label={editingMsg ? "Salvar mensagem" : "Enviar mensagem"} className="p-2.5 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition shrink-0 disabled:opacity-50" title={editingMsg ? "Salvar" : "Enviar"}>
@@ -1230,7 +1230,7 @@ const Chat = () => {
 
       {/* Create channel modal */}
       {showCreateChannel && (
-        <div className="fixed inset-0 z-[90] flex items-start sm:items-center justify-center bg-background/60 backdrop-blur-sm p-4 overflow-y-auto overscroll-contain" onClick={() => setShowCreateChannel(false)}>
+        <div className="fixed inset-0 z-90 flex items-start sm:items-center justify-center bg-background/60 backdrop-blur-xs p-4 overflow-y-auto overscroll-contain" onClick={() => setShowCreateChannel(false)}>
           <div className="bg-card border border-border rounded-2xl p-6 w-full max-w-sm my-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
               <Plus size={18} className="text-primary" /> Novo canal
@@ -1241,7 +1241,7 @@ const Chat = () => {
               onChange={(e) => setNewChannelName(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && createChannel()}
               placeholder="ex: anuncios"
-              className="w-full bg-muted/30 border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary/40"
+              className="w-full bg-muted/30 border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-hidden focus:border-primary/40"
             />
             <p className="text-[10px] text-muted-foreground mt-2">Será criado como <code className="bg-muted/40 px-1 rounded">#{newChannelName.toLowerCase().replace(/\s+/g, "-") || "nome"}</code></p>
             <div className="flex justify-end gap-2 mt-5">

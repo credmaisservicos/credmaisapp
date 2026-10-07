@@ -173,7 +173,7 @@ const Planilha = () => {
                   <th key={col.key} aria-sort={sortBy === col.key ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
                     className="text-left px-4 py-3 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                     <button type="button" onClick={() => toggleSort(col.key)}
-                      className="inline-flex items-center gap-1 rounded-md text-left hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60">
+                      className="inline-flex items-center gap-1 rounded-md text-left hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/60">
                       {col.label} <ArrowUpDown size={10} className={sortBy === col.key ? "text-primary" : "opacity-30"} />
                     </button>
                   </th>

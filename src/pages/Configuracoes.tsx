@@ -383,7 +383,7 @@ const Configuracoes = () => {
     queryClient.invalidateQueries({ queryKey: ["message-templates"] });
   };
 
-  const inputCls = "w-full px-4 py-2.5 rounded-xl bg-background/50 border border-border/50 text-sm text-foreground placeholder:text-muted-foreground/30 focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all outline-none";
+  const inputCls = "w-full px-4 py-2.5 rounded-xl bg-background/50 border border-border/50 text-sm text-foreground placeholder:text-muted-foreground/30 focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all outline-hidden";
 
   // Tudo que as seções consomem. As seções não sabem de Supabase nem de rota —
   // recebem dados e ações prontas, o que as torna testáveis isoladamente.
@@ -537,7 +537,7 @@ const Configuracoes = () => {
           <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
             <Settings size={18} className="text-primary" />
           </div>
-          <div className="min-w-0 flex-1 basis-[11rem]">
+          <div className="min-w-0 flex-1 basis-44">
             <h1 className="text-lg font-bold text-foreground truncate">Configurações</h1>
             <p className="text-[11px] text-muted-foreground truncate">
               {activeItem ? activeItem.label : "Personalize o sistema"}
@@ -554,7 +554,7 @@ const Configuracoes = () => {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar configuração... (Ctrl+K)"
-              className="w-72 pl-8 pr-12 py-2 rounded-lg bg-card border border-border/50 text-sm placeholder:text-muted-foreground/50 focus:border-primary/40 focus:outline-none"
+              className="w-72 pl-8 pr-12 py-2 rounded-lg bg-card border border-border/50 text-sm placeholder:text-muted-foreground/50 focus:border-primary/40 focus:outline-hidden"
             />
             <Settings size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/50 pointer-events-none" />
             <kbd className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-mono px-1.5 py-0.5 rounded border border-border/50 bg-muted/30 text-muted-foreground/70 pointer-events-none">⌘K</kbd>
@@ -589,7 +589,7 @@ const Configuracoes = () => {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar configuração..."
-            className="w-full pl-8 pr-3 py-2 rounded-lg bg-card border border-border/50 text-sm placeholder:text-muted-foreground/50 focus:border-primary/40 focus:outline-none"
+            className="w-full pl-8 pr-3 py-2 rounded-lg bg-card border border-border/50 text-sm placeholder:text-muted-foreground/50 focus:border-primary/40 focus:outline-hidden"
           />
           <Settings size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/50 pointer-events-none" />
         </div>

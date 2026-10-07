@@ -156,7 +156,7 @@ export default function LoanPreviewPanel({
                 </div>
                 <div className="h-1.5 rounded-full bg-muted overflow-hidden">
                   <div
-                    className="h-full bg-gradient-to-r from-primary to-success"
+                    className="h-full bg-linear-to-r from-primary to-success"
                     style={{ width: `${Math.min(200, (result.totalInterest / Math.max(input.capital, 1)) * 100) / 2}%` }}
                   />
                 </div>
@@ -185,7 +185,7 @@ export default function LoanPreviewPanel({
           {tab === "schedule" && (
             <div className="overflow-x-auto max-h-[420px]">
               <table className="w-full text-xs">
-                <thead className="sticky top-0 bg-muted/40 backdrop-blur z-10">
+                <thead className="sticky top-0 bg-muted/40 backdrop-blur-sm z-10">
                   <tr className="text-[10px] uppercase tracking-wider text-muted-foreground">
                     <th className="text-left px-3 py-2 font-semibold">#</th>
                     <th className="text-left px-3 py-2 font-semibold">Vencimento</th>
@@ -210,7 +210,7 @@ export default function LoanPreviewPanel({
                                 type="date"
                                 value={iso ? toDateInputValue(iso) : ""}
                                 onChange={(e) => setDate(idx, e.target.value)}
-                                className="bg-background border border-border rounded px-1.5 py-0.5 text-xs focus:outline-none focus:border-primary"
+                                className="bg-background border border-border rounded px-1.5 py-0.5 text-xs focus:outline-hidden focus:border-primary"
                               />
                               {badge && (
                                 <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full ${badge.cls}`}>
@@ -245,7 +245,7 @@ export default function LoanPreviewPanel({
                     );
                   })}
                 </tbody>
-                <tfoot className="sticky bottom-0 bg-muted/40 backdrop-blur">
+                <tfoot className="sticky bottom-0 bg-muted/40 backdrop-blur-sm">
                   <tr className="text-[11px] font-bold">
                     <td colSpan={2} className="px-3 py-2 text-muted-foreground uppercase tracking-wider text-[10px]">Totais</td>
                     <td className="px-3 py-2 text-right text-success">R$ {fmt(result.totalAmount)}</td>

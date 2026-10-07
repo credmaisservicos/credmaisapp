@@ -157,7 +157,7 @@ export const NotificationsBell = ({ token }: Props) => {
                 return (
                   <div
                     key={n.id}
-                    className={`flex gap-3 border-b border-white/5 px-4 py-3 transition-colors hover:bg-white/[0.03] ${
+                    className={`flex gap-3 border-b border-white/5 px-4 py-3 transition-colors hover:bg-white/3 ${
                       n.is_read ? "opacity-60" : ""
                     }`}
                   >

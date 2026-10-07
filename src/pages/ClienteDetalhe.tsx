@@ -1958,7 +1958,7 @@ const ClienteDetalhe = () => {
                     const owedAtSettlement = Math.round((base + Number(inst.late_fee || 0)) * 100) / 100;
                     const paidShortfall = isPaid ? Math.max(0, Math.round((owedAtSettlement - paidAmount) * 100) / 100) : 0;
                     return (
-                      <div key={inst.id} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-colors ${isOverdue ? "bg-destructive/[0.04] border-destructive/20" : isPaid ? "bg-success/[0.04] border-success/15" : "bg-card border-border/60"}`}>
+                      <div key={inst.id} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-colors ${isOverdue ? "bg-destructive/4 border-destructive/20" : isPaid ? "bg-success/4 border-success/15" : "bg-card border-border/60"}`}>
                         <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${isOverdue ? "bg-destructive/10 text-destructive ring-1 ring-destructive/20" : isPaid ? "bg-success/10 text-success ring-1 ring-success/20" : "bg-muted text-muted-foreground"}`}>
                           {inst.installment_number}
                         </div>
@@ -2130,7 +2130,7 @@ const ClienteDetalhe = () => {
                 <div className="absolute left-2 top-2 bottom-2 w-px bg-border" />
                 {filtered.map(ev => (
                   <div key={ev.id} className="relative">
-                    <div className={`absolute -left-[18px] top-3 w-3 h-3 rounded-full ${ev.bg} border-2 border-background`} />
+                    <div className={`absolute left-[-18px] top-3 w-3 h-3 rounded-full ${ev.bg} border-2 border-background`} />
                     <div className="bg-card border border-border rounded-2xl p-3 flex items-start gap-3 hover:border-primary/30 transition-colors">
                       <div className={`w-8 h-8 rounded-lg ${ev.bg} flex items-center justify-center shrink-0`}>
                         <ev.icon size={14} className={ev.color} />

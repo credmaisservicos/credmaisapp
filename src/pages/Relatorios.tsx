@@ -271,7 +271,7 @@ const Relatorios = () => {
   return (
     <div className="space-y-5">
       <div className="page-hero animate-fade-in relative overflow-hidden group">
-        <div className="absolute inset-0 bg-gradient-to-r from-primary/10 via-transparent to-transparent opacity-50 group-hover:opacity-100 transition-opacity" />
+        <div className="absolute inset-0 bg-linear-to-r from-primary/10 via-transparent to-transparent opacity-50 group-hover:opacity-100 transition-opacity" />
         <div className="page-hero-content flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5 relative z-10">
           <div className="flex min-w-0 items-center gap-3 sm:gap-4">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 ring-1 ring-primary/20 sm:h-14 sm:w-14">
@@ -287,7 +287,7 @@ const Relatorios = () => {
             <div className="col-span-2 flex min-w-0 items-center gap-3 rounded-xl border border-border/40 bg-card/60 px-3 py-2.5 sm:col-span-1">
               <Calendar size={16} className="text-primary shrink-0" />
               <input id="report-month" name="report_month" type="month" value={month} onChange={(e) => setMonth(e.target.value)}
-                aria-label="Mês do relatório" className="min-w-0 flex-1 bg-transparent text-sm font-bold text-foreground focus:outline-none [color-scheme:dark]" />
+                aria-label="Mês do relatório" className="min-w-0 flex-1 bg-transparent text-sm font-bold text-foreground focus:outline-hidden scheme-dark" />
             </div>
             <div className="h-10 w-px bg-border/20 hidden sm:block mx-1" />
             <div className="contents sm:flex sm:items-center sm:gap-2">
@@ -342,7 +342,7 @@ const Relatorios = () => {
                   </div>
                   <p className="text-label">{s.label}</p>
                 </div>
-                <p className={`break-words text-lg font-bold tabular-nums sm:text-xl ${s.color}`}>{s.value}</p>
+                <p className={`wrap-break-word text-lg font-bold tabular-nums sm:text-xl ${s.color}`}>{s.value}</p>
               </div>
             ))}
           </div>

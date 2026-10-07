@@ -59,7 +59,7 @@ const AppModeSwitcher = ({ collapsed = false }: { collapsed?: boolean }) => {
               onClick={() => go(opt.value)}
               className={`flex-1 flex items-center justify-center gap-1.5 h-7 rounded-lg text-[11px] font-semibold transition-[color,background-color,box-shadow] ${
                 active
-                  ? "bg-primary text-primary-foreground shadow-sm"
+                  ? "bg-primary text-primary-foreground shadow-xs"
                   : "text-muted-foreground hover:text-foreground hover:bg-accent/40"
               }`}
             >

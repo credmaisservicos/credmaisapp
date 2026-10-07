@@ -239,7 +239,7 @@ const Cobradores = () => {
     totalAssignments: assignments.length,
   };
 
-  const inputCls = "w-full px-4 py-2.5 rounded-2xl bg-card border border-border text-sm text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/30 focus:border-primary/50 outline-none transition-all";
+  const inputCls = "w-full px-4 py-2.5 rounded-2xl bg-card border border-border text-sm text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/30 focus:border-primary/50 outline-hidden transition-all";
 
   const formatPhone = (value: string) => {
     const digits = value.replace(/\D/g, "").slice(0, 11);
@@ -439,13 +439,13 @@ const Cobradores = () => {
                   isActive ? "border-border hover:border-primary/20" : "border-border/50 opacity-75"
                 }`}>
                 {/* Top accent bar */}
-                <div className={`h-1 w-full ${isActive ? "bg-gradient-to-r from-primary/60 to-primary/20" : "bg-muted"}`} />
+                <div className={`h-1 w-full ${isActive ? "bg-linear-to-r from-primary/60 to-primary/20" : "bg-muted"}`} />
 
                 <div className="p-4 sm:p-5 space-y-4">
                   {/* Header */}
                   <div className="flex min-w-0 items-start justify-between gap-2">
                     <div
-                      className="flex min-w-0 items-center gap-3 cursor-pointer rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+                      className="flex min-w-0 items-center gap-3 cursor-pointer rounded-lg outline-hidden focus-visible:ring-2 focus-visible:ring-primary/60"
                       role="button"
                       tabIndex={0}
                       aria-label={`Ver ficha de ${c.name || "cobrador"}`}
@@ -457,9 +457,9 @@ const Cobradores = () => {
                         }
                       }}
                     >
-                      <div className={`relative w-12 h-12 rounded-xl flex items-center justify-center text-base font-bold shadow-sm ${
+                      <div className={`relative w-12 h-12 rounded-xl flex items-center justify-center text-base font-bold shadow-xs ${
                         isActive
-                          ? "bg-gradient-to-br from-primary/20 to-primary/5 text-primary border border-primary/10"
+                          ? "bg-linear-to-br from-primary/20 to-primary/5 text-primary border border-primary/10"
                           : "bg-muted text-muted-foreground"
                       }`}>
                         {c.name?.charAt(0)?.toUpperCase()}
@@ -625,7 +625,7 @@ const Cobradores = () => {
             <>
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center text-lg font-bold text-primary border border-primary/10">
+                  <div className="w-12 h-12 rounded-xl bg-linear-to-br from-primary/20 to-primary/5 flex items-center justify-center text-lg font-bold text-primary border border-primary/10">
                     {fichaData.name?.charAt(0)?.toUpperCase()}
                   </div>
                   <div>
@@ -669,15 +669,15 @@ const Cobradores = () => {
                   </div>
                   <div className="p-3 rounded-xl border border-border bg-card">
                     <p className="text-[10px] text-muted-foreground uppercase">A Receber</p>
-                    <p className="text-base sm:text-lg font-bold leading-tight text-amber-500 break-words">R$ {fmt(fichaTotalPending)}</p>
+                    <p className="text-base sm:text-lg font-bold leading-tight text-amber-500 wrap-break-word">R$ {fmt(fichaTotalPending)}</p>
                   </div>
                   <div className="p-3 rounded-xl border border-border bg-card">
                     <p className="text-[10px] text-muted-foreground uppercase">Atrasado</p>
-                    <p className="text-base sm:text-lg font-bold leading-tight text-destructive break-words">R$ {fmt(fichaTotalOverdue)}</p>
+                    <p className="text-base sm:text-lg font-bold leading-tight text-destructive wrap-break-word">R$ {fmt(fichaTotalOverdue)}</p>
                   </div>
                   <div className="p-3 rounded-xl border border-border bg-card">
                     <p className="text-[10px] text-muted-foreground uppercase">Recebido</p>
-                    <p className="text-base sm:text-lg font-bold leading-tight text-success break-words">R$ {fmt(fichaTotalPaid)}</p>
+                    <p className="text-base sm:text-lg font-bold leading-tight text-success wrap-break-word">R$ {fmt(fichaTotalPaid)}</p>
                   </div>
                 </div>
 

@@ -135,7 +135,7 @@ const OnboardingTour = ({ open, onClose }: { open: boolean; onClose: () => void 
       })();
 
   return createPortal(
-    <div ref={overlayRef} className="fixed inset-0 z-[10000] animate-fade-in">
+    <div ref={overlayRef} className="fixed inset-0 z-10000 animate-fade-in">
       {/* Dim overlay with cutout via SVG mask */}
       <svg className="absolute inset-0 w-full h-full pointer-events-auto" onClick={finish}>
         <defs>

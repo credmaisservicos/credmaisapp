@@ -11,7 +11,7 @@ import { ArrowLeft, ArrowRight, Eye, EyeOff, Lock, Mail, CheckCircle2, Loader2, 
 type Mode = "request" | "update" | "done" | "error";
 
 const inputCls =
-  "w-full px-4 py-3.5 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-white placeholder:text-white/30 text-sm focus:outline-none focus:ring-2 focus:ring-white/30 focus:border-white/30 transition-all duration-200";
+  "w-full px-4 py-3.5 rounded-2xl bg-white/4 border border-white/8 text-white placeholder:text-white/30 text-sm focus:outline-hidden focus:ring-2 focus:ring-white/30 focus:border-white/30 transition-all duration-200";
 
 type FriendlyError = { title: string; description: string };
 
@@ -343,7 +343,7 @@ const ResetPassword = () => {
       </div>
 
       <div className="relative z-10 w-full max-w-md animate-scale-in">
-        <div className="rounded-2xl overflow-hidden border border-white/[0.06] shadow-2xl glass bg-white/[0.03] p-8">
+        <div className="rounded-2xl overflow-hidden border border-white/6 shadow-2xl glass bg-white/3 p-8">
           {checking ? (
             <p className="text-white/50 text-sm text-center">Carregando…</p>
           ) : mode === "request" ? (
@@ -447,7 +447,7 @@ const ResetPassword = () => {
               {lastSentAt && (
                 <div
                   key={nowTick}
-                  className="mb-5 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 flex items-center justify-center gap-2 text-[12px] text-white/60"
+                  className="mb-5 rounded-xl border border-white/8 bg-white/3 px-3 py-2.5 flex items-center justify-center gap-2 text-[12px] text-white/60"
                 >
                   <Clock size={13} className="text-white/40" />
                   <span>
@@ -455,7 +455,7 @@ const ResetPassword = () => {
                     <span className="text-white/40"> · {formatRelative(lastSentAt)}</span>
                   </span>
                   {resendCount > 0 && (
-                    <span className="ml-1 px-1.5 py-0.5 rounded-md bg-white/[0.06] text-white/50 text-[10px] font-medium">
+                    <span className="ml-1 px-1.5 py-0.5 rounded-md bg-white/6 text-white/50 text-[10px] font-medium">
                       {resendCount}x reenviado
                     </span>
                   )}
@@ -502,7 +502,7 @@ const ResetPassword = () => {
                 </button>
 
                 {resendCooldown > 0 && resendState !== "sending" && (
-                  <div className="h-0.5 w-full bg-white/[0.06] rounded-full overflow-hidden -mt-1">
+                  <div className="h-0.5 w-full bg-white/6 rounded-full overflow-hidden -mt-1">
                     <div
                       className="h-full bg-white/40 transition-all duration-1000 ease-linear"
                       style={{ width: `${((45 - resendCooldown) / 45) * 100}%` }}
@@ -531,7 +531,7 @@ const ResetPassword = () => {
               </p>
 
               {redirectIn > 0 && (
-                <div className="mb-5 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 flex items-center justify-center gap-2 text-[12px] text-white/55">
+                <div className="mb-5 rounded-xl border border-white/8 bg-white/3 px-3 py-2.5 flex items-center justify-center gap-2 text-[12px] text-white/55">
                   <Clock size={13} className="text-white/40" />
                   <span>
                     Redirecionando em <span className="text-white/85 font-medium">{redirectIn}s</span>…

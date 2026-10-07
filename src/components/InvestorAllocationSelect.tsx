@@ -73,7 +73,7 @@ export default function InvestorAllocationSelect({
         name="investor_allocation"
         value={value || ""}
         onChange={(e) => onChange(e.target.value || null)}
-        className="mt-2 w-full rounded-lg border border-white/10 bg-slate-900/50 px-3 py-2 text-sm text-white outline-none focus:border-primary"
+        className="mt-2 w-full rounded-lg border border-white/10 bg-slate-900/50 px-3 py-2 text-sm text-white outline-hidden focus:border-primary"
       >
         <option value="">— Capital próprio —</option>
         {options.map((o) => {

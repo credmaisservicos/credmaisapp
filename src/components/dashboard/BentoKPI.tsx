@@ -125,11 +125,11 @@ export default function BentoKPI({
       {/* faixa gradient */}
       <div
         className={cn(
-          "absolute inset-y-4 left-0 w-0.5 bg-gradient-to-b opacity-70",
+          "absolute inset-y-4 left-0 w-0.5 bg-linear-to-b opacity-70",
           t.grad
         )}
       />
-      <div className={cn("pointer-events-none absolute -right-10 -top-12 h-28 w-28 rounded-full bg-gradient-to-br blur-2xl opacity-25 transition-opacity duration-300 group-hover:opacity-55", t.grad)} />
+      <div className={cn("pointer-events-none absolute -right-10 -top-12 h-28 w-28 rounded-full bg-linear-to-br blur-2xl opacity-25 transition-opacity duration-300 group-hover:opacity-55", t.grad)} />
       <div className="relative z-10 flex flex-col justify-between h-full gap-3">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-1.5 min-w-0">

@@ -123,7 +123,7 @@ const Overview = () => {
       {statsError && <div role="alert" className="rounded-xl border border-destructive/30 p-4 text-sm">Não foi possível carregar os indicadores. <button type="button" className="underline min-h-11 px-2" onClick={() => void retryStats()}>Tentar novamente</button></div>}
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <Card className="p-5 border-border/50 bg-gradient-to-br from-primary/5 to-transparent">
+        <Card className="p-5 border-border/50 bg-linear-to-br from-primary/5 to-transparent">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
               <MessageCircle size={18} className="text-primary" />
@@ -134,7 +134,7 @@ const Overview = () => {
             </div>
           </div>
         </Card>
-        <Card className="p-5 border-border/50 bg-gradient-to-br from-emerald-500/5 to-transparent">
+        <Card className="p-5 border-border/50 bg-linear-to-br from-emerald-500/5 to-transparent">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
               <Bot size={18} className="text-emerald-500" />
@@ -145,7 +145,7 @@ const Overview = () => {
             </div>
           </div>
         </Card>
-        <Card className="p-5 border-border/50 bg-gradient-to-br from-amber-500/5 to-transparent">
+        <Card className="p-5 border-border/50 bg-linear-to-br from-amber-500/5 to-transparent">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center">
               <Activity size={18} className="text-amber-500" />
@@ -217,7 +217,7 @@ const Overview = () => {
             <div className="flex items-center gap-1 text-xs text-primary mt-3">Acessar <ArrowRight size={12} /></div>
           </Card>
         </Link>
-        <Card className="p-5 border-border/50 bg-gradient-to-br from-primary/5 to-transparent h-full">
+        <Card className="p-5 border-border/50 bg-linear-to-br from-primary/5 to-transparent h-full">
           <Sparkles size={18} className="text-primary mb-2" />
           <p className="font-semibold text-sm">Precisão nas cobranças</p>
           <p className="text-xs text-muted-foreground mt-1">
@@ -290,13 +290,13 @@ const CentralBot = () => {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview" className="mt-5 focus-visible:outline-none">
+        <TabsContent value="overview" className="mt-5 focus-visible:outline-hidden">
           <Overview />
         </TabsContent>
-        <TabsContent value="bot" className="mt-5 focus-visible:outline-none">
+        <TabsContent value="bot" className="mt-5 focus-visible:outline-hidden">
           <Suspense fallback={<Fallback />}><WhatsAppConfig /></Suspense>
         </TabsContent>
-        <TabsContent value="agente" className="mt-5 focus-visible:outline-none">
+        <TabsContent value="agente" className="mt-5 focus-visible:outline-hidden">
           <Suspense fallback={<Fallback />}><AgenteIA /></Suspense>
         </TabsContent>
       </Tabs>

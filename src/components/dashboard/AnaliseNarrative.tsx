@@ -50,7 +50,7 @@ export default function AnaliseNarrative({
         : "Período abaixo do anterior — vale revisar a régua de cobrança.";
 
   return (
-    <div className="relative overflow-hidden rounded-[32px] border border-primary/15 bg-gradient-to-br from-primary/[0.06] via-card/50 to-card/20 backdrop-blur-xl p-6 md:p-7 shadow-xl animate-fade-in">
+    <div className="relative overflow-hidden rounded-[32px] border border-primary/15 bg-linear-to-br from-primary/6 via-card/50 to-card/20 backdrop-blur-xl p-6 md:p-7 shadow-xl animate-fade-in">
       <div className="pointer-events-none absolute -top-20 -right-16 w-64 h-64 rounded-full bg-primary/15 blur-3xl opacity-40" />
 
       <div className="relative z-10 space-y-4">

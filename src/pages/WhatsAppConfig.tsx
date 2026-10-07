@@ -238,7 +238,7 @@ const WhatsAppConfig = () => {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-8 animate-fade-in">
-      <div className="relative overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-emerald-500/10 via-card to-card p-6">
+      <div className="relative overflow-hidden rounded-3xl border border-border bg-linear-to-br from-emerald-500/10 via-card to-card p-6">
         <div className="absolute -top-20 -right-16 w-64 h-64 rounded-full bg-emerald-500/15 blur-3xl pointer-events-none" />
         <div className="absolute -bottom-20 -left-16 w-64 h-64 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
 
@@ -273,7 +273,7 @@ const WhatsAppConfig = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Connection Card */}
-        <Card className="md:col-span-2 p-6 border-border/50 bg-card/50 backdrop-blur-sm">
+        <Card className="md:col-span-2 p-6 border-border/50 bg-card/50 backdrop-blur-xs">
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold flex items-center gap-2">

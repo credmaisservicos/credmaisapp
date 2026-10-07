@@ -14,7 +14,7 @@ Nenhum registro de produção foi alterado nesta preparação.
 | Integração dos handlers de recibos, WhatsApp e assinatura | 14 aprovados, com HTTP simulado e sem permissão de rede |
 | Suíte Vitest e regressões de atualização | 396 aprovados na suíte completa; 13 regressões de PWA/formulários aprovadas |
 | Catálogo público e empacotamento seguro | 1 teste Node e 9 testes Python aprovados |
-| Interface isolada: login, rotas públicas, internas e admin | 198 aprovados após as atualizações de dependências |
+| Interface isolada: login, rotas públicas, internas, admin e estilos | 202 aprovados, incluindo 4 regressões da migração Tailwind |
 | Instalação em Android e iPhone simulados | Prompt Android capturado antes da navegação; guia acessível do iPhone aprovado |
 | Instalação em computadores e notebooks | Prompt e guias Windows/macOS/Linux aprovados; Chrome confirmou zero erros de instalabilidade no site HTTPS publicado |
 | Arquivos na CDN após publicação | 218 arquivos JS/CSS conferidos sem parâmetros de cache; hashes correspondem ao catálogo publicado |
@@ -24,6 +24,7 @@ Nenhum registro de produção foi alterado nesta preparação.
 | APK público final | Versão 1.0.6/build 7; hash do download e correspondência com o build web verificados; downloads parciais funcionam e arquivos privados retornam 404 |
 | Atualização PWA em HTTPS real | Formulário editado preservado durante deploy; uma recarga automática após fechar o formulário |
 | Auditoria de dependências de produção | Zero alertas conhecidos |
+| Auditoria completa, incluindo ferramentas de desenvolvimento | Zero alertas conhecidos após migração para Tailwind 4.3.3 |
 | Sondagens que tentam escrever no backend | Desativadas por padrão; 49 casos ignorados sem opt-in |
 
 O build web está em `dist/`. `npm run mobile:apk` gera apenas o APK de
@@ -37,10 +38,10 @@ por HTTPS; iPhone oferece instalação web no Safari. O serviço no VPS acompanh
 as publicações e substitui o APK somente após verificar hashes, assinatura,
 package e versão. O APK anterior fica disponível em caso de falha.
 
-Seis alertas de desenvolvimento foram corrigidos com overrides de
-`postcss-selector-parser@7.1.6` e `uuid@11.1.1`. Restam cinco alertas altos da mesma
-cadeia de `braces@3.0.3`, sem versão corrigida publicada. A produção segue com zero
-alertas conhecidos. A avaliação e as verificações de compatibilidade estão em
+Os alertas de desenvolvimento foram eliminados pela migração para Tailwind 4.3.3
+e pela preservação do override de `uuid@11.1.1` para `xcode`. A cadeia de `braces`
+foi removida. As auditorias completa e de produção retornam zero alertas
+conhecidos. A avaliação e as verificações de compatibilidade estão em
 `docs/security-audit.md`.
 
 O frontend foi publicado no Cloudflare Pages em 2026-10-07 após validar a prévia.

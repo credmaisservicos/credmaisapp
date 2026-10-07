@@ -80,7 +80,7 @@ export default function TvMode() {
       <button
         type="button"
         onClick={() => navigate("/dashboard")}
-        className="absolute top-4 left-4 z-10 flex items-center gap-2 px-3 py-2 rounded-xl bg-card/80 backdrop-blur border border-border hover:bg-card text-xs text-muted-foreground hover:text-foreground transition"
+        className="absolute top-4 left-4 z-10 flex items-center gap-2 px-3 py-2 rounded-xl bg-card/80 backdrop-blur-sm border border-border hover:bg-card text-xs text-muted-foreground hover:text-foreground transition"
       >
         <ArrowLeft size={14} /> Sair
       </button>
@@ -119,7 +119,7 @@ export default function TvMode() {
                   <t.icon size={26} className={t.color} />
                 </div>
               </div>
-              <p className={`break-words text-3xl font-bold tabular-nums sm:text-5xl md:text-7xl ${t.color}`}>{t.value}</p>
+              <p className={`wrap-break-word text-3xl font-bold tabular-nums sm:text-5xl md:text-7xl ${t.color}`}>{t.value}</p>
             </div>
           ))}
         </div>

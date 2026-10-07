@@ -36,7 +36,7 @@ function ClientRowImpl({ client: c, summary, isSel, striped, onToggle, onOpen, o
   return (
     <tr
       onClick={() => onOpen(c.id)}
-      className={`group border-t border-border/30 hover:bg-primary/[0.04] cursor-pointer transition-colors ${isSel ? "bg-primary/[0.06]" : striped ? "bg-muted/[0.04]" : ""}`}
+      className={`group border-t border-border/30 hover:bg-primary/4 cursor-pointer transition-colors ${isSel ? "bg-primary/6" : striped ? "bg-muted/4" : ""}`}
     >
       <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
         <input

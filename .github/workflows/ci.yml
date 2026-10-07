@@ -27,8 +27,8 @@ jobs:
       - name: Instalar dependências
         run: npm ci
 
-      - name: Auditoria das dependências de produção
-        run: npm run audit:production
+      - name: Auditoria de todas as dependências
+        run: npm run audit
 
       - name: Typecheck
         run: npx tsc --noEmit -p tsconfig.app.json

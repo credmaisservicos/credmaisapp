@@ -238,7 +238,7 @@ const NotificationsBell = () => {
       >
         <Bell size={17} className={unreadCount > 0 ? "animate-[wiggle_2s_ease-in-out_infinite]" : ""} />
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-gradient-to-br from-destructive to-rose-600 text-destructive-foreground text-[10px] flex items-center justify-center font-bold ring-2 ring-card shadow-lg shadow-destructive/30">
+          <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-linear-to-br from-destructive to-rose-600 text-destructive-foreground text-[10px] flex items-center justify-center font-bold ring-2 ring-card shadow-lg shadow-destructive/30">
             {unreadCount > 99 ? "99+" : unreadCount}
           </span>
         )}
@@ -250,12 +250,12 @@ const NotificationsBell = () => {
           <div
             className={`${
               isMobile
-                ? "fixed top-[6.75rem] right-3 left-3"
+                ? "fixed top-27 right-3 left-3"
                 : "absolute right-0 top-12 w-[min(420px,calc(100vw-1.5rem))]"
             } max-h-[calc(100vh-5rem)] flex flex-col bg-card border border-border/60 rounded-2xl shadow-2xl shadow-black/40 z-50 overflow-hidden animate-scale-in`}
           >
             {/* Header */}
-            <div className="px-4 pt-4 pb-3 border-b border-border/40 bg-gradient-to-b from-muted/20 to-transparent">
+            <div className="px-4 pt-4 pb-3 border-b border-border/40 bg-linear-to-b from-muted/20 to-transparent">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center ring-1 ring-primary/20">
@@ -290,7 +290,7 @@ const NotificationsBell = () => {
                     onClick={() => setTab(t.k)}
                     className={`flex-1 px-2 py-1.5 rounded-lg text-[11px] font-semibold transition-all flex items-center justify-center gap-1.5 ${
                       tab === t.k
-                        ? "bg-card text-foreground shadow-sm ring-1 ring-border/60"
+                        ? "bg-card text-foreground shadow-xs ring-1 ring-border/60"
                         : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
@@ -334,7 +334,7 @@ const NotificationsBell = () => {
                   {Object.entries(grouped).map(([label, list]) =>
                     list.length === 0 ? null : (
                       <div key={label}>
-                        <div className="sticky top-0 z-10 px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70 bg-card/95 backdrop-blur-sm border-b border-border/30">
+                        <div className="sticky top-0 z-10 px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70 bg-card/95 backdrop-blur-xs border-b border-border/30">
                           {label}
                         </div>
                         {list.map((n) => {
@@ -348,7 +348,7 @@ const NotificationsBell = () => {
                               key={n.id}
                               onClick={() => handleClick(n)}
                               className={`group relative px-3 py-3 border-b border-border/20 last:border-0 cursor-pointer transition-all hover:bg-accent/40 ${
-                                !n.is_read ? "bg-primary/[0.04]" : ""
+                                !n.is_read ? "bg-primary/4" : ""
                               }`}
                             >
                               {!n.is_read && (
@@ -360,7 +360,7 @@ const NotificationsBell = () => {
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <p
-                                    className={`text-[13px] leading-snug ${!n.is_read ? "text-foreground font-medium" : "text-muted-foreground"} line-clamp-2 group-hover:line-clamp-none break-words`}
+                                    className={`text-[13px] leading-snug ${!n.is_read ? "text-foreground font-medium" : "text-muted-foreground"} line-clamp-2 group-hover:line-clamp-none wrap-break-word`}
                                     title={isLong ? message : undefined}
                                   >
                                     {message || "Notificação sem mensagem"}

@@ -45,7 +45,7 @@ export default function PagamentoDistribuidoModal({ installments, loading, onClo
 
   return (
     <ModalPortal>
-      <div className="fixed inset-0 z-[95] flex items-end justify-center bg-background/80 backdrop-blur-sm sm:items-center" onClick={() => !loading && onClose()}>
+      <div className="fixed inset-0 z-95 flex items-end justify-center bg-background/80 backdrop-blur-xs sm:items-center" onClick={() => !loading && onClose()}>
         <div className="max-h-[92dvh] w-full overflow-y-auto rounded-t-3xl border border-border bg-card p-5 shadow-2xl sm:max-w-md sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-start justify-between gap-3">
             <div><h2 className="font-bold text-foreground">Distribuir pagamento</h2><p className="mt-1 text-xs text-muted-foreground">Quita as parcelas mais antigas e deixa o restante na próxima.</p></div>

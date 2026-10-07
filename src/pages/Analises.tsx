@@ -115,7 +115,7 @@ function StatCard({ s, onClick }: { s: Stat; onClick?: () => void }) {
       className={cn(
         "min-w-0 rounded-xl border border-white/10 bg-card/55 p-3 sm:p-4 flex flex-col gap-2 text-left w-full backdrop-blur-xl",
         tone.border,
-        clickable && "hover:border-primary/40 hover:shadow-md transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/40",
+        clickable && "hover:border-primary/40 hover:shadow-md transition-all cursor-pointer focus:outline-hidden focus:ring-2 focus:ring-primary/40",
         !clickable && "cursor-default"
       )}
     >
@@ -127,7 +127,7 @@ function StatCard({ s, onClick }: { s: Stat; onClick?: () => void }) {
           </div>
         ) : null}
       </div>
-      <p className={cn("text-lg sm:text-xl xl:text-2xl font-bold tabular-nums leading-tight break-words", tone.value)}>{s.value}</p>
+      <p className={cn("text-lg sm:text-xl xl:text-2xl font-bold tabular-nums leading-tight wrap-break-word", tone.value)}>{s.value}</p>
       {showDelta ? (
         <p className={cn("text-[11px] font-semibold flex items-center gap-1", good ? "text-success" : "text-destructive")}>
           {up ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
@@ -608,11 +608,11 @@ const Analises = () => {
 
   if (isLoading || !m) return (
     <div role="status" aria-label="Carregando análises" className="space-y-4 animate-pulse">
-      <div className="h-44 rounded-3xl bg-white/[.04]" />
+      <div className="h-44 rounded-3xl bg-white/4" />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-28 rounded-2xl bg-white/[.04]" />)}
+        {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-28 rounded-2xl bg-white/4" />)}
       </div>
-      <div className="h-72 rounded-3xl bg-white/[.04]" />
+      <div className="h-72 rounded-3xl bg-white/4" />
     </div>
   );
 
@@ -636,7 +636,7 @@ const Analises = () => {
               <p className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">Análises · {periodLabel}</p>
               <h1 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">Recebido no período</h1>
               <div className="flex items-baseline gap-3 mt-1 flex-wrap">
-                <span className="max-w-full text-3xl sm:text-4xl font-bold text-success tracking-tight tabular-nums break-words">{fmtBRL(m.totalReceived)}</span>
+                <span className="max-w-full text-3xl sm:text-4xl font-bold text-success tracking-tight tabular-nums wrap-break-word">{fmtBRL(m.totalReceived)}</span>
                 {isFinite(heroDelta) && (
                   <span className={cn("text-xs font-bold px-2 py-1 rounded-lg flex items-center gap-1", heroUp ? "bg-success/15 text-success" : "bg-destructive/15 text-destructive")}>
                     {heroUp ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
@@ -802,7 +802,7 @@ const Analises = () => {
                             type="button"
                             key={b.label}
                             onClick={() => setDetail((m.details as any)[b.key])}
-                            className="rounded-xl border border-border bg-card/50 p-2.5 text-left hover:border-primary/40 hover:shadow-sm transition-all focus-ring group"
+                            className="rounded-xl border border-border bg-card/50 p-2.5 text-left hover:border-primary/40 hover:shadow-xs transition-all focus-ring group"
                           >
                             <div className="flex items-center gap-1.5 mb-1">
                               <div className={cn("w-2 h-2 rounded-full", b.color)} />

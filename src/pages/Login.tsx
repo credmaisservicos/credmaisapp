@@ -247,8 +247,8 @@ const Login = () => {
 
   // ---------- Estilos ----------
   const inputBase =
-    "w-full pl-11 pr-4 py-3.5 rounded-2xl bg-white/[0.04] border text-white placeholder:text-white/30 text-sm focus:outline-none focus:ring-2 transition-all duration-200";
-  const inputOk = "border-white/[0.08] focus:ring-white/30 focus:border-white/30";
+    "w-full pl-11 pr-4 py-3.5 rounded-2xl bg-white/4 border text-white placeholder:text-white/30 text-sm focus:outline-hidden focus:ring-2 transition-all duration-200";
+  const inputOk = "border-white/8 focus:ring-white/30 focus:border-white/30";
   const inputErr = "border-red-400/40 focus:ring-red-400/40 focus:border-red-400/60";
   const cls = (field: "email" | "password" | "name") =>
     `${inputBase} ${touched[field] && errors[field] ? inputErr : inputOk}`;
@@ -307,7 +307,7 @@ const Login = () => {
           {!isRegister ? (
             <div className="flex flex-col md:flex-row">
               {/* Form de Login */}
-              <div className="flex-1 p-6 sm:p-8 md:p-10 bg-white/[0.025]">
+              <div className="flex-1 p-6 sm:p-8 md:p-10 bg-white/2.5">
                 <div className="mb-7 grid grid-cols-2 border-b border-white/15">
                   <button type="button" role="tab" aria-selected="true" aria-label="Aba de login" onClick={() => setIsRegister(false)} className="relative pb-3 text-sm font-semibold text-white after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-amber-400">Entrar</button>
                   <button type="button" role="tab" aria-selected="false" aria-label="Aba de criação de conta" onClick={() => platform.allow_new_registrations && setIsRegister(true)} className="pb-3 text-sm font-semibold text-white/45 transition hover:text-white/80">Criar conta</button>
@@ -400,7 +400,7 @@ const Login = () => {
                           onChange={(e) => setRememberMeState(e.target.checked)}
                           className="peer sr-only"
                         />
-                        <span className="w-4 h-4 rounded-[5px] border border-white/20 bg-white/[0.04] peer-checked:bg-white/90 peer-checked:border-white/90 transition-all duration-200" />
+                        <span className="w-4 h-4 rounded-[5px] border border-white/20 bg-white/4 peer-checked:bg-white/90 peer-checked:border-white/90 transition-all duration-200" />
                         <svg
                           viewBox="0 0 16 16"
                           className="absolute w-3 h-3 text-black opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none"
@@ -452,7 +452,7 @@ const Login = () => {
               </div>
 
               {/* Painel direito */}
-              <div className="hidden flex-1 flex-col items-center justify-center p-5 sm:p-7 md:p-10 glass bg-white/[0.02] border-t md:border-t-0 md:border-l border-white/[0.06]">
+              <div className="hidden flex-1 flex-col items-center justify-center p-5 sm:p-7 md:p-10 glass bg-white/2 border-t md:border-t-0 md:border-l border-white/6">
                 <div className="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center mb-5">
                   <ArrowRight size={28} className="text-white/70" />
                 </div>
@@ -481,7 +481,7 @@ const Login = () => {
             </div>
           ) : (
             <div className="flex flex-col md:flex-row">
-              <div className="flex-1 flex flex-col items-center justify-center p-7 md:p-10 glass bg-white/[0.02] border-b md:border-b-0 md:border-r border-white/[0.06]">
+              <div className="flex-1 flex flex-col items-center justify-center p-7 md:p-10 glass bg-white/2 border-b md:border-b-0 md:border-r border-white/6">
                 <h2 className="font-display text-xl font-bold text-white mb-2">Já tem conta?</h2>
                 <p className="text-white/40 text-sm text-center mb-6 max-w-[260px]">
                   Entre com suas credenciais e acesse o sistema.
@@ -499,13 +499,13 @@ const Login = () => {
                 </button>
               </div>
 
-              <div className="flex-1 p-7 md:p-10 glass bg-white/[0.03]">
+              <div className="flex-1 p-7 md:p-10 glass bg-white/3">
                 <h2 className="font-display text-xl font-semibold text-white mb-1">Assinar &amp; criar conta</h2>
                 <p className="text-white/40 text-sm mb-4">
                   Pague primeiro com segurança. Sua conta é criada automaticamente após a confirmação — você recebe um e-mail para definir a senha.
                 </p>
 
-                <div className="mb-5 p-3 rounded-xl border border-amber-400/20 bg-amber-400/[0.04] text-[11px] text-amber-100/80 leading-relaxed">
+                <div className="mb-5 p-3 rounded-xl border border-amber-400/20 bg-amber-400/4 text-[11px] text-amber-100/80 leading-relaxed">
                   <strong className="text-amber-200">Como funciona:</strong> preencha nome e e-mail →
                   é redirecionado para o pagamento no Mercado Pago → recebe e-mail de boas-vindas com link para entrar.
                 </div>

@@ -68,7 +68,7 @@ const InstallAppCard = ({ showDownloadsLink = true }: { showDownloadsLink?: bool
 
   const actionClass = "w-full min-h-12 flex items-center justify-center gap-2 px-3 py-3 rounded-xl bg-primary text-primary-foreground font-semibold text-sm hover:opacity-90 transition disabled:opacity-60";
   return <>
-    <div className="rounded-2xl border border-primary/20 bg-primary/[0.04] p-5 space-y-4">
+    <div className="rounded-2xl border border-primary/20 bg-primary/4 p-5 space-y-4">
       <div className="flex items-center gap-3">
         <img src={icon} alt="" className="w-12 h-12 rounded-xl object-cover bg-white/5 ring-1 ring-border/40 shrink-0" />
         <div className="min-w-0"><p className="text-sm font-bold text-foreground truncate">Instalar {appName}</p>

@@ -21,7 +21,7 @@ const MarcaSection = ({ ctx }: SectionProps) => {
     <>
             <>
             {/* Identity Section */}
-            <div className="space-y-6 p-6 rounded-2xl border border-border/20 bg-background/20 backdrop-blur-sm">
+            <div className="space-y-6 p-6 rounded-2xl border border-border/20 bg-background/20 backdrop-blur-xs">
               <p className="text-xs font-semibold text-foreground uppercase tracking-wider flex items-center gap-1.5">
                 <Building size={12} className="text-primary" /> Identidade
               </p>
@@ -105,7 +105,7 @@ const MarcaSection = ({ ctx }: SectionProps) => {
                     onClick={() => setForm({ ...form, theme_mode: mode.value as any })}
                     className={`p-3 rounded-xl border text-center transition-all ${
                       form.theme_mode === mode.value
-                        ? "border-primary/40 bg-primary/10 shadow-sm"
+                        ? "border-primary/40 bg-primary/10 shadow-xs"
                         : "border-border hover:border-primary/20 hover:bg-accent/20"
                     }`}
                   >
@@ -133,11 +133,11 @@ const MarcaSection = ({ ctx }: SectionProps) => {
                     onClick={() => setForm({ ...form, primary_color: preset.primary, accent_color: preset.accent })}
                     className={`flex items-center gap-2.5 p-2.5 rounded-xl border transition-all ${
                       form.primary_color === preset.primary
-                        ? "border-primary bg-primary/10 shadow-sm scale-[1.02]"
+                        ? "border-primary bg-primary/10 shadow-xs scale-[1.02]"
                         : "border-border hover:border-primary/30 hover:bg-accent/20"
                     }`}
                   >
-                    <div className="w-8 h-8 rounded-lg shadow-sm shrink-0" style={{ background: `linear-gradient(135deg, ${preset.primary}, ${preset.accent})` }} />
+                    <div className="w-8 h-8 rounded-lg shadow-xs shrink-0" style={{ background: `linear-gradient(135deg, ${preset.primary}, ${preset.accent})` }} />
                     <div className="text-left min-w-0">
                       <p className="text-[10px] font-semibold text-foreground truncate">{preset.label}</p>
                       <p className="text-[8px] text-muted-foreground font-mono">{preset.primary}</p>
@@ -167,7 +167,7 @@ const MarcaSection = ({ ctx }: SectionProps) => {
               </div>
             </div>
 
-            <details className="group rounded-2xl border border-border/30 bg-background/20 backdrop-blur-sm overflow-hidden">
+            <details className="group rounded-2xl border border-border/30 bg-background/20 backdrop-blur-xs overflow-hidden">
               <summary className="cursor-pointer select-none px-5 py-3 flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors">
                 <span className="flex items-center gap-2"><Settings size={12} className="text-primary" /> Personalização Avançada</span>
                 <span className="text-[10px] opacity-60 group-open:rotate-180 transition-transform">▼</span>
@@ -265,7 +265,7 @@ const MarcaSection = ({ ctx }: SectionProps) => {
                     onClick={() => setForm({ ...form, font_family: font.value })}
                     className={`p-3 rounded-xl border text-center transition-all ${
                       form.font_family === font.value
-                        ? "border-primary/40 bg-primary/10 shadow-sm"
+                        ? "border-primary/40 bg-primary/10 shadow-xs"
                         : "border-border hover:border-primary/20 hover:bg-accent/20"
                     }`}
                   >

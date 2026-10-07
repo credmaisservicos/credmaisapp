@@ -150,7 +150,7 @@ const Perfil = () => {
             <p className="font-bold text-foreground text-lg">{profile?.name || "Usuário"}</p>
             <p className="text-sm text-muted-foreground">{profile?.email}</p>
             <div className="flex flex-wrap gap-2 mt-2">
-              <Badge variant="outline" className="bg-gradient-to-r from-amber-500/15 to-yellow-500/15 text-amber-400 border-amber-500/30 text-[10px] font-bold">
+              <Badge variant="outline" className="bg-linear-to-r from-amber-500/15 to-yellow-500/15 text-amber-400 border-amber-500/30 text-[10px] font-bold">
                 {isLifetime ? <InfinityIcon size={10} className="mr-1" /> : <CreditCard size={10} className="mr-1" />} {accessTitle}
               </Badge>
               {isPlatformAdmin && (
@@ -164,10 +164,10 @@ const Perfil = () => {
       </div>
 
       {/* Access status */}
-      <div className="rounded-2xl border border-amber-500/30 bg-gradient-to-br from-amber-500/[0.08] via-card to-yellow-500/[0.05] p-6 space-y-4 card-shine relative overflow-hidden group">
+      <div className="rounded-2xl border border-amber-500/30 bg-linear-to-br from-amber-500/8 via-card to-yellow-500/5 p-6 space-y-4 card-shine relative overflow-hidden group">
         <div className="flex items-center justify-between relative z-10">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-amber-500/20 to-yellow-500/20 flex items-center justify-center ring-1 ring-amber-500/30">
+            <div className="w-9 h-9 rounded-lg bg-linear-to-br from-amber-500/20 to-yellow-500/20 flex items-center justify-center ring-1 ring-amber-500/30">
               {isLifetime ? <InfinityIcon size={18} className="text-amber-400" /> : <CreditCard size={18} className="text-amber-400" />}
             </div>
             <div>
@@ -208,7 +208,7 @@ const Perfil = () => {
           </p>
         </div>
 
-        <InfinityIcon className="absolute -right-6 -bottom-6 w-36 h-36 text-amber-500/[0.04] -rotate-12 group-hover:rotate-0 transition-transform duration-700" />
+        <InfinityIcon className="absolute -right-6 -bottom-6 w-36 h-36 text-amber-500/4 -rotate-12 group-hover:rotate-0 transition-transform duration-700" />
       </div>
 
       {/* Info */}
@@ -289,7 +289,7 @@ const Perfil = () => {
           <LogOut size={16} /> Sair
         </button>
         <button onClick={handleSave} disabled={saving}
-          className={saved ? "btn-premium bg-success !shadow-none" : "btn-premium"}>
+          className={saved ? "btn-premium bg-success shadow-none!" : "btn-premium"}>
           {saved ? <><Check size={16} /> Salvo!</> : <><Save size={16} /> {saving ? "Salvando..." : "Salvar Alterações"}</>}
         </button>
       </div>

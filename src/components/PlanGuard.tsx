@@ -32,7 +32,7 @@ const PlanGuard = ({ children }: { children: React.ReactNode }) => {
         <ul className="text-left text-sm text-muted-foreground space-y-2">
           {PLANS.completo.features.slice(1).map((f) => (
             <li key={f} className="flex items-start gap-2">
-              <Sparkles size={14} className="text-primary mt-0.5 flex-shrink-0" />
+              <Sparkles size={14} className="text-primary mt-0.5 shrink-0" />
               <span>{f}</span>
             </li>
           ))}

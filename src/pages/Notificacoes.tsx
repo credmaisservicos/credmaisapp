@@ -264,7 +264,7 @@ const Notificacoes = () => {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar por mensagem ou remetente..."
-              aria-label="Buscar notificações" className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60"
+              aria-label="Buscar notificações" className="min-w-0 flex-1 bg-transparent text-sm outline-hidden placeholder:text-muted-foreground/60"
             />
             {search && (
               <button type="button" aria-label="Limpar busca de notificações" onClick={() => setSearch("")} className="text-muted-foreground hover:text-foreground">
@@ -286,7 +286,7 @@ const Notificacoes = () => {
                 onClick={() => setTypeFilter(f.value)}
                 className={`text-[11px] font-semibold px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition ${
                   active
-                    ? "bg-primary text-primary-foreground shadow-sm"
+                    ? "bg-primary text-primary-foreground shadow-xs"
                     : "bg-muted/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                 }`}
               >
@@ -382,7 +382,7 @@ const Notificacoes = () => {
               return (
                 <div
                   key={n.id}
-                  className={`group px-4 py-3 transition-all hover:bg-accent/30 ${!n.is_read ? "bg-primary/[0.03]" : ""} ${isSelected ? "bg-primary/[0.08]" : ""}`}
+                  className={`group px-4 py-3 transition-all hover:bg-accent/30 ${!n.is_read ? "bg-primary/3" : ""} ${isSelected ? "bg-primary/8" : ""}`}
                 >
                   <div className="flex gap-3 items-start">
                     <input

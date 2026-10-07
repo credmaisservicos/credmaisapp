@@ -90,7 +90,7 @@ const Auditoria = () => {
       )
     : logs;
 
-  const selectCls = "px-3 py-2.5 rounded-2xl bg-card border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all";
+  const selectCls = "px-3 py-2.5 rounded-2xl bg-card border border-border text-sm text-foreground focus:outline-hidden focus:ring-2 focus:ring-primary/30 transition-all";
 
   const exportCsv = () => {
     const rows = [

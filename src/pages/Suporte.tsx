@@ -257,7 +257,7 @@ const Suporte = () => {
         <button onClick={() => setActiveTicket(null)} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4">
           <ChevronLeft size={16} /> Voltar para tickets
         </button>
-        <div className="rounded-2xl border border-border/40 bg-card/60 backdrop-blur-sm overflow-hidden">
+        <div className="rounded-2xl border border-border/40 bg-card/60 backdrop-blur-xs overflow-hidden">
           <div className="p-5 border-b border-border/40 flex items-start justify-between gap-3">
             <div>
               <h1 className="text-xl font-semibold text-foreground">{activeTicket.subject}</h1>
@@ -299,7 +299,7 @@ const Suporte = () => {
                           {relativeDate(m.created_at)}
                         </span>
                       </div>
-                      <p className="text-sm whitespace-pre-wrap break-words">{m.message}</p>
+                      <p className="text-sm whitespace-pre-wrap wrap-break-word">{m.message}</p>
                     </div>
                   </div>
                 );

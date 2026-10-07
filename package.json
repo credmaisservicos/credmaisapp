@@ -23,6 +23,7 @@
     "test:integrations": "node scripts/testar-integracoes.mjs",
     "test:release": "node --test scripts/web-release-catalog.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern backups --max-warnings 0",
+    "audit": "npm audit --audit-level=low",
     "audit:production": "npm audit --omit=dev --audit-level=moderate",
     "preview": "vite preview",
     "deploy:cloudflare": "npm run deploy:cloudflare:pages",
@@ -35,7 +36,6 @@
     "test:e2e:ui": "playwright test --ui"
   },
   "overrides": {
-    "postcss-selector-parser": "7.1.6",
     "xcode": {
       "uuid": "11.1.1"
     }
@@ -82,7 +82,7 @@
     "react-router-dom": "^7.18.2",
     "recharts": "^2.15.4",
     "sonner": "^1.7.4",
-    "tailwind-merge": "^2.6.0",
+    "tailwind-merge": "^3.6.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
@@ -90,21 +90,19 @@
     "@electric-sql/pglite": "^0.5.8",
     "@eslint/js": "^9.32.0",
     "@playwright/test": "^1.57.0",
-    "@tailwindcss/typography": "^0.5.16",
+    "@tailwindcss/vite": "^4.3.3",
     "@testing-library/jest-dom": "^6.6.0",
     "@testing-library/react": "^16.0.0",
     "@types/node": "^22.16.5",
     "@types/react": "^18.3.23",
     "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react-swc": "^4.3.3",
-    "autoprefixer": "^10.4.21",
     "eslint": "^9.32.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^15.15.0",
     "jsdom": "^20.0.3",
-    "postcss": "^8.5.6",
-    "tailwindcss": "^3.4.17",
+    "tailwindcss": "^4.3.3",
     "tailwindcss-animate": "^1.0.7",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.38.0",

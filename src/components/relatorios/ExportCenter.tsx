@@ -147,12 +147,12 @@ const ExportCenter = () => {
           <div className="flex min-w-0 items-center gap-2 rounded-xl border border-border/40 bg-background/40 px-3 py-2">
             <label className="text-[10px] font-bold text-muted-foreground uppercase">De</label>
             <input type="date" value={from} onChange={(e) => setFrom(e.target.value)}
-              aria-label="Data inicial da exportação" className="min-w-0 flex-1 bg-transparent text-xs font-semibold focus:outline-none [color-scheme:dark]" />
+              aria-label="Data inicial da exportação" className="min-w-0 flex-1 bg-transparent text-xs font-semibold focus:outline-hidden scheme-dark" />
           </div>
           <div className="flex min-w-0 items-center gap-2 rounded-xl border border-border/40 bg-background/40 px-3 py-2">
             <label className="text-[10px] font-bold text-muted-foreground uppercase">Até</label>
             <input type="date" value={to} onChange={(e) => setTo(e.target.value)}
-              min={from} aria-label="Data final da exportação" className="min-w-0 flex-1 bg-transparent text-xs font-semibold focus:outline-none [color-scheme:dark]" />
+              min={from} aria-label="Data final da exportação" className="min-w-0 flex-1 bg-transparent text-xs font-semibold focus:outline-hidden scheme-dark" />
           </div>
           <div className="flex items-center gap-1 sm:col-span-2">
             {[

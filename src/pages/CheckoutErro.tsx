@@ -15,7 +15,7 @@ export default function CheckoutErro() {
 
   return (
     <div className="min-h-dvh bg-black text-white flex items-center justify-center px-6">
-      <div className="max-w-md w-full text-center p-10 rounded-3xl bg-white/[0.04] border border-white/10 backdrop-blur-xl">
+      <div className="max-w-md w-full text-center p-10 rounded-3xl bg-white/4 border border-white/10 backdrop-blur-xl">
         <Credinho pose={"thinking"} className="mx-auto w-[110px]" />
         <div className="w-20 h-20 rounded-full bg-red-500/15 border border-red-400/30 flex items-center justify-center mx-auto mb-6">
           <XCircle size={40} className="text-red-400" />

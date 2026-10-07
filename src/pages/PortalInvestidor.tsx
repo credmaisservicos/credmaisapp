@@ -104,7 +104,7 @@ export default function PortalInvestidor() {
   if (!data) {
     return (
       <div className="min-h-dvh bg-[#101010] bg-cover bg-center text-white grid place-items-center p-6" style={{ backgroundImage: "radial-gradient(at 50% 25%,#e4a33d14,transparent 60%)" }}>
-        <div className="max-w-md rounded-2xl border border-white/10 bg-white/5 p-8 text-center backdrop-blur">
+        <div className="max-w-md rounded-2xl border border-white/10 bg-white/5 p-8 text-center backdrop-blur-sm">
           <Credinho pose="thinking" className="mx-auto w-[110px]" />
           <Shield className="mx-auto h-10 w-10 text-red-400" />
           {loadError ? (
@@ -168,7 +168,7 @@ export default function PortalInvestidor() {
         </header>
 
         {/* Boas-vindas */}
-        <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 backdrop-blur">
+        <section className="rounded-3xl border border-white/10 bg-white/4 p-6 backdrop-blur-sm">
           <p className="text-xs uppercase tracking-widest text-primary">Olá, investidor</p>
           <h2 className="mt-1 font-heading text-3xl font-bold">{data.investor.name}</h2>
           <p className="mt-2 max-w-2xl text-sm text-white/60">
@@ -186,7 +186,7 @@ export default function PortalInvestidor() {
         </section>
 
         {/* Empréstimos */}
-        <section className="mt-6 rounded-3xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur">
+        <section className="mt-6 rounded-3xl border border-white/10 bg-white/4 p-5 backdrop-blur-sm">
           <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/60">Seus contratos</h3>
           {data.loans.length === 0 ? (
             <p className="py-10 text-center text-sm text-white/50">Nenhum contrato registrado ainda.</p>
@@ -200,7 +200,7 @@ export default function PortalInvestidor() {
                 const dueDate = parseLocalDate(l.due_date);
                 const overdue = l.status !== "paid" && !!dueDate && dueDate < new Date();
                 return (
-                  <li key={l.id} className="rounded-2xl border border-white/5 bg-white/[0.03] p-4">
+                  <li key={l.id} className="rounded-2xl border border-white/5 bg-white/3 p-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <p className="font-mono text-2xl font-bold">{brl(Number(l.total_due))}</p>
@@ -220,7 +220,7 @@ export default function PortalInvestidor() {
                       </div>
                     </div>
                     <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/5">
-                      <div className="h-full bg-gradient-to-r from-primary to-violet-400" style={{ width: `${pct}%` }} />
+                      <div className="h-full bg-linear-to-r from-primary to-violet-400" style={{ width: `${pct}%` }} />
                     </div>
                     <div className="mt-1 flex justify-between text-[11px] text-white/50">
                       <span>Já recebido: {brl(safeNumber(l.paid_amount))}</span>
@@ -250,7 +250,7 @@ export default function PortalInvestidor() {
 
         {/* PIX do credor */}
         {data.owner?.pix_key && (
-          <section className="mt-6 rounded-3xl border border-primary/20 bg-primary/5 p-5 backdrop-blur">
+          <section className="mt-6 rounded-3xl border border-primary/20 bg-primary/5 p-5 backdrop-blur-sm">
             <h3 className="text-sm font-semibold uppercase tracking-wider text-primary/80">Chave PIX do credor</h3>
             <div className="mt-2 flex items-center justify-between gap-3">
               <div>
@@ -282,7 +282,7 @@ export default function PortalInvestidor() {
 
       {/* Modal ajuda */}
       {helpOpen && (
-        <div className="fixed inset-0 z-[90] grid place-items-center bg-black/70 p-4" onClick={() => setHelpOpen(false)}>
+        <div className="fixed inset-0 z-90 grid place-items-center bg-black/70 p-4" onClick={() => setHelpOpen(false)}>
           <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-slate-900 p-6" onClick={(e) => e.stopPropagation()}>
             <h4 className="font-heading text-lg font-bold">Precisa de ajuda?</h4>
             <p className="mt-1 text-xs text-white/60">Fale diretamente com o credor:</p>
@@ -319,7 +319,7 @@ function Kpi({ icon: Icon, label, value, tone }: { icon: any; label: string; val
     violet: "from-violet-500/20 to-violet-500/5 text-violet-300",
   };
   return (
-    <div className={`rounded-2xl border border-white/5 bg-gradient-to-br ${tones[tone]} p-4 backdrop-blur`}>
+    <div className={`rounded-2xl border border-white/5 bg-linear-to-br ${tones[tone]} p-4 backdrop-blur-sm`}>
       <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest opacity-80">
         <Icon className="h-3.5 w-3.5" /> {label}
       </div>

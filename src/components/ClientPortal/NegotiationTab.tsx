@@ -131,7 +131,7 @@ export const NegotiationTab = ({ clientId, sessionToken }: { clientId: string, s
                 }`}>
                   {msg.role === "user" ? <User size={14} className="text-primary" /> : <Bot size={14} className="text-primary" />}
                 </div>
-                <div className={`rounded-2xl px-4 py-2.5 text-sm shadow-sm ${
+                <div className={`rounded-2xl px-4 py-2.5 text-sm shadow-xs ${
                   msg.role === "user" 
                     ? "bg-primary text-primary-foreground rounded-tr-none" 
                     : "bg-muted text-foreground rounded-tl-none"

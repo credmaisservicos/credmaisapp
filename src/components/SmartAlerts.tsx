@@ -349,7 +349,7 @@ const SmartAlerts = ({ overdue, dueToday, notifications }: Props) => {
           {hiddenCount > 0 && (
             <button
               onClick={restoreAll}
-              className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded"
+              className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary rounded"
               title={`${hiddenCount} alerta${hiddenCount !== 1 ? "s" : ""} dispensado${hiddenCount !== 1 ? "s" : ""}`}
             >
               <RotateCcw size={11} /> Restaurar ({hiddenCount})
@@ -359,7 +359,7 @@ const SmartAlerts = ({ overdue, dueToday, notifications }: Props) => {
             <button
               onClick={dismissAll}
               disabled={busy}
-              className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded"
+              className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors disabled:opacity-50 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary rounded"
             >
               {busy ? <Loader2 size={11} className="animate-spin" /> : <CheckCheck size={11} />}
               Limpar todos
@@ -390,7 +390,7 @@ const SmartAlerts = ({ overdue, dueToday, notifications }: Props) => {
                 </span>
                 <button
                   onClick={() => navigate(meta.to)}
-                  className="text-[10px] font-bold text-muted-foreground hover:text-foreground hover:underline flex items-center gap-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded"
+                  className="text-[10px] font-bold text-muted-foreground hover:text-foreground hover:underline flex items-center gap-0.5 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary rounded"
                   aria-label={`Ver lista completa de ${meta.label}`}
                 >
                   Ver todos <ChevronRight size={10} />
@@ -423,7 +423,7 @@ const SmartAlerts = ({ overdue, dueToday, notifications }: Props) => {
                             {a.action && (
                               <button
                                 onClick={a.action.onClick}
-                                className={`text-[11px] font-bold ${s.icon} hover:underline flex items-center gap-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded`}
+                                className={`text-[11px] font-bold ${s.icon} hover:underline flex items-center gap-0.5 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary rounded`}
                               >
                                 {a.action.label} <ChevronRight size={11} />
                               </button>
@@ -431,7 +431,7 @@ const SmartAlerts = ({ overdue, dueToday, notifications }: Props) => {
                             {a.secondaryAction && (
                               <button
                                 onClick={a.secondaryAction.onClick}
-                                className="text-[11px] font-semibold text-muted-foreground hover:text-foreground hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded"
+                                className="text-[11px] font-semibold text-muted-foreground hover:text-foreground hover:underline focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary rounded"
                               >
                                 {a.secondaryAction.label}
                               </button>

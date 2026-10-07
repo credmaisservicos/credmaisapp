@@ -72,7 +72,7 @@ const Sidebar = ({ collapsed = false, onToggleCollapse }: SidebarProps) => {
           group relative w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium
           transition-[color,background-color,box-shadow,transform] duration-200 ease-out will-change-transform
           ${active
-            ? "text-[#201a10] bg-gradient-to-r from-[#e3a33e] via-[#ffdc91] to-[#e3a33e] shadow-[0_8px_20px_rgba(245,189,89,.16)]"
+            ? "text-[#201a10] bg-linear-to-r from-[#e3a33e] via-[#ffdc91] to-[#e3a33e] shadow-[0_8px_20px_rgba(245,189,89,.16)]"
             : "text-slate-300/75 hover:text-white hover:bg-white/[.07]"
           }
           ${collapsed ? "justify-center px-2" : ""}
@@ -139,7 +139,7 @@ const Sidebar = ({ collapsed = false, onToggleCollapse }: SidebarProps) => {
             <p className={`text-[10px] font-bold uppercase tracking-[0.16em] transition-colors ${sectionHasActive ? "text-orange-300" : "text-slate-400/55"}`}>
               {section.title}
             </p>
-            <div className="flex-1 h-px bg-gradient-to-r from-white/10 to-transparent ml-1" />
+            <div className="flex-1 h-px bg-linear-to-r from-white/10 to-transparent ml-1" />
             {isCollapsible && (
               <ChevronDown
                 aria-hidden="true"
@@ -153,7 +153,7 @@ const Sidebar = ({ collapsed = false, onToggleCollapse }: SidebarProps) => {
             <p className={`text-[10px] font-bold uppercase tracking-[0.16em] transition-colors ${sectionHasActive ? "text-orange-300" : "text-slate-400/55"}`}>
               {section.title}
             </p>
-            <div className="flex-1 h-px bg-gradient-to-r from-white/10 to-transparent ml-1" />
+            <div className="flex-1 h-px bg-linear-to-r from-white/10 to-transparent ml-1" />
           </div>
         ) : null}
 
@@ -191,7 +191,7 @@ const Sidebar = ({ collapsed = false, onToggleCollapse }: SidebarProps) => {
       }}
     >
       {/* Logo */}
-      <div className={`flex items-center h-[72px] border-b border-white/[.08] shrink-0 ${collapsed ? "justify-center px-2" : "px-5 gap-3"}`}>
+      <div className={`flex items-center h-[72px] border-b border-white/8 shrink-0 ${collapsed ? "justify-center px-2" : "px-5 gap-3"}`}>
         <div className="relative shrink-0">
           <img src={logoSrc} alt={brandName} width={30} height={30} className="rounded-lg ring-1 ring-primary/20" />
           <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-card" />
@@ -228,7 +228,7 @@ const Sidebar = ({ collapsed = false, onToggleCollapse }: SidebarProps) => {
         <div className="px-3 pt-3 pb-2 space-y-1.5">
           <button
             onClick={openGlobalSearch}
-            className="w-full flex items-center gap-2 h-9 px-3 rounded-lg bg-white/[.06] border border-white/[.08] text-[12px] text-slate-300/70 hover:bg-white/[.1] hover:text-white transition-colors"
+            className="w-full flex items-center gap-2 h-9 px-3 rounded-lg bg-white/6 border border-white/8 text-[12px] text-slate-300/70 hover:bg-white/10 hover:text-white transition-colors"
           >
             <Search size={13} />
             <span className="flex-1 text-left">Buscar...</span>
@@ -236,7 +236,7 @@ const Sidebar = ({ collapsed = false, onToggleCollapse }: SidebarProps) => {
           </button>
           <button
             onClick={() => navigate("/clientes/novo")}
-            className="w-full flex items-center justify-center gap-1.5 h-9 rounded-lg bg-gradient-to-r from-[#e3a33e] via-[#ffdc91] to-[#e3a33e] text-[#201a10] text-[12px] font-bold hover:brightness-110 transition-colors shadow-md shadow-amber-950/30"
+            className="w-full flex items-center justify-center gap-1.5 h-9 rounded-lg bg-linear-to-r from-[#e3a33e] via-[#ffdc91] to-[#e3a33e] text-[#201a10] text-[12px] font-bold hover:brightness-110 transition-colors shadow-md shadow-amber-950/30"
           >
             <Plus size={13} /> Novo cliente
           </button>

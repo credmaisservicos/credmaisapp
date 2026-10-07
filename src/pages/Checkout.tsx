@@ -298,7 +298,7 @@ export default function Checkout() {
   const body: React.CSSProperties = { fontFamily: "'Figtree', system-ui, sans-serif" };
 
   const inputBase =
-    "w-full px-4 py-3 bg-white/[0.04] border rounded-xl outline-none transition-all text-white placeholder:text-white/35 focus:ring-2 focus:ring-[#F5BD59]/30";
+    "w-full px-4 py-3 bg-white/4 border rounded-xl outline-hidden transition-all text-white placeholder:text-white/35 focus:ring-2 focus:ring-[#F5BD59]/30";
 
   const STEPS = [
     { n: 1, label: "Identificação", icon: User },
@@ -347,10 +347,10 @@ export default function Checkout() {
                 const Icon = s.icon;
                 return (
                   <div key={s.n} className="flex-1 flex items-center gap-3">
-                    <div className="flex items-center gap-3 flex-shrink-0">
+                    <div className="flex items-center gap-3 shrink-0">
                       <motion.div
                         animate={{ scale: active ? 1.05 : 1 }}
-                        className="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center text-sm font-bold shadow-sm transition-colors"
+                        className="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center text-sm font-bold shadow-xs transition-colors"
                         style={{
                           backgroundColor: done ? c.gold : active ? "rgba(245,189,89,0.22)" : "rgba(255,255,255,0.06)",
                           color: done ? "#0A0A0A" : active ? c.gold : "rgba(255,255,255,0.35)",
@@ -447,7 +447,7 @@ export default function Checkout() {
                   </p>
                 </div>
 
-                <div className="relative z-10 space-y-4 flex-grow">
+                <div className="relative z-10 space-y-4 grow">
                   {selectedPlan.features.slice(0, 6).map((f) => (
                     <div key={f} className="flex gap-3 items-start">
                       <div className="mt-0.5 shrink-0 w-5 h-5 rounded-full flex items-center justify-center" style={{ backgroundColor: c.gold }}>
@@ -542,7 +542,7 @@ export default function Checkout() {
                                   type="button"
                                   onClick={() => { setDocType(t); setDoc(""); }}
                                   className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${
-                                    docType === t ? "bg-white/15 shadow-sm text-white" : "text-white/40"
+                                    docType === t ? "bg-white/15 shadow-xs text-white" : "text-white/40"
                                   }`}
                                   style={docType === t ? { color: c.cream } : undefined}
                                 >
@@ -566,7 +566,7 @@ export default function Checkout() {
                         </div>
 
                         <div className="rounded-xl border border-dashed p-4 text-[12px] text-white/60 leading-relaxed flex gap-3 items-start" style={{ borderColor: "rgba(245,189,89,0.40)", backgroundColor: "rgba(255,255,255,0.04)" }}>
-                          <Mail size={16} className="mt-0.5 flex-shrink-0" style={{ color: c.inkSoft }} />
+                          <Mail size={16} className="mt-0.5 shrink-0" style={{ color: c.inkSoft }} />
                           <span>Após a confirmação você recebe um <strong style={{ color: c.gold }}>link de acesso</strong> em <strong style={{ color: c.gold }}>{email || "seu e-mail"}</strong>.</span>
                         </div>
 
@@ -710,7 +710,7 @@ function SuccessScreen({
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.4 }}
-      className="relative w-full rounded-3xl overflow-hidden border border-white/10 bg-white/[0.03] backdrop-blur-2xl shadow-[0_40px_120px_-40px_rgba(0,0,0,0.9)]"
+      className="relative w-full rounded-3xl overflow-hidden border border-white/10 bg-white/3 backdrop-blur-2xl shadow-[0_40px_120px_-40px_rgba(0,0,0,0.9)]"
     >
       <div
         className="relative overflow-hidden px-6 md:px-12 py-14 md:py-20 text-center"
@@ -789,7 +789,7 @@ function SuccessScreen({
       >
         <div className="max-w-lg mx-auto space-y-4">
           <div className="flex items-start gap-4 p-4 rounded-2xl border" style={{ borderColor: `${c.inkSoft}22`, backgroundColor: "rgba(255,255,255,0.05)" }}>
-            <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: c.inkSoft }}>
+            <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: c.inkSoft }}>
               <Mail size={18} className="text-white" />
             </div>
             <div className="text-sm text-left">
@@ -799,7 +799,7 @@ function SuccessScreen({
           </div>
 
           <div className="flex items-start gap-4 p-4 rounded-2xl border" style={{ borderColor: `${c.gold}33`, backgroundColor: "rgba(245,189,89,0.10)" }}>
-            <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: c.gold }}>
+            <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: c.gold }}>
               <ShieldCheck size={18} style={{ color: c.cream }} />
             </div>
             <div className="text-sm text-left">

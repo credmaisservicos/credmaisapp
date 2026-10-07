@@ -1285,7 +1285,7 @@ const AgenteIA = () => {
     }
     return (
       <div
-        className={`rounded-full shrink-0 flex items-center justify-center text-white font-semibold bg-gradient-to-br ${avatarGradient(chat.remoteJid)} ring-1 ring-border/30`}
+        className={`rounded-full shrink-0 flex items-center justify-center text-white font-semibold bg-linear-to-br ${avatarGradient(chat.remoteJid)} ring-1 ring-border/30`}
         style={{ ...dim, fontSize: Math.round(size * 0.38) }}
       >
         {isGroup ? <Users size={Math.round(size * 0.45)} /> : initialsOf(chat.name)}
@@ -1563,7 +1563,7 @@ const AgenteIA = () => {
                     value={chatSearch}
                     onChange={(e) => setChatSearch(e.target.value)}
                     placeholder="Buscar por nome, telefone ou mensagem..."
-                    className="w-full pl-9 pr-9 py-2 rounded-lg bg-muted/30 border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                    className="w-full pl-9 pr-9 py-2 rounded-lg bg-muted/30 border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-1 focus:ring-ring"
                   />
                   {chatSearch && (
                     <button onClick={() => setChatSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-muted">
@@ -1632,7 +1632,7 @@ const AgenteIA = () => {
                           )}
                         </div>
                         {chat.unreadCount ? (
-                          <span className="shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center font-bold shadow-sm">
+                          <span className="shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center font-bold shadow-xs">
                             {chat.unreadCount > 99 ? "99+" : chat.unreadCount}
                           </span>
                         ) : null}
@@ -1644,7 +1644,7 @@ const AgenteIA = () => {
             </>
           ) : (
             <>
-              <div className="p-3 border-b border-border flex items-center gap-3 bg-card/50 backdrop-blur">
+              <div className="p-3 border-b border-border flex items-center gap-3 bg-card/50 backdrop-blur-sm">
                 <button onClick={() => { setSelectedChat(null); setChatMessages([]); }} className="p-1.5 rounded-lg hover:bg-muted/50">
                   <ChevronLeft size={18} className="text-foreground" />
                 </button>
@@ -1680,10 +1680,10 @@ const AgenteIA = () => {
                   Motivo do encaminhamento: {selectedChat.humanReason}
                 </div>
               )}
-              <div className="flex-1 overflow-y-auto p-4 space-y-1 bg-gradient-to-b from-background to-muted/10 relative">
+              <div className="flex-1 overflow-y-auto p-4 space-y-1 bg-linear-to-b from-background to-muted/10 relative">
                 {/* AI Assist Sidebar/Panel */}
                 {selectedChat && aiAssist.summary && (
-                  <div className="sticky top-0 z-20 mb-4 rounded-xl border border-primary/20 bg-primary/5 backdrop-blur-md p-3 shadow-sm animate-in fade-in slide-in-from-top-2">
+                  <div className="sticky top-0 z-20 mb-4 rounded-xl border border-primary/20 bg-primary/5 backdrop-blur-md p-3 shadow-xs animate-in fade-in slide-in-from-top-2">
                     <div className="flex items-start gap-2.5">
                       <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                         <Sparkles size={16} className="text-primary" />
@@ -1779,7 +1779,7 @@ const AgenteIA = () => {
                           </div>
                         )}
                         <div className={`flex ${fromMe ? "justify-end" : "justify-start"} ${sameSender ? "mt-0.5" : "mt-2"}`}>
-                          <div className={`max-w-[78%] rounded-2xl text-sm shadow-sm overflow-hidden ${isMediaOnly ? "p-1" : "px-3 py-2"} ${fromMe ? "bg-primary text-primary-foreground rounded-br-sm" : "bg-card text-foreground border border-border/50 rounded-bl-sm"}`}>
+                          <div className={`max-w-[78%] rounded-2xl text-sm shadow-xs overflow-hidden ${isMediaOnly ? "p-1" : "px-3 py-2"} ${fromMe ? "bg-primary text-primary-foreground rounded-br-sm" : "bg-card text-foreground border border-border/50 rounded-bl-sm"}`}>
                             {senderName && (
                               <p className={`text-[11px] font-semibold mb-1 ${fromMe ? "text-primary-foreground/90" : "text-primary"} ${isMediaOnly ? "px-2 pt-1" : ""}`}>{senderName}</p>
                             )}
@@ -1866,7 +1866,7 @@ const AgenteIA = () => {
                             )}
 
                             {text && (
-                              <p className={`whitespace-pre-wrap break-words leading-relaxed ${isMediaOnly ? "px-2 pt-2" : (kind !== "text" ? "mt-1.5" : "")}`}>
+                              <p className={`whitespace-pre-wrap wrap-break-word leading-relaxed ${isMediaOnly ? "px-2 pt-2" : (kind !== "text" ? "mt-1.5" : "")}`}>
                                 {renderTextWithLinks(text, !!fromMe)}
                               </p>
                             )}
@@ -1904,7 +1904,7 @@ const AgenteIA = () => {
                     onChange={(e) => setReplyInput(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && sendReply()}
                     placeholder="Digite sua resposta..."
-                    className="flex-1 px-4 py-2.5 rounded-lg bg-muted/30 border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                    className="flex-1 px-4 py-2.5 rounded-lg bg-muted/30 border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-1 focus:ring-ring"
                   />
                   <button onClick={sendReply} disabled={!replyInput.trim() || sendingReply} className="p-2.5 rounded-lg bg-primary text-primary-foreground disabled:opacity-50">
                     {sendingReply ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
@@ -1987,7 +1987,7 @@ const AgenteIA = () => {
                 type="number"
                 value={agentConfig.maxMessagesPerDay}
                 onChange={(e) => setAgentConfig((p) => ({ ...p, maxMessagesPerDay: Number(e.target.value) }))}
-                className="w-24 px-3 py-2 rounded-lg bg-muted/30 border border-border text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                className="w-24 px-3 py-2 rounded-lg bg-muted/30 border border-border text-sm text-foreground focus:outline-hidden focus:ring-1 focus:ring-ring"
               />
             </div>
             <div className="py-3">
@@ -2001,7 +2001,7 @@ const AgenteIA = () => {
                   max={23}
                   value={agentConfig.workHourStart}
                   onChange={(e) => setAgentConfig((p) => ({ ...p, workHourStart: Number(e.target.value) }))}
-                  className="w-16 px-3 py-2 rounded-lg bg-muted/30 border border-border text-sm text-foreground focus:outline-none"
+                  className="w-16 px-3 py-2 rounded-lg bg-muted/30 border border-border text-sm text-foreground focus:outline-hidden"
                 />
                 <span className="text-sm text-muted-foreground">às</span>
                 <input
@@ -2010,7 +2010,7 @@ const AgenteIA = () => {
                   max={23}
                   value={agentConfig.workHourEnd}
                   onChange={(e) => setAgentConfig((p) => ({ ...p, workHourEnd: Number(e.target.value) }))}
-                  className="w-16 px-3 py-2 rounded-lg bg-muted/30 border border-border text-sm text-foreground focus:outline-none"
+                  className="w-16 px-3 py-2 rounded-lg bg-muted/30 border border-border text-sm text-foreground focus:outline-hidden"
                 />
                 <span className="text-sm text-muted-foreground">horas</span>
               </div>
@@ -2176,7 +2176,7 @@ const AgenteIA = () => {
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleSend()}
                   placeholder='Pergunte algo... (atalho: "/")'
-                  className="flex-1 px-4 py-2.5 rounded-lg bg-primary/10 border border-primary/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/25"
+                  className="flex-1 px-4 py-2.5 rounded-lg bg-primary/10 border border-primary/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:border-primary/60 focus:ring-2 focus:ring-primary/25"
                 />
                 <button onClick={() => handleSend()} disabled={!input.trim() || loading} className="p-2.5 rounded-lg bg-primary text-primary-foreground disabled:opacity-50 hover:opacity-90 transition-opacity">
                   {loading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}

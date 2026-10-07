@@ -332,7 +332,7 @@ function KpiCard({
     slate: "from-slate-500/10 to-slate-500/5 border-slate-500/20 text-slate-300",
   }[tone];
   return (
-    <Card className={`bg-gradient-to-br ${bg} border`}>
+    <Card className={`bg-linear-to-br ${bg} border`}>
       <CardContent className="p-4">
         <div className="flex items-center gap-2 opacity-80">{icon}<span className="text-xs">{label}</span></div>
         <div className="text-3xl font-bold mt-1 text-foreground">{value}</div>
