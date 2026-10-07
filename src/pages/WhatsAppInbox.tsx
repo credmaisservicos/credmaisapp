@@ -127,6 +127,22 @@ export default function WhatsAppInbox() {
   const [actionsOpen, setActionsOpen] = useState(false);
   const [botActions, setBotActions] = useState<Array<{ id: string; tool_name: string; tool_input: any; tool_output: any; success: boolean; created_at: string }>>([]);
   const [actionsLoading, setActionsLoading] = useState(false);
+  const [queueJobs,setQueueJobs]=useState<any[]>([]);
+  const [queueRevision,setQueueRevision]=useState(0);
+  const [queueError,setQueueError]=useState(false);
+  const sendRequest=useRef<{payload:string;id:string}|null>(null);
+  useEffect(()=>{
+    if(!selectedId||!user){setQueueJobs([]);return;}
+    let active=true;
+    const load=async()=>{
+      try{
+      const {data,error}=await supabase.from("whatsapp_scheduled_messages").select("*").eq("user_id",user.id).eq("conversation_id",selectedId).in("status",["awaiting_approval","uncertain","failed","pending"]).order("created_at",{ascending:false}).limit(30);
+      if(active){setQueueError(!!error);if(!error)setQueueJobs(data||[]);}
+      }catch{if(active)setQueueError(true);}
+    };
+    void load();const timer=setInterval(()=>{if(!document.hidden)void load();},30_000);
+    return()=>{active=false;clearInterval(timer);};
+  },[selectedId,user,queueRevision]);
 
   const openBotActions = async () => {
     if (!selected || !user) return;
@@ -308,11 +324,12 @@ export default function WhatsAppInbox() {
     const { data: sess } = await supabase.auth.getSession();
     const token = sess.session?.access_token;
     const res = await supabase.functions.invoke("whatsapp-send", {
-      body: payload,
+      body: (()=>{const key=JSON.stringify(payload);if(sendRequest.current?.payload!==key)sendRequest.current={payload:key,id:crypto.randomUUID()};return {...payload,request_id:sendRequest.current.id};})(),
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
     if (res.error) throw res.error;
     if (res.data?.error || res.data?.ok !== true) throw new Error(res.data?.error || "O envio não foi confirmado pelo servidor.");
+    sendRequest.current=null;setQueueRevision(n=>n+1);
   };
 
   const send = async () => {
@@ -848,6 +865,7 @@ export default function WhatsAppInbox() {
                         )}
                         <div>{m.content || <em className="opacity-60">[{m.message_type}]</em>}</div>
                         <div className="text-[9px] opacity-60 mt-0.5 text-right">
+                          {m.metadata?.storage_path && <button className="mr-2 underline" onClick={async()=>{const {data,error}=await supabase.storage.from("uploads").createSignedUrl(m.metadata.storage_path,300);if(error||!data?.signedUrl){toast({title:"Não foi possível abrir o anexo",variant:"destructive"});return;}window.open(data.signedUrl,"_blank","noopener,noreferrer");}}>Abrir anexo</button>}
                           {safeTime(m.created_at)}
                         </div>
                       </div>
@@ -860,6 +878,17 @@ export default function WhatsAppInbox() {
               </div>
 
 
+              {queueError && <p role="alert" className="px-3 text-sm text-destructive">Não foi possível verificar a fila desta conversa.</p>}
+              {queueJobs.length>0 && <div className="max-h-48 overflow-y-auto border-t px-3 py-2 space-y-2" aria-label="Fila de mensagens">
+                {queueJobs.map(job=><div key={job.id} className="rounded border p-2 text-xs">
+                  <p className="font-semibold">{job.status==="awaiting_approval"?"Mensagem para aprovação":job.status==="uncertain"?"Entrega incerta — confira o WhatsApp antes de reenviar":job.status==="failed"?"Envio falhou":"Mensagem na fila"}</p>
+                  <p className="whitespace-pre-wrap break-words">{job.text}</p>
+                  {job.status==="awaiting_approval" && <div className="mt-2 flex gap-2">
+                    <Button size="sm" disabled={sending} onClick={async()=>{setSending(true);try{await invokeSend({conversation_id:selectedId,action:"approve_job",job_id:job.id});toast({title:"Envio aprovado"});}catch(error){toast({...friendlyError(error,"Não foi possível aprovar."),variant:"destructive"});}finally{setSending(false);}}}>Aprovar envio</Button>
+                    <Button size="sm" variant="outline" disabled={sending} onClick={async()=>{try{await invokeSend({conversation_id:selectedId,action:"reject_job",job_id:job.id});}catch(error){toast({...friendlyError(error,"Não foi possível descartar."),variant:"destructive"});}}}>Descartar</Button>
+                  </div>}
+                </div>)}
+              </div>}
               {/* Quick actions */}
               <div className="px-3 pt-2 flex gap-1.5 flex-wrap border-t border-border">
                 <Button size="sm" variant="outline" className="h-7 text-xs gap-1"

@@ -87,6 +87,12 @@ const Overview = () => {
     enabled: !!user,
   });
 
+  const {data:health,isLoading:healthLoading,isError:healthError,refetch:retryHealth}=useQuery({
+    queryKey:["central-bot-health",user?.id],
+    queryFn:async()=>{const {data,error}=await supabase.functions.invoke("whatsapp-health");if(error||data?.error)throw error||Error(data.error);return data;},
+    enabled:!!user,staleTime:30_000,refetchOnWindowFocus:false,
+  });
+
   const { data: stats, isLoading: statsLoading, isError: statsError, refetch: retryStats } = useQuery({
     queryKey: ["central-bot-stats", user?.id],
     queryFn: async () => {
@@ -164,9 +170,9 @@ const Overview = () => {
           <Activity size={16} className="text-primary" />
           <h3 className="font-bold">Diagnóstico do Bot</h3>
         </div>
-        {settingsError || instancesError ? (
-          <div role="alert" className="text-sm">Não foi possível verificar o atendimento. <button type="button" className="underline min-h-11 px-2" onClick={() => { void retrySettings(); void retryInstances(); }}>Tentar novamente</button></div>
-        ) : isLoading || instancesLoading ? (
+        {settingsError || instancesError || healthError ? (
+          <div role="alert" className="text-sm">Não foi possível verificar o atendimento. <button type="button" className="underline min-h-11 px-2" onClick={() => { void retrySettings(); void retryInstances(); void retryHealth(); }}>Tentar novamente</button></div>
+        ) : isLoading || instancesLoading || healthLoading ? (
           <div className="flex items-center gap-2 py-6 text-muted-foreground text-sm">
             <Loader2 className="animate-spin" size={14} /> Verificando...
           </div>
@@ -175,7 +181,7 @@ const Overview = () => {
             <HealthRow
               label="Bot habilitado"
               ok={botEnabled}
-              detail={botEnabled ? "O bot responderá mensagens recebidas via webhook." : "Ative o bot em Configurações → Comunicação para começar a atender."}
+              detail={botEnabled ? "Atendimento habilitado. Confira abaixo a disponibilidade do servidor e da conexão." : "Ative o bot em Configurações → Comunicação para começar a atender."}
             />
             <HealthRow
               label="WhatsApp configurado"
@@ -194,7 +200,11 @@ const Overview = () => {
               warn={!settings?.company_name}
               detail={settings?.company_name ? `Bot se identifica como "${settings.company_name}".` : "Defina o nome da empresa em Configurações para o bot se apresentar corretamente."}
             />
-            <p className="pt-3 text-sm text-muted-foreground">A execução das cobranças deve ser conferida no histórico de cobranças. Esta tela não verifica o agendamento em tempo real.</p>
+            <HealthRow label="Recepção de mensagens" ok={!!health?.webhook_ready} detail={health?.webhook_ready?"Autenticação do webhook configurada.":"Recepção indisponível; a configuração do servidor precisa de atenção."}/>
+            <HealthRow label="Rotinas automáticas" ok={!!health?.cron_ready} detail={health?.cron_ready?"Autenticação das rotinas configurada.":"Agendamento indisponível no servidor."}/>
+            <HealthRow label="Conexão do WhatsApp" ok={health?.connection==="open"} detail={health?.connection==="open"?"Conexão aberta no provedor.":"Não foi possível confirmar a conexão. Confira a aba WhatsApp."}/>
+            <HealthRow label="Inteligência artificial" ok={!!health?.ai_ready} warn={!health?.ai_ready} detail={health?.ai_ready?"Integração disponível.":"Atendimento por menus e regras locais; análise pela equipe."}/>
+            <p className="pt-3 text-sm text-muted-foreground">{health?.pending_approval||0} mensagem(ns) para aprovação · {health?.uncertain||0} entrega(s) incerta(s) · {health?.failed24h||0} falha(s) nas últimas 24h. A aceitação pelo provedor não confirma leitura ou entrega ao destinatário.</p>
           </div>
         )}
       </Card>

@@ -4,7 +4,9 @@
 //
 // Formato compatível com Anthropic Tool Use:
 //   https://docs.anthropic.com/en/docs/build-with-claude/tool-use
-import { callAnthropic, ANTHROPIC_MODEL } from "./anthropic.ts";
+import { ANTHROPIC_MODEL } from "./anthropic.ts";
+import { botBalance, activeDebt, botLateFee } from "./bot_finance.ts";
+import { botRows, botPortalLink } from "./bot_data.ts";
 
 export interface ToolDef {
   name: string;
@@ -95,6 +97,9 @@ export interface ToolContext {
   supabase: any; // SupabaseClient — evitando dep. duplicada
   siteUrl: string;
   today: string; // YYYY-MM-DD
+  ownerId: string;
+  billingDay?: string;
+  verifiedClientId: string;
 }
 
 export type ToolResult =
@@ -119,11 +124,12 @@ export function calculateAgentOverdueCharge(input: {
   // não reaplica taxa, multa ou qualquer padrão global no valor comunicado.
   const configuredDailyPct = Number(input.dailyPercent || 0);
   const dailyPct = configuredDailyPct > 0 ? configuredDailyPct : 0;
-  const interest = Math.max(0, Number(input.lateFee) || 0);
+  const total = botBalance({ amount: base, paid_amount: input.paidAmount, late_fee: input.lateFee });
+  const interest = Math.max(0, total - saldo);
   const round = (value: number) => Math.round(value * 100) / 100;
   return {
     base: round(base), saldo: round(saldo), daysLate, dailyPct,
-    interest: round(interest), total: round(saldo + interest),
+    interest: round(interest), total,
   };
 }
 
@@ -137,28 +143,28 @@ export async function executeTool(
   ctx: ToolContext,
 ): Promise<ToolResult> {
   try {
+    if (!ctx.ownerId || !ctx.verifiedClientId) return { ok: false, error: "identity_required" };
+    if (input.client_id && input.client_id !== ctx.verifiedClientId) return { ok: false, error: "client_not_authorized" };
     switch (name) {
       case "buscar_cliente_por_cpf": {
         const cpf = String(input.cpf || "").replace(/\D/g, "");
         if (cpf.length !== 11 && cpf.length !== 14) {
           return { ok: false, error: "CPF/CNPJ inválido (esperado 11 ou 14 dígitos)" };
         }
-        const { data, error } = await ctx.supabase.rpc(
-          "search_clients_by_document",
-          { _document: cpf },
-        );
+        const { data: c, error } = await ctx.supabase.from("clients")
+          .select("id,name,status,cpf_cnpj").eq("id", ctx.verifiedClientId)
+          .eq("user_id", ctx.ownerId).maybeSingle();
         if (error) return { ok: false, error: error.message };
-        if (!data || data.length === 0) {
+        if (!c || String(c.cpf_cnpj || "").replace(/\D/g, "") !== cpf) {
           return { ok: false, error: "cliente_nao_encontrado" };
         }
-        const c = data[0];
         return {
           ok: true,
           data: {
             client_id: c.id,
             name: c.name,
             status: c.status,
-            has_more: data.length > 1,
+            has_more: false,
           },
         };
       }
@@ -167,31 +173,26 @@ export async function executeTool(
         const clientId = String(input.client_id || "");
         const somenteVencidas = Boolean(input.somente_vencidas);
         if (!clientId) return { ok: false, error: "client_id obrigatório" };
-        let q = ctx.supabase
+        const build = () => { let q = ctx.supabase
           .from("contract_installments")
           // A multa e o juro diário ficam no CONTRATO, não na parcela. Pedindo os
           // dois como colunas da parcela, o PostgREST devolvia 400 e a ferramenta
           // inteira falhava: a IA nunca conseguia listar as parcelas em aberto de
           // ninguém. Aqui eles vêm pelo contrato.
           .select(
-            "id, installment_number, amount, paid_amount, late_fee, due_date, status, contracts:contract_id ( status, daily_interest_percent, max_interest_cap_percent )",
+            "id, installment_number, amount, paid_amount, late_fee, due_date, status, pre_settlement_snapshot, contracts:contract_id ( status, daily_interest_percent, daily_penalty_type, daily_penalty_value, max_interest_cap_percent )",
           )
           .eq("client_id", clientId)
-          .neq("status", "paid")
-          .order("due_date", { ascending: true })
-          .limit(20);
+          .eq("user_id", ctx.ownerId)
+          .not("status", "in", '("paid","cancelled")')
+          .order("due_date", { ascending: true }).order("id");
         if (somenteVencidas) q = q.lt("due_date", ctx.today);
-        const { data, error } = await q;
-        if (error) return { ok: false, error: error.message };
-        const rows = (data || []).filter((r: any) => {
-          const ct = Array.isArray(r.contracts) ? r.contracts[0] : r.contracts;
-          return r.status !== "cancelled"
-            && ["active", "overdue"].includes(String(ct?.status || "").toLowerCase())
-            && Number(r.amount || 0) - Number(r.paid_amount || 0) > 0.009;
-        }).map((r: any) => {
+        return q; };
+        const data = await botRows(build);
+        const rows = data.filter(activeDebt).map((r: any) => {
           const ct = r.contracts || {};
           const charge = calculateAgentOverdueCharge({
-            amount: r.amount, paidAmount: r.paid_amount, lateFee: r.late_fee, dueDate: r.due_date,
+            amount: r.amount, paidAmount: r.paid_amount, lateFee: botLateFee(r,ctx.billingDay ?? ctx.today), dueDate: r.due_date,
             today: ctx.today, dailyPercent: ct.daily_interest_percent,
             capPercent: ct.max_interest_cap_percent,
           });
@@ -207,7 +208,8 @@ export async function executeTool(
             total_com_encargos: charge.total,
           };
         });
-        return { ok: true, data: { parcelas: rows, total: rows.length } };
+        return { ok: true, data: { parcelas: rows.slice(0, 30), total: rows.length,
+          has_more: rows.length > 30, saldo_total: rows.reduce((sum: number, r: any) => sum + r.total_com_encargos, 0) } };
       }
 
       case "gerar_link_pix": {
@@ -215,8 +217,9 @@ export async function executeTool(
         if (!instId) return { ok: false, error: "installment_id obrigatório" };
         const { data: inst, error } = await ctx.supabase
           .from("contract_installments")
-          .select("id, amount, paid_amount, late_fee, installment_number, user_id, status, due_date, contracts:contract_id ( status, daily_interest_percent, max_interest_cap_percent )")
+          .select("id, client_id, amount, paid_amount, late_fee, installment_number, user_id, status, due_date, pre_settlement_snapshot, contracts:contract_id ( status, daily_interest_percent, daily_penalty_type, daily_penalty_value, max_interest_cap_percent )")
           .eq("id", instId)
+          .eq("user_id", ctx.ownerId).eq("client_id", ctx.verifiedClientId)
           .maybeSingle();
         if (error || !inst) return { ok: false, error: "parcela_nao_encontrada" };
         if (["paid", "cancelled"].includes(inst.status)) return { ok: false, error: "parcela_sem_saldo" };
@@ -224,11 +227,11 @@ export async function executeTool(
         if (!["active", "overdue"].includes(String(ct.status || "").toLowerCase())) {
           return { ok: false, error: "contrato_inativo_ou_inexistente" };
         }
-        if (Number(inst.amount || 0) - Number(inst.paid_amount || 0) <= 0.009) {
+        if (botBalance(inst) < 0.01) {
           return { ok: false, error: "parcela_sem_saldo" };
         }
         const charge = calculateAgentOverdueCharge({
-          amount: Number(inst.amount), paidAmount: Number(inst.paid_amount), lateFee: Number((inst as any).late_fee),
+          amount: Number(inst.amount), paidAmount: Number(inst.paid_amount), lateFee: botLateFee(inst,ctx.billingDay ?? ctx.today),
           dueDate: String((inst as any).due_date || ctx.today), today: ctx.today,
           dailyPercent: ct.daily_interest_percent, capPercent: ct.max_interest_cap_percent,
         });
@@ -262,15 +265,7 @@ export async function executeTool(
       case "enviar_portal_link": {
         const clientId = String(input.client_id || "");
         if (!clientId) return { ok: false, error: "client_id obrigatório" };
-        const { data: token } = await ctx.supabase
-          .from("client_tokens")
-          .select("token")
-          .eq("client_id", clientId)
-          .maybeSingle();
-        const t = token?.token;
-        const url = t
-          ? `${ctx.siteUrl}/portal?t=${t}`
-          : `${ctx.siteUrl}/portal`;
+        const url = await botPortalLink(ctx.supabase, ctx.ownerId, clientId, ctx.siteUrl);
         return { ok: true, data: { url } };
       }
 
@@ -289,6 +284,7 @@ export interface RunAgentParams {
   history?: Array<{ role: "user" | "assistant"; content: string }>;
   ctx: ToolContext;
   maxSteps?: number;
+  deadline?: number;
 }
 
 export interface RunAgentResult {
@@ -317,8 +313,10 @@ export async function runAgentWithTools(
     ...(params.history || []),
     { role: "user", content: params.userMessage },
   ];
+  const deadline = Math.min(Date.now()+20_000,params.deadline ?? Infinity);
 
   for (let step = 0; step < maxSteps; step++) {
+    if (Date.now() >= deadline) break;
     const resp = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -334,6 +332,7 @@ export async function runAgentWithTools(
         tools: AGENT_TOOLS,
         messages,
       }),
+      signal: AbortSignal.timeout(Math.max(1, Math.min(10_000, deadline - Date.now()))),
     });
 
     if (!resp.ok) {
@@ -363,6 +362,7 @@ export async function runAgentWithTools(
       if (block.name === "escalar_para_humano" && result.ok) {
         handoff = true;
         handoffMotivo = String((result.data as any).motivo || "");
+        return { reply: "Encaminhei seu atendimento para a equipe responsável.", tools_used: toolsUsed, handoff, handoff_motivo: handoffMotivo };
       }
       toolResults.push({
         type: "tool_result",

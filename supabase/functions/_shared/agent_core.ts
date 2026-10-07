@@ -4,6 +4,9 @@
 //  2) Seleção correta de parcelas realmente em atraso (com saldo > 0).
 //  3) Log auditável de cada decisão em `bot_actions_log`.
 
+import { botRows } from "./bot_data.ts";
+import { activeDebt, botBalance, botLateFee } from "./bot_finance.ts";
+
 export type IdentifyResult =
   | { status: "unique"; client: any; matchType: "conversation" | "phone_strict" | "cpf" }
   | { status: "ambiguous"; candidates: any[] }
@@ -87,16 +90,15 @@ export async function identifyClient(
     preboundClient?: any | null; // client_id já vinculado na conversa
   },
 ): Promise<IdentifyResult> {
-  const CLIENT_FIELDS = "id, name, phone, whatsapp, cpf_cnpj, status, credit_score, bot_memory, birth_date, email, address";
-
-  if (params.preboundClient) {
+  if (params.preboundClient?.user_id === params.userId &&
+    (samePhoneBR(params.senderPhone, params.preboundClient.whatsapp || "") || samePhoneBR(params.senderPhone, params.preboundClient.phone || ""))) {
     return { status: "unique", client: params.preboundClient, matchType: "conversation" };
   }
 
-  const { data: clients } = await supabase
-    .from("clients")
-    .select(CLIENT_FIELDS)
-    .eq("user_id", params.userId);
+  const { data: clients, error } = await supabase.rpc("system_find_clients_by_phone", {
+    _user_id: params.userId, _phone: params.senderPhone,
+  });
+  if (error || !Array.isArray(clients)) throw new Error("client_lookup_unavailable");
 
   const candidates = (clients || []).filter((c: any) => {
     return samePhoneBR(params.senderPhone, c.whatsapp || "") ||
@@ -165,42 +167,42 @@ export async function loadClientInstallments(
   supabase: any,
   clientId: string,
   today: string = todayInSP(),
+  ownerId: string,
 ): Promise<OverdueBucket> {
-  const { data } = await supabase
+  if (!ownerId) throw new Error("owner_required");
+  const data = await botRows(() => supabase
     .from("contract_installments")
-    .select("id, contract_id, installment_number, amount, paid_amount, late_fee, due_date, status, contracts:contract_id(status)")
+    .select("id, contract_id, installment_number, amount, paid_amount, late_fee, due_date, status, pre_settlement_snapshot, contracts:contract_id(status,daily_interest_percent,daily_penalty_type,daily_penalty_value,max_interest_cap_percent)")
     .eq("client_id", clientId)
+    .eq("user_id", ownerId)
     .not("status", "in", '("paid","cancelled")')
-    .order("due_date", { ascending: true });
+    .order("due_date", { ascending: true }).order("id"));
 
   const rows: InstallmentRow[] = (data || [])
-    .filter((r: any) => {
-      const contract = Array.isArray(r.contracts) ? r.contracts[0] : r.contracts;
-      return ["active", "overdue"].includes(String(contract?.status || "").toLowerCase());
-    })
+    .filter(activeDebt)
     .map((r: any): InstallmentRow => ({
       id: r.id,
       contract_id: r.contract_id,
       installment_number: Number(r.installment_number) || 0,
       amount: Number(r.amount) || 0,
       paid_amount: Number(r.paid_amount) || 0,
-      late_fee: Number(r.late_fee) || 0,
+      late_fee: botLateFee(r),
       due_date: ymd(r.due_date),
       status: String(r.status || ""),
     }))
     // Saldo > 0 (proteção contra parcelas quitadas mas com status errado)
-    .filter((r: InstallmentRow) => r.amount - (r.paid_amount || 0) > 0.005);
+    .filter((r: InstallmentRow) => botBalance(r) >= 0.01);
 
   const overdue = rows.filter((r) => r.due_date < today);
   const dueToday = rows.filter((r) => r.due_date === today);
   const future = rows.filter((r) => r.due_date > today);
 
   const totalOverdue = overdue.reduce(
-    (s, r) => s + (r.amount + (r.late_fee || 0) - (r.paid_amount || 0)),
+    (s, r) => s + botBalance(r),
     0,
   );
   const totalDueToday = dueToday.reduce(
-    (s, r) => s + (r.amount + (r.late_fee || 0) - (r.paid_amount || 0)),
+    (s, r) => s + botBalance(r),
     0,
   );
 

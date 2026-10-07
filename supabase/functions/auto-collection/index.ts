@@ -7,6 +7,10 @@ import { renderTemplate, renderMessage } from "../_shared/messageTemplate.ts";
 import { assertReplySafe } from "../_shared/bot_utils.ts";
 import { alertPlatformAdmins } from "../_shared/operations.ts";
 import { checkSharedSecret } from "../_shared/guard.ts";
+import { botRows, checkedBotQuery } from "../_shared/bot_data.ts";
+import { botBalance, botLateFee, activeDebt } from "../_shared/bot_finance.ts";
+import { queueBotMessage } from "../_shared/bot_delivery.ts";
+import { withinBotHours,automationAccountActive } from "../_shared/bot_policy.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -68,7 +72,7 @@ serve(async (req) => {
     const spParts = Object.fromEntries(
       new Intl.DateTimeFormat("en-US", {
         timeZone: "America/Sao_Paulo",
-        year: "numeric", month: "2-digit", day: "2-digit", weekday: "short",
+        year: "numeric", month: "2-digit", day: "2-digit", weekday: "short",hour:"2-digit",minute:"2-digit",hourCycle:"h23",
       }).formatToParts(now).map((part) => [part.type, part.value]),
     );
     const todayStr = `${spParts.year}-${spParts.month}-${spParts.day}`;
@@ -81,9 +85,9 @@ serve(async (req) => {
     const { error: expirePromisesError } = await supabase.rpc("expire_payment_promises", {
       _reference_date: todayStr,
     });
-    if (expirePromisesError) console.error("[auto-collection] expire promises:", expirePromisesError.message);
+    if(expirePromisesError)throw Error("promise_state_unavailable");
 
-    const { data: allSettings } = await supabase.from("settings").select("*").eq("bot_enabled", true);
+    const allSettings=await botRows(()=>supabase.from("settings").select("*").eq("bot_enabled",true).order("user_id"));
     if (!allSettings?.length) {
       return new Response(JSON.stringify({ message: "Nenhum bot ativo", sent: 0 }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -91,12 +95,10 @@ serve(async (req) => {
     }
 
     // Plano Essencial (R$199) não inclui automações/IA — pula esses usuários.
-    const { data: automationProfiles } = await supabase
-      .from("profiles")
-      .select("id, plan_tier, is_blocked, subscription_type, subscription_expires_at, trial_ends_at");
+    const automationProfiles=await botRows(()=>supabase.from("profiles").select("id,is_admin,plan_tier,is_blocked,subscription_type,subscription_expires_at,trial_ends_at").order("id"));
     const profilesById = new Map((automationProfiles ?? []).map((p: any) => [p.id, p]));
 
-    let totalSent = 0, totalEmail = 0, totalSkipped = 0;
+    let totalSent = 0, totalEmail = 0, totalSkipped = 0,totalQueued=0;
     const results: any[] = [];
 
     for (const settings of allSettings) {
@@ -107,7 +109,7 @@ serve(async (req) => {
         : entitlementProfile?.subscription_expires_at;
       const expired = entitlementProfile?.subscription_type !== "lifetime" &&
         (!entitlementEnd || new Date(entitlementEnd).getTime() <= now.getTime());
-      if (!entitlementProfile || entitlementProfile.is_blocked || entitlementProfile.plan_tier === "essencial" || expired) {
+      if (!automationAccountActive(entitlementProfile,now)) {
         const reason = !entitlementProfile ? "Perfil não encontrado"
           : entitlementProfile.is_blocked ? "Conta bloqueada"
           : entitlementProfile.plan_tier === "essencial" ? "Plano Essencial: automações desativadas"
@@ -116,7 +118,7 @@ serve(async (req) => {
         continue;
       }
       const errors: string[] = [];
-      let sent = 0, emailSent = 0, skipped = 0;
+      let sent = 0, emailSent = 0, skipped = 0,queued=0;
 
       const workDays = (settings.bot_work_days as string[]) || ["mon", "tue", "wed", "thu", "fri"];
       if (!workDays.includes(dayOfWeek)) {
@@ -124,6 +126,10 @@ serve(async (req) => {
         continue;
       }
 
+      const currentMinute=Number(spParts.hour)*60+Number(spParts.minute);
+      const targetMinute=Number(settings.bot_send_hour ?? 10)*60+Number(settings.bot_send_minute ?? 0);
+      // Five-minute cron windows honor each account's selected minute.
+      if((currentMinute-targetMinute+1440)%1440>=5 || !withinBotHours(settings,now))continue;
       const apiUrl = (settings.whatsapp_api_url || "").replace(/\/$/, "");
       const apiKey = settings.whatsapp_api_key || "";
       const instanceName = settings.whatsapp_instance || "";
@@ -141,7 +147,7 @@ serve(async (req) => {
         let conectado = false;
         try {
           const est = await fetch(`${apiUrl}/instance/connectionState/${instanceName}`, {
-            headers: { apikey: apiKey },
+            headers: { apikey: apiKey },signal:AbortSignal.timeout(5_000),
           });
           if (est.ok) {
             const j = await est.json();
@@ -173,11 +179,15 @@ serve(async (req) => {
         }
       }
 
-      const { count: sentToday } = await supabase
+      const { count: legacySent,error:sentError } = await supabase
         .from("audit_logs").select("id", { count: "exact", head: true })
         .eq("user_id", userId).eq("entity_type", "auto_collection")
         .eq("action", "message_sent").gte("created_at", startOfTodayUtc);
 
+      if(sentError)throw Error("delivery_limit_unavailable");
+      const {count:queuedToday,error:queuedError}=await supabase.from("whatsapp_scheduled_messages").select("id",{count:"exact",head:true}).eq("user_id",userId).eq("purpose","collection").gte("created_at",startOfTodayUtc).not("status","in",'("cancelled","failed")');
+      if(queuedError)throw Error("delivery_limit_unavailable");
+      const sentToday=(legacySent||0)+(queuedToday||0);
       const maxPerDay = settings.bot_max_messages_per_day ?? 50;
       if ((sentToday || 0) >= maxPerDay) {
         results.push({ user_id: userId, sent: 0, skipped: 1, errors: ["Limite diário atingido"] });
@@ -214,55 +224,38 @@ serve(async (req) => {
       // mais antiga vencida desde 01/06.
       //
       // A regra correta é a mesma do painel: em aberto = não paga e não cancelada.
-      const { data: rawInstallments } = await supabase
-        .from("contract_installments")
-        .select("id, amount, paid_amount, status, due_date, client_id, contract_id, installment_number, late_fee, contracts(status,daily_interest_percent)")
-        .eq("user_id", userId)
-        .not("status", "in", '("paid","cancelled")')
-        .lte("due_date", lookAheadDate);
-
-      // Defesa contra dados legados/inconsistentes: uma parcela com saldo zerado
-      // ou pertencente a contrato concluído jamais pode gerar cobrança, mesmo que
-      // seu campo status tenha ficado como pending/overdue.
-      const installments = (rawInstallments || []).filter((i: any) => {
-        const contract = Array.isArray(i.contracts) ? i.contracts[0] : i.contracts;
-        const contractOpen = ["active", "overdue"].includes(String(contract?.status || "").toLowerCase());
-        const outstanding = Math.max(0, Number(i.amount || 0) - Number(i.paid_amount || 0));
-        // O join é esquerdo: contrato apagado chega como null. Antes null era
-        // tratado como aberto e fazia o bot cobrar uma dívida que já não existia.
-        return contractOpen && outstanding > 0.009;
-      });
+      const rawInstallments=await botRows(()=>supabase.from("contract_installments")
+        .select("id,amount,paid_amount,status,due_date,client_id,contract_id,installment_number,late_fee,pre_settlement_snapshot,contracts(status,daily_interest_percent,daily_penalty_type,daily_penalty_value,max_interest_cap_percent)")
+        .eq("user_id",userId).not("status","in",'("paid","cancelled")').lte("due_date",lookAheadDate).order("id"));
+      const installments=rawInstallments.filter(activeDebt);
 
       if (!installments?.length) {
         results.push({ user_id: userId, sent: 0, skipped: 0, errors: [] });
         continue;
       }
 
-      const clientIds = [...new Set(installments.map(i => i.client_id))];
-      const { data: clients } = await supabase
-        .from("clients").select("id, name, phone, whatsapp, email, credit_score, bot_memory").in("id", clientIds);
+
+      const clients=await botRows(()=>supabase.from("clients").select("id,name,phone,whatsapp,email,credit_score,bot_memory").eq("user_id",userId).order("id"));
       const clientMap = new Map((clients || []).map(c => [c.id, c]));
 
       // Uma promessa futura é um compromisso válido: não se deve disparar uma
       // nova cobrança genérica antes da data combinada.
-      const { data: futurePromises } = await supabase
+      const futurePromises = await botRows(()=>supabase
         .from("payment_promises")
         .select("client_id, promised_for, promised_amount")
         .eq("user_id", userId)
         .eq("status", "open")
-        .gt("promised_for", todayStr);
+        .gt("promised_for", todayStr).order("id"));
       const promiseByClient = new Map((futurePromises || []).map((promise: any) => [promise.client_id, promise]));
 
       // Opt-out/bloqueio no Inbox vale também para a régua automática.
-      const { data: blockedConversations } = await supabase
-        .from("whatsapp_conversations").select("jid").eq("user_id", userId).eq("blocked", true);
+      const blockedConversations = await botRows(()=>supabase
+        .from("whatsapp_conversations").select("jid").eq("user_id", userId).or("blocked.eq.true,bot_paused.eq.true,needs_human.eq.true").order("id"));
       const blockedPhones = new Set((blockedConversations || []).map((c: any) => String(c.jid || "").replace(/\D/g, "")));
 
-      const { data: profile } = await supabase
-        .from("profiles").select("name, billing_message, pix_key, pix_key_type").eq("id", userId).single();
+      const {data:profile}=await checkedBotQuery(supabase.from("profiles").select("name,billing_message,pix_key,pix_key_type").eq("id",userId).single());
 
-      const { data: templates } = await supabase
-        .from("message_templates").select("*").eq("user_id", userId).eq("is_active", true);
+      const templates=await botRows(()=>supabase.from("message_templates").select("*").eq("user_id",userId).eq("is_active",true).order("id"));
 
       const companyName = settings.company_name || profile?.name || "Sistema Juros";
 
@@ -276,7 +269,7 @@ serve(async (req) => {
       const contactedRecipients = new Set<string>();
 
       for (const [clientId, insts] of byClient) {
-        if (sent + emailSent >= remaining) break;
+        if (sent + emailSent + queued >= remaining) break;
         const client = clientMap.get(clientId);
         if (!client) continue;
         if (promiseByClient.has(clientId)) {
@@ -289,6 +282,7 @@ serve(async (req) => {
         const normalizedPhone = String(phone || "").replace(/\D/g, "");
         const phoneWithCountry = normalizedPhone.startsWith("55") ? normalizedPhone : `55${normalizedPhone}`;
         const whatsappBlocked = !!normalizedPhone && (blockedPhones.has(normalizedPhone) || blockedPhones.has(phoneWithCountry));
+        if(whatsappBlocked){skipped++;continue;}
         const recipientKey = phoneWithCountry.length > 4 ? `wa:${phoneWithCountry}` : email ? `email:${String(email).trim().toLowerCase()}` : "";
         if (recipientKey && contactedRecipients.has(recipientKey)) { skipped++; continue; }
 
@@ -374,14 +368,9 @@ serve(async (req) => {
 
         // Juros diário composto (4% a.d. padrão) calculado ao vivo — nunca depende
         // apenas do late_fee gravado, que pode estar desatualizado.
-        const liveLateFee = (i: any) => {
-          return Math.max(0, Number(i.late_fee) || 0);
-        };
-        const totalLateFees = insts.reduce((s, i) => s + liveLateFee(i), 0);
-        const totalAmount = insts.reduce(
-          (s, i: any) => s + Math.max(0, Number(i.amount || 0) - Number(i.paid_amount || 0)) + liveLateFee(i),
-          0,
-        );
+        const liveLateFee=(i:any)=>botLateFee(i);
+        const totalAmount=insts.reduce((sum,i:any)=>sum+botBalance(i),0);
+        const totalLateFees=insts.reduce((sum,i:any)=>sum+Math.min(liveLateFee(i),botBalance(i)),0);
         // A taxa aparecia como "4% ao dia" escrito à mão na mensagem e no
         // prompt da IA, enquanto o cálculo já usava a taxa do contrato. Hoje os
         // 74 contratos em atraso são todos 4%, então o número está certo — mas
@@ -616,100 +605,27 @@ ${extraDiversity}`;
         }
 
         let waOk = false;
-        if (waConfigured && phone && !whatsappBlocked && (matchingRule.channel === "whatsapp" || matchingRule.channel === "both" || !matchingRule.channel)) {
-          const cleanPhone = phone.replace(/\D/g, "");
-          const recipient = cleanPhone.startsWith("55") ? cleanPhone : `55${cleanPhone}`;
-          try {
-            // Segunda leitura imediatamente antes do disparo. Evita cobrar quando
-            // o pagamento foi lançado depois que o cron montou a lista inicial.
-            const { data: latestRows } = await supabase
-              .from("contract_installments")
-              .select("amount,paid_amount,late_fee,status,contracts(status)")
-              .eq("user_id", userId)
-              .eq("client_id", clientId)
-              .not("status", "in", '("paid","cancelled")');
-            const stillOwes = (latestRows || []).some((row: any) => {
-              const contract = Array.isArray(row.contracts) ? row.contracts[0] : row.contracts;
-              return ["active", "overdue"].includes(String(contract?.status || "").toLowerCase())
-                && Number(row.amount || 0) - Number(row.paid_amount || 0) > 0.009;
-            });
-            if (!stillOwes) { skipped++; continue; }
-            const latestTotal = (latestRows || []).reduce((sum: number, row: any) => {
-              const contract = Array.isArray(row.contracts) ? row.contracts[0] : row.contracts;
-              const open = ["active", "overdue"].includes(String(contract?.status || "").toLowerCase());
-              if (!open) return sum;
-              return sum + Math.max(0, Number(row.amount || 0) - Number(row.paid_amount || 0))
-                + Math.max(0, Number(row.late_fee) || 0);
-            }, 0);
-            // Se a dívida mudou entre a seleção e o envio, não arriscamos mandar
-            // uma mensagem com valor antigo. O próximo ciclo lerá o novo total.
-            if (Math.abs(latestTotal - totalAmount) > 0.009) {
-              skipped++;
-              await supabase.from("audit_logs").insert({
-                user_id: userId, entity_type: "auto_collection", action: "amount_changed_blocked",
-                entity_id: clientId, details: { previous_amount: totalAmount, latest_amount: latestTotal },
-              }).then(() => {}, () => {});
-              continue;
-            }
-
-            const { data: claimed } = await supabase.rpc("claim_collection_dispatch", {
-              _user_id: userId, _client_id: clientId, _channel: "whatsapp", _bucket: now.toISOString(),
-            });
-            if (!claimed) { skipped++; continue; }
-            const sendResp = await fetch(`${apiUrl}/message/sendText/${instanceName}`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json", apikey: apiKey },
-              body: JSON.stringify({ number: recipient, text: message }),
-            });
-            if (sendResp.ok) {
-              waOk = true; sent++;
-              if (recipientKey) contactedRecipients.add(recipientKey);
-              await supabase.from("audit_logs").insert({
-                user_id: userId, entity_type: "auto_collection", action: "message_sent",
-                entity_id: clientId,
-                details: {
-                  client_name: client.name, phone: recipient, channel: "whatsapp",
-                  rule: matchingRule, days_overdue: daysOverdue, days_until_due: daysUntilDue,
-                  pre_due: isPreDue, amount: totalAmount, reliability, ai_generated: !!settings.bot_use_ai,
-                  approach: nextApproach,
-                  message_preview: (message || "").slice(0, 400),
-                },
-              });
-              // Registra a abordagem usada NA MEMÓRIA do cliente (evita repetir no próximo cron)
-              try {
-                const memUpd = pushIntent(clientMemory, {
-                  tipo: "silencio", // será atualizado pela resposta do cliente, se houver
-                  data: todayStr,
-                  abordagem: nextApproach,
-                  canal: "whatsapp",
-                  detalhe: `${isPreDue ? `pré ${daysUntilDue}d` : `atraso ${daysOverdue}d`} R$${totalAmount.toFixed(2)}`,
-                });
-                await supabase.from("clients").update({ bot_memory: serializeMemory(memUpd) }).eq("id", clientId);
-              } catch (memErr) { console.error("[memory] auto-collection push failed:", memErr); }
-            } else {
-              // Falha de envio precisa deixar rastro no banco. Antes ela só
-              // entrava neste array, que vira a resposta HTTP do cron — ou seja,
-              // era descartada. O dono não tinha como saber que a cobrança não saiu.
-              const motivo = (await sendResp.text()).slice(0, 300);
-              errors.push(`${client.name}: ${motivo}`);
-              await supabase.from("audit_logs").insert({
-                user_id: userId, entity_type: "auto_collection", action: "message_failed",
-                entity_id: clientId,
-                details: { client_name: client.name, phone: recipient, channel: "whatsapp", status: sendResp.status, motivo },
-              }).then(() => {}, () => {});
-            }
-          } catch (err) {
-            const motivo = err instanceof Error ? err.message : "Erro envio";
-            errors.push(`${client.name}: ${motivo}`);
-            await supabase.from("audit_logs").insert({
-              user_id: userId, entity_type: "auto_collection", action: "message_failed",
-              entity_id: clientId,
-              details: { client_name: client.name, phone: recipient, channel: "whatsapp", motivo },
-            }).then(() => {}, () => {});
+        if (waConfigured && phone && ["whatsapp","both"].includes(matchingRule.channel)) {
+          const recipient=phoneWithCountry;
+          const {data:existing,error:ce}=await supabase.from("whatsapp_conversations").select("id,blocked,bot_paused,needs_human,instance").eq("user_id",userId).eq("phone",recipient).maybeSingle();
+          if(ce)throw Error("conversation_lookup_unavailable");
+          if(existing?.blocked || existing?.bot_paused || existing?.needs_human){skipped++;continue;}
+          let conversationId=existing?.id;
+          if(!conversationId){
+            const {data:created,error}=await supabase.from("whatsapp_conversations").insert({user_id:userId,phone:recipient,jid:`${recipient}@s.whatsapp.net`,instance:instanceName,client_id:clientId,contact_name:client.name}).select("id").single();
+            if(error)throw Error("conversation_create_unavailable");conversationId=created.id;
           }
+          const job=await queueBotMessage(supabase,{user_id:userId,conversation_id:conversationId,client_id:clientId,
+            text:withoutEmoji(message),purpose:"collection",status:settings.bot_auto_send===true?"pending":"awaiting_approval",
+            scheduled_for:new Date().toISOString(),source_key:`collection:${clientId}:${todayStr}:${Math.round(totalAmount*100)}`,
+            expected_amount:totalAmount,installment_ids:insts.map(i=>i.id)});
+          waOk=["pending","awaiting_approval","processing","sent"].includes(job.status);
+          if(waOk){queued++;if(recipientKey)contactedRecipients.add(recipientKey);}
+          await supabase.from("audit_logs").insert({user_id:userId,entity_type:"auto_collection",action:"message_queued",entity_id:clientId,
+            details:{channel:"whatsapp",job_id:job.id,status:job.status,amount:totalAmount}});
         }
 
-        let shouldEmail = !!email && (
+        let shouldEmail = settings.bot_auto_send===true && !!email && (
           matchingRule.channel === "email" || matchingRule.channel === "both" ||
           (!waOk && !waConfigured) || (!waOk && daysOverdue >= 15) || daysOverdue >= 30
         );
@@ -717,16 +633,14 @@ ${extraDiversity}`;
         // O e-mail também precisa da mesma leitura final do WhatsApp. Sem isto,
         // uma baixa/exclusão entre a montagem da fila e o envio ainda era cobrada.
         if (shouldEmail) {
-          const { data: latestEmailRows } = await supabase
+          const latestEmailRows = await botRows(()=>supabase
             .from("contract_installments")
-            .select("amount,paid_amount,status,contracts(status)")
+            .select("id,amount,paid_amount,late_fee,status,due_date,pre_settlement_snapshot,contracts(status,daily_interest_percent,daily_penalty_type,daily_penalty_value,max_interest_cap_percent)")
             .eq("user_id", userId).eq("client_id", clientId)
-            .not("status", "in", '("paid","cancelled")');
-          shouldEmail = (latestEmailRows || []).some((row: any) => {
-            const contract = Array.isArray(row.contracts) ? row.contracts[0] : row.contracts;
-            return ["active", "overdue"].includes(String(contract?.status || "").toLowerCase())
-              && Number(row.amount || 0) - Number(row.paid_amount || 0) > 0.009;
-          });
+            .not("status", "in", '("paid","cancelled")').order('id'));
+          const selectedIds=new Set(insts.map(i=>i.id));
+          const latestTotal=latestEmailRows.filter(row=>selectedIds.has(row.id)&&activeDebt(row)).reduce((sum,row)=>sum+botBalance(row),0);
+          shouldEmail=latestTotal>=0.01&&Math.abs(latestTotal-totalAmount)<0.01;
         }
 
         if (shouldEmail) {
@@ -773,8 +687,8 @@ ${extraDiversity}`;
         }
       }
 
-      totalSent += sent; totalEmail += emailSent; totalSkipped += skipped;
-      results.push({ user_id: userId, sent, email_sent: emailSent, skipped, errors });
+      totalSent += sent; totalEmail += emailSent; totalSkipped += skipped;totalQueued+=queued;
+      results.push({ user_id: userId, sent, queued,email_sent: emailSent, skipped, errors });
 
       if ((sent + emailSent) > 0 && settings.bot_notify_owner) {
         await supabase.from("notifications").insert({
@@ -806,7 +720,7 @@ ${extraDiversity}`;
     }
 
     return new Response(
-      JSON.stringify({ message: "Sucesso", total_sent: totalSent, total_email: totalEmail, total_skipped: totalSkipped, results }),
+      JSON.stringify({ message: "Sucesso", total_sent: totalSent,total_queued:totalQueued, total_email: totalEmail, total_skipped: totalSkipped, results }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {

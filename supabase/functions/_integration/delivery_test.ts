@@ -18,6 +18,8 @@ for (const [name, value] of Object.entries({
 
 interface Call { url: URL; method: string; body: Record<string, unknown> }
 let calls: Call[] = [];
+let jobs=new Map<string,any>();
+let jobSequence=0;
 let installmentOwner = owner;
 let conversationOwner = owner;
 let paymentAmount = 199;
@@ -48,8 +50,23 @@ globalThis.fetch = async (input, init) => {
       id: "installment-test", user_id: installmentOwner, paid_amount: 40, amount: 100,
       installment_number: 1, clients: { name: "Cliente de teste", whatsapp: "5500000000000" }, contracts: { num_installments: 2 },
     }, request);
+    if(url.pathname === "/rest/v1/whatsapp_scheduled_messages"){
+      if(request.method==="POST"){
+        const key=String(call.body.source_key||`job-${++jobSequence}`);
+        if(!jobs.has(key))jobs.set(key,{id:`job-${++jobSequence}`,attempts:0,...call.body});
+        return new Response(null,{status:201});
+      }
+      const matching=[...jobs.values()].filter(j=>["id","user_id","source_key","conversation_id"].every(k=>!url.searchParams.get(k)||url.searchParams.get(k)===`eq.${j[k]}`));
+      if(request.method==="PATCH"){for(const j of matching)Object.assign(j,call.body);return new Response(null,{status:204});}
+      if(request.headers.get("Accept")?.includes("vnd.pgrst.object"))return row(matching[0]||null,request);
+      return json(matching);
+    }
+    if(url.pathname==="/rest/v1/rpc/claim_whatsapp_job"){
+      const j=[...jobs.values()].find(j=>j.id===call.body._id&&j.user_id===call.body._user_id&&j.status==="pending");
+      if(!j)return json([]);j.status="processing";j.attempts++;return json([j]);
+    }
     if (url.pathname === "/rest/v1/settings") return row({
-      company_name: "Empresa de teste", bot_send_receipt: receiptsEnabled,
+      company_name: "Empresa de teste", bot_send_receipt: receiptsEnabled,bot_enabled:true,bot_auto_send:true,
       whatsapp_api_url: evolution, whatsapp_api_key: "isolated-wa-key", whatsapp_instance: "test-instance",
     }, request);
     if (url.pathname === "/rest/v1/whatsapp_conversations" && request.method === "GET") {
@@ -58,7 +75,7 @@ globalThis.fetch = async (input, init) => {
     }
     if (url.pathname === "/rest/v1/profiles") {
       if (request.method === "PATCH") { profileWrites.push(call.body); return new Response(null, { status: 204 }); }
-      return row({ id: owner, name: "QA", subscription_type: subscriptionType }, request);
+      return row({ id: owner, name: "QA",is_admin:true,plan_tier:"completo", subscription_type: subscriptionType }, request);
     }
     if (url.pathname === "/rest/v1/subscriptions") {
       if (request.method === "POST") subscriptionWrites.push(call.body);
@@ -94,7 +111,7 @@ function reset() {
   calls = []; installmentOwner = owner; conversationOwner = owner;
   paymentAmount = 199; paymentStatus = "approved"; subscriptionType = "monthly";
   providerFails = false; receiptsEnabled = true;
-  events = new Set(); subscriptionWrites = []; profileWrites = [];
+  events = new Set(); subscriptionWrites = []; profileWrites = []; jobs=new Map();jobSequence=0;
 }
 
 function invoke(handler: Handler, body: unknown, authenticated = true) {
@@ -150,7 +167,7 @@ Deno.test("WhatsApp: mensagem enviada é registrada no dono autenticado", async 
   const message = calls.find(call => call.url.pathname === "/rest/v1/whatsapp_messages")!;
   assertEquals(message.body.user_id, owner); assertEquals(message.body.content, "Mensagem de teste");
   const conversation = calls.find(call => call.url.pathname === "/rest/v1/whatsapp_conversations" && call.method === "PATCH")!;
-  assertEquals(conversation.body.bot_paused, true);
+  assert(calls.some(c=>c.url.pathname==="/rest/v1/whatsapp_conversations"&&c.method==="PATCH"&&c.body.bot_paused===true));
 });
 Deno.test("WhatsApp: falha no provedor não grava sucesso", async () => {
   reset(); providerFails = true;
@@ -183,4 +200,25 @@ Deno.test("Mercado Pago: evento repetido não duplica ativação ou e-mail", asy
 Deno.test("Mercado Pago: assinatura vitalícia é preservada", async () => {
   reset(); subscriptionType = "lifetime"; assertEquals((await signedWebhook()).status, 200);
   assertEquals(profileWrites[0].subscription_type, undefined); assertEquals(profileWrites[0].subscription_expires_at, undefined);
+});
+
+Deno.test("WhatsApp: retry of an accepted request does not resend",async()=>{
+  reset();const body={conversation_id:"conversation-test",text:"Teste único",request_id:"stable-test-request"};
+  assertEquals((await invoke(whatsapp,body)).status,200);assertEquals((await invoke(whatsapp,body)).status,200);
+  assertEquals(calls.filter(c=>c.url.origin===evolution).length,1);
+});
+Deno.test("WhatsApp: uncertain provider outcome is not retried automatically",async()=>{
+  reset();providerFails=true;const body={conversation_id:"conversation-test",text:"Teste",request_id:"uncertain-request"};
+  assertEquals((await invoke(whatsapp,body)).status,502);assertEquals((await invoke(whatsapp,body)).status,502);
+  assertEquals(calls.filter(c=>c.url.origin===evolution).length,1);
+});
+Deno.test("WhatsApp: scheduled attachment retains its media",async()=>{
+  reset();assertEquals((await invoke(whatsapp,{conversation_id:"conversation-test",media_url:"https://files.test.invalid/file.pdf",media_type:"document",caption:"Arquivo",schedule_for:new Date(Date.now()+3600000).toISOString()})).status,200);
+  const job=[...jobs.values()][0];assertEquals(job.media_type,"document");assertEquals(job.media_url,"https://files.test.invalid/file.pdf");
+  assert(!calls.some(c=>c.url.origin===evolution));
+});
+Deno.test("WhatsApp: approval checks job ownership",async()=>{
+  reset();jobs.set("foreign",{id:"foreign-job",user_id:other,conversation_id:"conversation-test",status:"awaiting_approval"});
+  assertEquals((await invoke(whatsapp,{conversation_id:"conversation-test",action:"approve_job",job_id:"foreign-job"})).status,404);
+  assertEquals(jobs.get("foreign").status,"awaiting_approval");
 });

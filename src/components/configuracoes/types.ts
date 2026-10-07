@@ -49,10 +49,8 @@ export interface SettingsForm {
   bot_send_receipt: boolean;
   bot_tone: string;
   bot_use_ai: boolean;
-  bot_send_audio: boolean;
   bot_process_audio: boolean;
   bot_process_receipts: boolean;
-  bot_auto_confirm_payment: boolean;
   portal_title: string;
   portal_subtitle: string;
   portal_welcome_message: string;

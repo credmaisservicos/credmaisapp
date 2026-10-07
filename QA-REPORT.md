@@ -1,5 +1,13 @@
 # QA Report — CredMais
 
+## Correções da auditoria do bot — 2026-10-07
+
+RPCs internas protegidas, ferramentas vinculadas ao dono e cliente, fila persistente de eventos e entregas, pausa humana preservada, aprovação manual no inbox e comprovantes privados com conferência do valor recebido. Cobranças e PIX incluem encargos pendentes; a confirmação parcial acrescenta somente o novo recebimento. Renovação de juros exige valor compatível e novo vencimento.
+
+Validação: 435 testes Vitest, 121 testes de funções, 28 integrações HTTP isoladas, 211 testes de navegador, tipos, lint, hooks, 43 funções verificadas e build aprovados. Migrações exercitadas em PostgreSQL local em memória e aplicadas com backup privado em produção. Reconexão do WhatsApp por QR Code e chaves dos provedores de IA/transcrição são dependências externas.
+
+Detalhes: [docs/correcoes-bot-2026-10-07.md](docs/correcoes-bot-2026-10-07.md).
+
 ## Recuperação de perfil e sessão — 2026-10-07
 
 Foi observada uma consulta de perfil rejeitada com HTTP 401. O app não renovava

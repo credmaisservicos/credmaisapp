@@ -314,7 +314,6 @@ const AgenteIA = () => {
     workHourEnd: 20,
     tone: "formal" as "formal" | "casual" | "firme",
     useAi: false,
-    sendAudio: false,
   });
 
   const { data: settings } = useQuery({
@@ -322,7 +321,7 @@ const AgenteIA = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from("settings")
-        .select("bot_enabled, bot_auto_send, bot_send_pix, bot_notify_owner, bot_max_messages_per_day, bot_send_hour, bot_send_minute, bot_tone, whatsapp_instance, bot_use_ai, bot_send_audio")
+        .select("bot_enabled, bot_auto_send, bot_send_pix, bot_notify_owner, bot_max_messages_per_day, bot_send_hour, bot_send_minute, bot_tone, whatsapp_instance, bot_use_ai")
         .eq("user_id", user!.id)
         .single();
       return data;
@@ -343,7 +342,6 @@ const AgenteIA = () => {
         workHourStart: settings.bot_send_hour ?? 8,
         tone: (settings.bot_tone as any) ?? "formal",
         useAi: settings.bot_use_ai ?? false,
-        sendAudio: settings.bot_send_audio ?? false,
       }));
     }
   }, [settings]);
@@ -398,8 +396,15 @@ const AgenteIA = () => {
     refetchInterval: 30_000,
   });
 
+  const [receiptAmounts, setReceiptAmounts] = useState<Record<string,string>>({});
+  const [receiptDates,setReceiptDates]=useState<Record<string,string>>({});
   const approveReceipt = async (reviewId: string) => {
-    const { error } = await (supabase as any).rpc("approve_whatsapp_receipt", { _review_id: reviewId });
+    const item=(reviewCenter?.receipts || []).find((row:any)=>row.id===reviewId);
+    const amount=Number((receiptAmounts[reviewId] || String(item?.amount || 0)).replace(",","."));
+    if(!Number.isFinite(amount) || amount<=0){toast({title:"Informe o valor recebido",variant:"destructive"});return;}
+    const nextDue=item?.metadata?.payment_kind==='interest_only'?receiptDates[reviewId]:null;
+    if(item?.metadata?.payment_kind==='interest_only'&&!nextDue){toast({title:'Informe o novo vencimento da renovação.',variant:'destructive'});return;}
+    const { error } = await (supabase as any).rpc("confirm_whatsapp_receipt", { _review_id: reviewId, _received_amount:amount,_next_due_date:nextDue });
     if (error) {
       toast({ title: "Não foi possível aprovar", description: error.message, variant: "destructive" });
       return;
@@ -944,7 +949,6 @@ const AgenteIA = () => {
         bot_send_hour: agentConfig.workHourStart,
         bot_tone: agentConfig.tone,
         bot_use_ai: agentConfig.useAi,
-        bot_send_audio: agentConfig.sendAudio,
       }).eq("user_id", user.id);
       if (error) throw error;
       queryClient.invalidateQueries({ queryKey: ["settings-agent"] });
@@ -1449,11 +1453,20 @@ const AgenteIA = () => {
                       <p className="text-sm text-muted-foreground">
                         Parcela #{item.contract_installments?.installment_number || "não identificada"} · {safeAgentNumber(item.amount).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
                       </p>
-                      <p className="mt-1 text-xs text-muted-foreground">Correspondência: {item.match_type || "revisão manual"}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">Confira o favorecido e o recebimento no banco antes de aprovar.</p>
+                      <p className="mt-1 text-xs text-muted-foreground">O pagamento será aplicado à parcela indicada; eventual sobra será aplicada às demais parcelas abertas deste cliente.</p>
+                      <label className="mt-2 block text-xs">Valor efetivamente recebido
+                        <input aria-label={`Valor recebido de ${item.clients?.name || "cliente"}`} type="text" inputMode="decimal" className="ml-2 rounded border bg-background px-2 py-1"
+                          value={receiptAmounts[item.id] ?? String(item.amount || "")} onChange={e=>setReceiptAmounts(prev=>({...prev,[item.id]:e.target.value}))}/>
+                      </label>
+                      {item.metadata?.payment_kind==='interest_only'&&<label className="mt-2 block text-xs">Novo vencimento da renovação
+                        <input aria-label="Novo vencimento da renovação" type="date" className="ml-2 rounded border bg-background px-2 py-1" value={receiptDates[item.id]||''} onChange={e=>setReceiptDates(prev=>({...prev,[item.id]:e.target.value}))}/>
+                      </label>}
                     </div>
                     <div className="flex gap-2">
+                      {item.metadata?.storage_path && <button onClick={()=>openStoredDocument(item.metadata.storage_path)} className="rounded-lg border px-3 py-2 text-xs">Abrir comprovante</button>}
                       <button onClick={() => rejectReceipt(item.id)} className="rounded-lg border border-destructive/30 px-3 py-2 text-xs font-semibold text-destructive hover:bg-destructive/10">Rejeitar</button>
-                      <button onClick={() => approveReceipt(item.id)} disabled={!item.installment_id} className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-50">Aprovar e dar baixa</button>
+                      <button onClick={() => approveReceipt(item.id)} disabled={!item.installment_id} className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-50">Confirmar recebimento e registrar</button>
                     </div>
                   </div>
                 </div>
@@ -1961,14 +1974,9 @@ const AgenteIA = () => {
               enabled={agentConfig.useAi}
               onToggle={() => setAgentConfig((p) => ({ ...p, useAi: !p.useAi }))}
               label="Inteligência Artificial"
-              description="Usa o Lovable AI para gerar mensagens de cobrança persuasivas e humanizadas"
+              description="Cria mensagens personalizadas quando a integração de IA está disponível"
             />
-            <ToggleSwitch
-              enabled={agentConfig.sendAudio}
-              onToggle={() => setAgentConfig((p) => ({ ...p, sendAudio: !p.sendAudio }))}
-              label="Enviar Áudio (Beta)"
-              description="Converte a mensagem em áudio (TTS) antes de enviar"
-            />
+
             <ToggleSwitch
               enabled={agentConfig.sendPix}
               onToggle={() => setAgentConfig((p) => ({ ...p, sendPix: !p.sendPix }))}

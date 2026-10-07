@@ -118,7 +118,7 @@ const BotSection = ({ ctx }: SectionProps) => {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-xs font-medium text-foreground">Gerar Mensagens com IA</p>
-                        <p className="text-[10px] text-muted-foreground">Usa o Lovable AI para criar mensagens personalizadas e persuasivas</p>
+                        <p className="text-[10px] text-muted-foreground">Cria mensagens personalizadas quando a integração de IA está configurada</p>
                       </div>
                       <button
                         type="button"
@@ -128,22 +128,6 @@ const BotSection = ({ ctx }: SectionProps) => {
                         className={`w-10 h-6 rounded-full transition-colors relative ${form.bot_use_ai ? "bg-primary" : "bg-muted"}`}
                       >
                         <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${form.bot_use_ai ? "left-5" : "left-1"}`} />
-                      </button>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-xs font-medium text-foreground">Enviar Áudio (Beta)</p>
-                        <p className="text-[10px] text-muted-foreground">O bot envia áudios curtos personalizados (TTS)</p>
-                      </div>
-                      <button 
-                        type="button"
-                        aria-label="Alternar envio de áudio"
-                        aria-pressed={form.bot_send_audio}
-                        onClick={() => setForm({ ...form, bot_send_audio: !form.bot_send_audio })}
-                        className={`w-10 h-6 rounded-full transition-colors relative ${form.bot_send_audio ? "bg-primary" : "bg-muted"}`}
-                      >
-                        <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${form.bot_send_audio ? "left-5" : "left-1"}`} />
                       </button>
                     </div>
 
@@ -179,21 +163,7 @@ const BotSection = ({ ctx }: SectionProps) => {
                       </button>
                     </div>
 
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-xs font-medium text-foreground">Baixa Automática (Smart Pay)</p>
-                        <p className="text-[10px] text-muted-foreground">Dá baixa na parcela automaticamente após validar o comprovante</p>
-                      </div>
-                      <button 
-                        type="button"
-                        aria-label="Alternar baixa automática de pagamentos"
-                        aria-pressed={form.bot_auto_confirm_payment}
-                        onClick={() => setForm({ ...form, bot_auto_confirm_payment: !form.bot_auto_confirm_payment })}
-                        className={`w-10 h-6 rounded-full transition-colors relative ${form.bot_auto_confirm_payment ? "bg-primary" : "bg-muted"}`}
-                      >
-                        <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${form.bot_auto_confirm_payment ? "left-5" : "left-1"}`} />
-                      </button>
-                    </div>
+                    <p className="text-xs text-muted-foreground">Comprovantes recebidos ficam para conferência da equipe. A baixa só ocorre após confirmar o recebimento do dinheiro.</p>
                   </div>
                 </div>
 

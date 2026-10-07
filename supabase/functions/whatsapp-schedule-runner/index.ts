@@ -1,143 +1,47 @@
-// Roda a cada minuto: envia mensagens agendadas cujo scheduled_for já passou.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { checkSharedSecret } from "../_shared/guard.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
-
-const SESSION_TIMEOUT_MESSAGE = "Atendimento encerrado por falta de resposta. Quando precisar continuar, envie uma nova mensagem para abrir o menu novamente.";
-
-serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-  // SEGURANÇA (M4): cron protegido por segredo obrigatório.
-  if (!checkSharedSecret(req, "CRON_SECRET")) {
-    return new Response(JSON.stringify({ error: "unauthorized" }), {
-      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const supabase = createClient(supabaseUrl, serviceKey);
-
-  const { data: jobs, error: claimError } = await supabase.rpc("claim_due_whatsapp_messages", { _limit: 50 });
-  if (claimError) throw claimError;
-
-  let sent = 0;
-  let failed = 0;
-
-  for (const job of jobs || []) {
-    try {
-      const { data: convo, error: convoError } = await supabase
-        .from("whatsapp_conversations").select("*")
-        .eq("id", job.conversation_id).eq("user_id", job.user_id).single();
-      if (convoError || !convo) {
-        await supabase.from("whatsapp_scheduled_messages").update({
-          status: "failed", error: "conversation_not_found",
-        }).eq("id", job.id);
-        failed++; continue;
-      }
-
-      if (convo.blocked || (convo.bot_paused && job.purpose !== "manual" && job.purpose !== "session_timeout")) {
-        await supabase.from("whatsapp_scheduled_messages").update({
-          status: "cancelled", error: "conversation_paused_or_blocked",
-        }).eq("id", job.id);
-        continue;
-      }
-
-      if (["collection", "service_followup"].includes(job.purpose) && job.client_id) {
-        const { data: openRows } = await supabase.from("contract_installments")
-          .select("amount,paid_amount,status,contracts(status)")
-          .eq("user_id", job.user_id).eq("client_id", job.client_id)
-          .not("status", "in", '("paid","cancelled")');
-        const stillOwes = (openRows || []).some((row: any) => {
-          const contract = Array.isArray(row.contracts) ? row.contracts[0] : row.contracts;
-          return ["active", "overdue"].includes(String(contract?.status || "").toLowerCase())
-            && Number(row.amount || 0) - Number(row.paid_amount || 0) > 0.009;
-        });
-        if (!stillOwes) {
-          await supabase.from("whatsapp_scheduled_messages").update({
-            status: "cancelled", error: "debt_no_longer_exists",
-          }).eq("id", job.id);
+import { deliverBotJob } from "../_shared/bot_delivery.ts";
+import { alertPlatformAdmins } from "../_shared/operations.ts";
+const headers = {"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization,x-client-info,apikey,content-type","Content-Type":"application/json"};
+serve(async req => {
+  if (req.method === "OPTIONS") return new Response(null, {headers});
+  if (!checkSharedSecret(req, "CRON_SECRET")) return new Response(JSON.stringify({error:"unauthorized"}), {status:401,headers});
+  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  try {
+    const retryWork = (async()=>{
+      const {data:events,error}=await supabase.rpc("claim_whatsapp_event_retries",{_limit:5});
+      if(error)throw Error("inbox_queue_unavailable");
+      const outcomes=await Promise.allSettled((events||[]).map(async(event:any)=>{
+        const response=await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/whatsapp-webhook`,{
+          method:"POST",headers:{"Content-Type":"application/json","x-webhook-secret":Deno.env.get("EVOLUTION_WEBHOOK_SECRET")!,
+            apikey:Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,Authorization:`Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`},
+          body:JSON.stringify(event.payload),signal:AbortSignal.timeout(48_000),
+        });await response.body?.cancel();
+        if(!response.ok)throw Error('inbox_retry_failed');
+      }));
+      return outcomes.some(r=>r.status==='rejected');
+    })().catch(()=>true);
+    const {data:jobs,error} = await supabase.rpc("claim_due_whatsapp_messages", {_limit:20});
+    if (error) throw Error("queue_unavailable");
+    const results: string[] = [];
+    const groups=new Map<string,any[]>();
+    for(const job of jobs||[]){const list=groups.get(job.conversation_id)||[];list.push(job);groups.set(job.conversation_id,list);}
+    const batches=[...groups.values()];
+    const deadline=Date.now()+48_000;
+    for(let i=0;i<batches.length;i+=5)await Promise.all(batches.slice(i,i+5).map(async group=>{
+      group.sort((a,b)=>new Date(a.scheduled_for).getTime()-new Date(b.scheduled_for).getTime());
+      for(const job of group){
+        if(Date.now()+13_000>deadline){
+          await supabase.from('whatsapp_scheduled_messages').update({status:'pending',error:'worker_budget_deferred'}).eq('id',job.id).eq('status','processing').is('delivery_started_at',null);
           continue;
         }
+        results.push(await deliverBotJob(supabase,job));
       }
-
-      // Um job pode ter sido reivindicado no mesmo instante em que o cliente
-      // respondeu. Confere o estado atual antes de encerrar para não mandar uma
-      // mensagem de inatividade depois de uma resposta recente.
-      if (job.text === SESSION_TIMEOUT_MESSAGE) {
-        const scheduledAt = new Date(job.scheduled_for).getTime();
-        const lastMessageAt = new Date(convo.last_message_at || 0).getTime();
-        const stillInactive = convo.last_message_from === "bot" && lastMessageAt <= scheduledAt - 9 * 60_000;
-        if (!stillInactive) {
-          await supabase.from("whatsapp_scheduled_messages").update({
-            status: "cancelled", error: "conversation_became_active",
-          }).eq("id", job.id);
-          continue;
-        }
-      }
-
-      const { data: settings, error: settingsError } = await supabase
-        .from("settings").select("whatsapp_api_url, whatsapp_api_key, whatsapp_instance")
-        .eq("user_id", job.user_id).single();
-
-      const apiUrl = (settings?.whatsapp_api_url || "").replace(/\/$/, "");
-      const apiKey = settings?.whatsapp_api_key;
-      const instance = convo.instance || settings?.whatsapp_instance;
-      if (settingsError || !apiUrl || !apiKey || !instance) {
-        await supabase.from("whatsapp_scheduled_messages").update({
-          status: "failed", error: "whatsapp_not_configured",
-        }).eq("id", job.id);
-        failed++; continue;
-      }
-
-      const res = await fetch(`${apiUrl}/message/sendText/${instance}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", apikey: apiKey },
-        body: JSON.stringify({ number: convo.jid, text: job.text, delay: 600 }),
-        signal: AbortSignal.timeout(20_000),
-      });
-
-      if (!res.ok) {
-        await supabase.from("whatsapp_scheduled_messages").update({
-          status: "failed", error: `send_failed_${res.status}`,
-        }).eq("id", job.id);
-        failed++; continue;
-      }
-
-      const { error: messageError } = await supabase.from("whatsapp_messages").insert({
-        conversation_id: job.conversation_id, user_id: job.user_id,
-        direction: "out", sender: job.text === SESSION_TIMEOUT_MESSAGE ? "bot" : "human",
-        message_type: "text", content: job.text,
-        metadata: { scheduled: true, scheduled_for: job.scheduled_for },
-      });
-      if (messageError) throw new Error("message_persist_failed");
-      const { error: conversationError } = await supabase.from("whatsapp_conversations").update({
-        last_message_at: new Date().toISOString(),
-        last_message_preview: job.text.slice(0, 200),
-        last_message_from: job.text === SESSION_TIMEOUT_MESSAGE ? "bot" : "human",
-        updated_at: new Date().toISOString(),
-      }).eq("id", job.conversation_id).eq("user_id", job.user_id);
-      if (conversationError) throw new Error("conversation_persist_failed");
-      const { error: statusError } = await supabase.from("whatsapp_scheduled_messages").update({
-        status: "sent", sent_at: new Date().toISOString(),
-      }).eq("id", job.id).eq("user_id", job.user_id);
-      if (statusError) throw new Error("schedule_status_failed");
-      sent++;
-    } catch (e) {
-      const timedOut = e instanceof DOMException && e.name === "TimeoutError";
-      await supabase.from("whatsapp_scheduled_messages").update({
-        status: "failed", error: timedOut ? "provider_timeout" : "processing_failed",
-      }).eq("id", job.id).eq("user_id", job.user_id);
-      failed++;
-    }
-  }
-
-  return new Response(JSON.stringify({ processed: jobs?.length || 0, sent, failed }), {
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
+    }));
+    const sent = results.filter(x=>x==="sent").length, failed = results.filter(x=>["failed","uncertain"].includes(x)).length;
+    if (failed) await alertPlatformAdmins(supabase,"whatsapp-delivery",`${failed} entrega(s) precisam de conferência. Consulte a fila de atendimento.`);
+    if(await retryWork)await alertPlatformAdmins(supabase,'whatsapp-inbox-retry','Há mensagens recebidas aguardando nova tentativa de processamento.');
+    return new Response(JSON.stringify({processed:jobs?.length||0,sent,failed}), {headers});
+  } catch { return new Response(JSON.stringify({error:"queue_unavailable"}), {status:503,headers}); }
 });

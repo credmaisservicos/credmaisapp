@@ -29,6 +29,7 @@ export interface CallAnthropicParams {
   maxTokens?: number;
   temperature?: number;
   model?: string;
+  timeoutMs?: number;
 }
 
 /** Converte o conteúdo (string ou blocos Anthropic) para texto simples. */
@@ -43,6 +44,7 @@ function toText(content: string | any[]): string {
 async function callGateway(params: CallAnthropicParams, apiKey: string): Promise<string> {
   const resp = await fetch(GATEWAY_URL, {
     method: "POST",
+    signal:AbortSignal.timeout(params.timeoutMs ?? 15_000),
     headers: {
       "Content-Type": "application/json",
       "Lovable-API-Key": apiKey,
@@ -71,6 +73,7 @@ async function callGateway(params: CallAnthropicParams, apiKey: string): Promise
 async function callDeepSeek(params: CallAnthropicParams, apiKey: string): Promise<string> {
   const resp = await fetch("https://api.deepseek.com/chat/completions", {
     method: "POST",
+    signal:AbortSignal.timeout(params.timeoutMs ?? 15_000),
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
@@ -100,6 +103,7 @@ async function callDeepSeek(params: CallAnthropicParams, apiKey: string): Promis
 async function callAnthropicDirect(params: CallAnthropicParams, apiKey: string): Promise<string> {
   const resp = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
+    signal:AbortSignal.timeout(params.timeoutMs ?? 15_000),
     headers: {
       "Content-Type": "application/json",
       "x-api-key": apiKey,
@@ -143,7 +147,10 @@ export async function callAnthropic(params: CallAnthropicParams): Promise<string
   }
 
   let ultimoErro: unknown;
+  const deadline=Date.now()+(params.timeoutMs ?? 15_000);
   for (const [nome, exec] of provedores) {
+    if(Date.now()>=deadline)break;
+    params={...params,timeoutMs:Math.max(1,deadline-Date.now())};
     try {
       return await exec();
     } catch (err) {
