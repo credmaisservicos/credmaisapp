@@ -2,6 +2,8 @@
 
 ## 2026-10-07 — Recuperação de rede no Safari e origens nativas
 
+Conferência posterior encontrou HTML no lugar do chunk de ícone no Chromium e WebKit, impedindo a inicialização pública apesar da API disponível. A URL do chunk é renovada e a entrega valida MIME dos assets, recusando fallback HTML e falhas HTTP sem cache. Arquivos válidos permanecem imutáveis; as rotas estáticas da aplicação continuam usando o shell. Seis novos testes cobrem a entrega, incluindo quatro falhas reproduzidas antes da correção.
+
 O proxy passa a permitir o cabeçalho de nova tentativa GET usado pelo SDK nas origens nativas. A recusa foi reproduzida no WebKit com uma consulta pública vazia: sem o cabeçalho, HTTP 200; com ele, `Load failed`. A recuperação do perfil reconhece as mensagens específicas do Safari, mantendo limite de tentativas e negativas de acesso. WebKit com configuração de iPhone integra os testes de login com backend fictício. Validação local: 663 testes unitários e 18 de login nos dois motores, tipos, lint, hooks e build. Sem migração nem alteração de registros financeiros. A causa específica nos aparelhos relatados e o DNS com `www` permanecem pendentes. [Evidências e limites](docs/acesso-safari-retry-2026-10-07.md).
 
 ## 2026-10-07 — Razão dos pagamentos parciais sucessivos

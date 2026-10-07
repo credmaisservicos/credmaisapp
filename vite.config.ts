@@ -43,7 +43,7 @@ export default defineConfig({
         banner: "/* credmais-release: 2026-10-07-desktop-install */",
         entryFileNames: "assets/[name]-release20261007-[hash].js",
         chunkFileNames: (chunk) => chunk.name === "trash-2"
-          ? "assets/[name]-cachefix20261007-[hash].js"
+          ? "assets/[name]-assetguard20261007-[hash].js"
           : "assets/[name]-release20261007-[hash].js",
         // O bundle de entrada juntava React, framer-motion, o cliente do
         // Supabase e o Radix inteiro no MESMO arquivo do código do app. Duas

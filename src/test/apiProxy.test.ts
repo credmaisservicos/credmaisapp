@@ -38,3 +38,19 @@ it.each(['http://localhost','https://localhost','capacitor://localhost'])('allow
  expect(requested.every(name=>allowed.includes(name))).toBe(true);expect(upstream).not.toHaveBeenCalled();
 });
 it('serves other paths as static assets',async()=>{expect(await (await proxy.fetch(new Request('https://credmaisapp.com.br/dashboard'),{ASSETS:{fetch:assets}})).text()).toBe('static asset');});
+it.each(['script.js','style.css','picture.webp'])('rejects an HTML fallback for %s without caching it',async name=>{
+ const fallback=vi.fn(async()=>new Response('<html>SPA shell</html>',{headers:{'Content-Type':'text/html','Cache-Control':'public,max-age=31536000,immutable'}}));
+ const response=await proxy.fetch(new Request('https://credmaisapp.com.br/assets/'+name),{ASSETS:{fetch:fallback}});
+ expect(response.status).toBe(404);expect(response.headers.get('Cache-Control')).toContain('no-store');
+ expect(response.headers.get('Cloudflare-CDN-Cache-Control')).toBe('no-store');expect(response.headers.get('Content-Type')).not.toContain('html');
+});
+it.each([['script.js','application/javascript'],['style.css','text/css']])('keeps immutable cache for a valid %s',async(name,type)=>{
+ const valid=vi.fn(async()=>new Response('valid asset',{headers:{'Content-Type':type,'Cache-Control':'public,max-age=31536000,immutable'}}));
+ const response=await proxy.fetch(new Request('https://credmaisapp.com.br/assets/'+name),{ASSETS:{fetch:valid}});
+ expect(response.status).toBe(200);expect(response.headers.get('Cache-Control')).toContain('immutable');expect(await response.text()).toBe('valid asset');
+});
+it('does not cache an unavailable asset and preserves its HTTP failure',async()=>{
+ const unavailable=vi.fn(async()=>new Response('Unavailable',{status:503,headers:{'Cache-Control':'public,max-age=3600'}}));
+ const response=await proxy.fetch(new Request('https://credmaisapp.com.br/assets/script.js'),{ASSETS:{fetch:unavailable}});
+ expect(response.status).toBe(503);expect(response.headers.get('Cache-Control')).toContain('no-store');
+});

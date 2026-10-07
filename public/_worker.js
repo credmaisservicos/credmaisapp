@@ -1,10 +1,26 @@
 const PREFIX='/api/supabase';
 const BACKEND='https://credmaisapp-supabase.fcoipz.easypanel.host';
 const appOrigins=new Set(['https://credmaisapp.com.br','https://www.credmaisapp.com.br','http://localhost','https://localhost','capacitor://localhost']);
+async function staticResponse(request,env,url){
+ const response=await env.ASSETS.fetch(request);
+ if(!url.pathname.startsWith('/assets/')||response.status===304)return response;
+ const type=(response.headers.get('content-type')||'').toLowerCase();
+ const invalid=response.ok&&(type.includes('text/html')||
+  (/\.(?:js|mjs)$/i.test(url.pathname)&&!/(?:java|ecma)script/.test(type))||
+  (/\.css$/i.test(url.pathname)&&!type.includes('text/css')));
+ if(!invalid&&response.status<400)return response;
+ // SPA fallback HTML must never become an immutable JavaScript cache entry.
+ const headers=invalid?new Headers({'Content-Type':'text/plain; charset=utf-8','X-Content-Type-Options':'nosniff'}):new Headers(response.headers);
+ headers.set('Cache-Control','no-store');
+ headers.set('CDN-Cache-Control','no-store');
+ headers.set('Cloudflare-CDN-Cache-Control','no-store');
+ if(invalid)return new Response(request.method==='HEAD'?null:'Arquivo do aplicativo indisponível. Tente novamente.',{status:404,headers});
+ return new Response(response.body,{status:response.status,statusText:response.statusText,headers});
+}
 export default {
  async fetch(request,env){
   const url=new URL(request.url);
-  if(!url.pathname.startsWith(PREFIX+'/'))return env.ASSETS.fetch(request);
+  if(!url.pathname.startsWith(PREFIX+'/'))return staticResponse(request,env,url);
   const path=url.pathname.slice(PREFIX.length);
   const origin=request.headers.get('origin');
   const allowed=!origin||origin===url.origin||appOrigins.has(origin);
