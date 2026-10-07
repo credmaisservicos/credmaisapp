@@ -26,7 +26,7 @@ const plans = [
       { label: "Réguas de cobrança automáticas", on: true },
       { label: "Agente de IA no WhatsApp 24h", on: true },
       { label: "Disparos e follow-up inteligentes", on: true },
-      { label: "Análises e briefing diário por IA", on: true },
+      { label: "Análises por IA", on: true },
       { label: "Suporte prioritário", on: true },
     ],
   },

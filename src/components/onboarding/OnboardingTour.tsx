@@ -21,7 +21,7 @@ const STEPS: Step[] = [
   {
     selector: '[data-tour="dashboard"]',
     title: "Dashboard",
-    description: "Aqui você acompanha KPIs, lucros, cobranças do dia e o briefing diário gerado por IA.",
+    description: "Aqui você acompanha KPIs, lucros e cobranças do dia.",
     placement: "right",
   },
   {

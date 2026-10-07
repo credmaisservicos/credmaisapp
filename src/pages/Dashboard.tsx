@@ -18,7 +18,6 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useMultiTableRealtime } from "@/hooks/useRealtimeSubscription";
 const DashboardCharts = lazy(() => import("@/components/dashboard/DashboardCharts"));
-import DailyBriefing from "@/components/dashboard/DailyBriefing";
 import PeriodComparison from "@/components/dashboard/PeriodComparison";
 import NarrativeHero from "@/components/dashboard/NarrativeHero";
 import ExecutiveKPIs from "@/components/dashboard/ExecutiveKPIs";
@@ -239,9 +238,6 @@ const Dashboard = () => {
           ))}
         </div>
       </section>
-
-      {/* ─── Daily AI Briefing ─── */}
-      <DailyBriefing />
 
       <PendingCenter overdueCount={metrics.overdueCount} />
 
