@@ -1,5 +1,9 @@
 # QA Report — CredMais
 
+## 2026-10-07 — Inicialização nativa e diagnóstico em outros aparelhos
+
+Leitura de preferência bloqueada não interrompe mais a inicialização do shell nativo. Erros gerais distinguem conexão com o servidor, indisponibilidade HTTP, sessão, permissão e internet offline. Validação: 580 testes unitários, oito cenários de login com backend fictício, tipos, lint, hooks e build aprovados. A tela publicada de login abriu em três contextos novos do Chromium, incluindo simulações móveis. Autenticação e REST disponíveis; nenhuma das 14 contas está sem perfil. O domínio com `www` não possui DNS e permanece pendente de acesso à zona; o endereço sem `www` funciona. Não há confirmação de causa ou resolução no aparelho relatado. Sem alteração de dados de usuários ou backend. [Evidências e limites](docs/auth-session-recovery.md).
+
 ## 2026-10-07 — Logout por navegador e acesso aos portais
 
 O portal e os demais botões de saída deixam de invalidar sessões em outros aparelhos. A área do credor fica bloqueada enquanto o portal está ativo e uma renovação tardia não recupera suas credenciais nesse documento. Cliente e cobrador conseguem entrar com armazenamento bloqueado ou cheio, usando sessão temporária nesta janela. Leituras expiram com cancelamento e respostas antigas não restauram o portal após sair, inclusive depois de uma resposta de pagamento. Validação: 569 testes Vitest e 234 de interface, tipos, lint, hooks e build aprovados; 222 verificações compartilhadas e 220 integrações permanecem na CI (1.245 cenários na execução completa). O servidor confirmou o logout local com duas sessões temporárias da conta autorizada: uma foi recusada na renovação e outra continuou válida, preservando as anteriores e removendo as temporárias. Sem e-mail, senha alterada, pagamento ou mensagem real. Uma raiz vazia em relatórios na matriz local não se repetiu e permanece em acompanhamento. [Evidências e pendências](docs/auth-session-recovery.md).

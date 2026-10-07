@@ -13,6 +13,8 @@
  * rejeita — isso não pode derrubar o app inteiro por causa de uma status bar.
  */
 
+import { readLocalPreference } from './browserStorage';
+
 export type NativePlatform = "android" | "ios" | "web";
 
 interface CapacitorGlobal {
@@ -120,7 +122,7 @@ export async function iniciarShellNativo(): Promise<void> {
   if (shellIniciado || !isNativeApp()) return;
   shellIniciado = true;
   await ligarTeclado();
-  const temaSalvo = localStorage.getItem("theme") === "light" ? "light" : "dark";
+  const temaSalvo = readLocalPreference("theme") === "light" ? "light" : "dark";
   await aplicarTemaNativo(temaSalvo);
   await esconderSplashNativo();
 }

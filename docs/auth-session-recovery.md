@@ -33,3 +33,13 @@ As assinaturas das duas RPCs de contrato foram conferidas no catálogo do Postgr
 No servidor, duas sessões temporárias da conta de testes autorizada confirmaram o escopo: a primeira foi encerrada e não conseguiu renovar; a segunda renovou normalmente. Sessões anteriores foram preservadas e as duas temporárias foram removidas. A geração dos links ocorreu pela API administrativa, sem envio de e-mail e sem mudança de senha. Nenhum pagamento real ou mensagem foi enviado; não houve migração nem alteração de registros financeiros ou funções do bot nesta rodada.
 
 A confirmação no aparelho que apresentou o erro e a entrega real de e-mail continuam pendentes. Permanecem em revisão as chamadas HTTP diretas da tela de agente e exportação, conexões de tempo real em redes restritas e os demais itens do checklist de entrega. Esses resultados não comprovam a conclusão de toda a aplicação.
+
+## Diagnóstico adicional de acesso em outros aparelhos
+
+Uma nova leitura em 7 de outubro confirmou autenticação e REST disponíveis, preflights nativos aceitos e correspondência de perfil para as 14 contas cadastradas. Em três contextos novos do Chromium, a tela publicada de login abriu com HTTP 200, sem erro de JavaScript ou requisição do domínio principal que falhasse: desktop, Android emulado e iPhone emulado. Esses testes não comprovam acesso em aparelho físico nem login com a senha de cada usuário.
+
+O endereço `www.credmaisapp.com.br` não possui registro DNS. O endereço funcional é `https://credmaisapp.com.br/login`. A credencial Cloudflare disponível nesta sessão consulta o projeto Pages, mas não retorna a zona DNS do domínio; nenhuma configuração de DNS foi alterada. Essa é uma falha concreta de endereço e ainda não foi demonstrado que é a causa do relato.
+
+Foi reproduzida e corrigida uma exceção na inicialização do shell Android quando a leitura de `localStorage` falha: a preferência de tema passa pelo adaptador protegido, permitindo que a inicialização chegue à liberação do splash. Testes também cobrem tema salvo, inicialização única e plugin visual ausente. Mensagens gerais agora distinguem falta de internet informada pelo navegador, falha de conexão com o servidor, HTTP 5xx, sessão expirada, permissão e limite de tentativas. Isso melhora o diagnóstico e não substitui a correção de uma falha de rede.
+
+580 testes unitários passaram após essas alterações. Não houve mudança de conta, política de acesso, dado financeiro ou função de servidor nesta rodada. A confirmação do endereço, plataforma, rede e mensagem nos aparelhos afetados continua pendente.
