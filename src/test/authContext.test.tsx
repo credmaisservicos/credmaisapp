@@ -54,6 +54,23 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe("sessão e perfil", () => {
+  it.each(['resolved','rejected'])('recupera uma falha de rede do Safari na consulta do perfil: %s',async kind=>{
+    if(kind==='resolved')api.single.mockResolvedValueOnce({data:null,error:{message:'TypeError: Load failed'},status:0});
+    else api.single.mockRejectedValueOnce(new TypeError('Load failed'));
+    const {result}=await open();await emit(session('a'));
+    expect(result.current.loading).toBe(true);
+    await act(async()=>{await vi.advanceTimersByTimeAsync(500);});
+    expect(result.current.profile?.id).toBe('a');expect(result.current.authError).toBeNull();
+    expect(api.single).toHaveBeenCalledTimes(2);expect(api.refreshSession).not.toHaveBeenCalled();
+  });
+  it('não insiste nem libera permissões salvas se a rede do Safari continua falhando',async()=>{
+    saveOfflineSession('a',{id:'a',subscription_type:'lifetime'},true);
+    api.single.mockResolvedValue({data:null,error:{message:'TypeError: Load failed'},status:0});
+    const {result}=await open();await emit(session('a'));
+    await act(async()=>{await vi.advanceTimersByTimeAsync(500);});
+    expect(api.single).toHaveBeenCalledTimes(2);expect(result.current.profile).toBeNull();
+    expect(result.current.isPlatformAdmin).toBe(false);expect(result.current.authError).toContain('servidor');
+  });
   it('normal logout does not end the account sessions on other devices',async()=>{
     const {result}=await open();await emit(session('a'));
     await act(async()=>{await result.current.signOut();});

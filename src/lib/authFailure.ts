@@ -6,7 +6,10 @@ const fields=(error:unknown)=>{
 export function isTemporaryAuthFailure(error:unknown){
  const {status,code,message}=fields(error);
  if([401,403,429].includes(status)||/invalid_credentials|refresh_token|42501|PGRST30[123]/i.test(code))return false;
- return [408,502,503,504].includes(status)||(!status&&/network|failed to fetch|fetch failed|timeout|timed out|demorou|aborted|aborterror|falha de rede/i.test(message));
+ // WebKit reports fetch failures as "Load failed"; PostgREST may retain the
+ // "TypeError:" prefix. Match those messages rather than every TypeError.
+ const safariNetworkFailure=/^(?:TypeError:\s*)?(?:Load failed|The Internet connection appears to be offline)\.?$/i.test(message.trim());
+ return [408,502,503,504].includes(status)||(!status&&(safariNetworkFailure||/network|failed to fetch|fetch failed|timeout|timed out|demorou|aborted|aborterror|falha de rede/i.test(message)));
 }
 export function authFailureMessage(error:unknown,fallback='Não foi possível verificar seu acesso. Tente novamente.'){
  const {status,code,message}=fields(error);

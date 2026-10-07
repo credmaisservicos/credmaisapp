@@ -106,8 +106,9 @@ jobs:
           cache: npm
 
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install --with-deps chromium webkit
       - name: Testar login e interface com dados simulados
+        # WebKit exercises the iPhone fetch errors and recovery too.
         run: npm run test:e2e:local
 
   segredos:

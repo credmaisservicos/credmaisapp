@@ -29,4 +29,12 @@ it.each(['http://localhost','https://localhost','capacitor://localhost','https:/
  const upstream=vi.fn();vi.stubGlobal('fetch',upstream);const response=await proxy.fetch(new Request(base+'/auth/v1/token',{method:'OPTIONS',headers:{Origin:origin}}),{ASSETS:{fetch:assets}});
  expect(response.status).toBe(204);expect(response.headers.get('Access-Control-Allow-Origin')).toBe(origin);expect(response.headers.get('Access-Control-Allow-Headers')).toContain('apikey');expect(upstream).not.toHaveBeenCalled();
 });
+it.each(['http://localhost','https://localhost','capacitor://localhost'])('allows native SDK retry preflight from %s',async origin=>{
+ const upstream=vi.fn();vi.stubGlobal('fetch',upstream);
+ const requested=['authorization','apikey','x-client-info','x-retry-count'];
+ const response=await proxy.fetch(new Request(base+'/rest/v1/profiles?select=id&limit=0',{method:'OPTIONS',headers:{Origin:origin,'Access-Control-Request-Method':'GET','Access-Control-Request-Headers':requested.join(',')}}),{ASSETS:{fetch:assets}});
+ expect(response.status).toBe(204);expect(response.headers.get('Access-Control-Allow-Origin')).toBe(origin);
+ const allowed=response.headers.get('Access-Control-Allow-Headers')!.split(',').map(name=>name.trim().toLowerCase());
+ expect(requested.every(name=>allowed.includes(name))).toBe(true);expect(upstream).not.toHaveBeenCalled();
+});
 it('serves other paths as static assets',async()=>{expect(await (await proxy.fetch(new Request('https://credmaisapp.com.br/dashboard'),{ASSETS:{fetch:assets}})).text()).toBe('static asset');});

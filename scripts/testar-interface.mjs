@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { join } from "node:path";
 import { setTimeout } from "node:timers/promises";
 import { existsSync } from "node:fs";
-import { chromium } from "@playwright/test";
+import { chromium, webkit } from "@playwright/test";
 
 // Artefato e backend exclusivos de teste: nunca usa a configuração de produção.
 const env = {
@@ -30,6 +30,7 @@ async function run(cli, args) {
 }
 
 if (!existsSync(chromium.executablePath())) await run(playwright, ["install", "chromium"]);
+if (!existsSync(webkit.executablePath())) await run(playwright, ["install", "webkit"]);
 await run(vite, ["build", "--mode", "test", "--outDir", "dist-e2e"]);
 const server = start(vite, ["preview", "--outDir", "dist-e2e", "--host", "127.0.0.1", "--port", "4173", "--strictPort"], ["ignore", "pipe", "pipe"]);
 let serverError;

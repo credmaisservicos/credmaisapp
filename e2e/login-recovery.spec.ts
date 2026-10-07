@@ -15,7 +15,7 @@ const b64 = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("bas
 // self-hosted — e os testes passam a bater no backend real sem perceber.
 const supabaseOrigin = new URL(process.env.VITE_SUPABASE_URL || "https://supabase-not-configured.invalid").origin;
 
-async function mockBackend(page: Page, failFirstProfile: boolean|'temporary' = false) {
+async function mockBackend(page: Page, failFirstProfile: boolean|'temporary'|'network' = false) {
   let profileReads = 0;
   await page.routeWebSocket("**", socket => socket.close());
   await page.route(`${supabaseOrigin}/**`, async route => {
@@ -30,7 +30,10 @@ async function mockBackend(page: Page, failFirstProfile: boolean|'temporary' = f
     else if (path === "/rest/v1/profiles") {
       const isAuthProfile = url.searchParams.get("select") === "*";
       if (isAuthProfile) profileReads++;
-      if (failFirstProfile && isAuthProfile && profileReads === 1) {
+      // Exhaust the SDK's three GET retries too, so this exercises the app's
+      // profile recovery with WebKit's actual "Load failed" response.
+      if (failFirstProfile && isAuthProfile && (failFirstProfile==='network'?profileReads<=4:profileReads===1)) {
+        if(failFirstProfile==='network'){await route.abort('failed');return;}
         await route.fulfill({ status: failFirstProfile==='temporary'?503:400, json: { message: "Falha simulada ao consultar perfil" } });
         return;
       }
@@ -72,6 +75,11 @@ test('uma falha temporária do perfil se recupera automaticamente no login',asyn
  const reads=await mockBackend(page,'temporary');await login(page);
  await expect(page.getByRole('tab',{name:'Visão geral',exact:true})).toBeVisible();
  expect(reads()).toBe(2);await expect(page.getByText('Não foi possível verificar seu acesso')).toHaveCount(0);
+});
+test('primeiro acesso recupera uma falha de rede do navegador ao consultar o perfil',async({page})=>{
+ const reads=await mockBackend(page,'network');await login(page);
+ await expect(page.getByRole('tab',{name:'Visão geral',exact:true})).toBeVisible();
+ expect(reads()).toBe(5);await expect(page.getByText('Não foi possível verificar seu acesso')).toHaveCount(0);
 });
 for(const failure of ['quota','blocked']as const)test(`login chega ao painel com armazenamento ${failure}`,async({page})=>{
  const errors:string[]=[];page.on('pageerror',error=>errors.push(error.stack||error.message));

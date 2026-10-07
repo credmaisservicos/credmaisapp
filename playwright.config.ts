@@ -43,5 +43,10 @@ export default defineConfig({
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
     },
+    {
+      name: "webkit-login",
+      testMatch: /login-recovery\.spec\.ts/,
+      use: { ...devices["iPhone 13"] },
+    },
   ],
 });

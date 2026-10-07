@@ -15,7 +15,7 @@ export default {
   if(!/^\/(?:auth|rest|storage|functions)\/v1\//.test(path))return new Response(JSON.stringify({message:'Unknown API route'}),{status:404,headers});
   if(request.method==='OPTIONS'){
    headers.set('Access-Control-Allow-Methods','GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS');
-   headers.set('Access-Control-Allow-Headers','authorization,apikey,x-client-info,content-type,accept,prefer,range,range-unit,accept-profile,content-profile,x-upsert,x-supabase-api-version,x-supabase-client-platform,x-supabase-client-platform-version,x-supabase-client-runtime,x-supabase-client-runtime-version');
+   headers.set('Access-Control-Allow-Headers','authorization,apikey,x-client-info,x-retry-count,content-type,accept,prefer,range,range-unit,accept-profile,content-profile,x-upsert,x-supabase-api-version,x-supabase-client-platform,x-supabase-client-platform-version,x-supabase-client-runtime,x-supabase-client-runtime-version');
    return new Response(null,{status:204,headers});
   }
   const target=new URL(BACKEND);target.pathname=path;target.search=url.search;
