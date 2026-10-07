@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.117.2";
 import { checkSharedSecret } from "../_shared/guard.ts";
 import { queueBotMessage } from "../_shared/bot_delivery.ts";
 const headers={"Access-Control-Allow-Origin":"*","Content-Type":"application/json"};

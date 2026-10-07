@@ -1,7 +1,7 @@
 import { assert, assertEquals } from 'https://deno.land/std@0.168.0/testing/asserts.ts';
 import { handlers } from './capture_serve.ts';
 import { deliverBotJob } from '../_shared/bot_delivery.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.117.2';
 import { saoPauloDay } from '../_shared/bot_collection.ts';
 const backend='https://collection.test.invalid',provider='https://provider.test.invalid',owner='00000000-0000-4000-8000-000000000001',client='client-test';
 for(const [key,value] of Object.entries({SUPABASE_URL:backend,SUPABASE_SERVICE_ROLE_KEY:'test-service',CRON_SECRET:'test-cron'}))Deno.env.set(key,value);

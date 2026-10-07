@@ -1,6 +1,6 @@
 import { isEmAtraso, isEmAberto, venceHoje } from "../_shared/installmentStatus.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.117.2";
 import { callAnthropicJSON } from "../_shared/anthropic.ts";
 import { enforceEntitlement, entitlementResponse } from "../_shared/entitlement.ts";
 

@@ -1,5 +1,5 @@
 // Helpers de autenticação/autorização compartilhados entre edge functions.
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.117.2";
 
 /** Comparação de strings em tempo constante (evita timing side-channel em segredos). */
 export function timingSafeEqual(a: string, b: string): boolean {

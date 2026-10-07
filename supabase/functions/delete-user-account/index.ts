@@ -1,7 +1,7 @@
 // Apaga a conta do usuário autenticado (LGPD - Direito ao esquecimento)
 // Requer confirmação com o próprio email do usuário no body.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.117.2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

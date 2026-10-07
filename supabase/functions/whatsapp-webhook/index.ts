@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.117.2";
 import { checkSharedSecret } from "../_shared/guard.ts";
 import { guard as rateLimitGuard } from "../_shared/rate_limit.ts";
 import { parseMemory, mergeMemory, serializeMemory, pushIntent, summarizeIntents, lastApproach, type IntentEntry } from "../_shared/memory.ts";

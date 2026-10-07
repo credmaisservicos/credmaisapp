@@ -7,7 +7,7 @@
 // Só admin da plataforma executa. O padrão é CONFERÊNCIA (dry run): lê o arquivo
 // e relata o que ele contém, sem escrever nada. Para gravar de fato é preciso
 // mandar `confirmar: "RESTAURAR"` explicitamente.
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.117.2";
 import { getPlatformAdminUser, unauthorized } from "../_shared/guard.ts";
 
 const corsHeaders = {

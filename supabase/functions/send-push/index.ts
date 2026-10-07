@@ -3,7 +3,7 @@
 // `notifications_push_on_insert` (ver 20260922140000_web_push_notifications.sql)
 // a cada INSERT em `public.notifications` — não é invocado direto pelo app.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.117.2";
 // `web-push` é um pacote CJS; os tipos publicados no esm.sh não declaram
 // `export default`, embora o módulo em runtime exponha um. Import de
 // namespace evita o erro de tipo TS1192 sem perder o valor em runtime.
