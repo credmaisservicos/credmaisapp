@@ -2864,6 +2864,10 @@ export type Database = {
         Args: { _transaction_id: string }
         Returns: Json
       }
+      wallet_cash_report: {
+        Args: { _days?: number | null; _search?: string; _offset?: number; _limit?: number }
+        Returns: Json
+      }
       reverse_last_investor_payment: {
         Args: { _loan_id: string }
         Returns: Json

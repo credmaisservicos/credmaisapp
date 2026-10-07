@@ -103,6 +103,8 @@ aparelhos físicos, banco de staging e contas sandbox dos provedores.
 - [ ] `automation_logs` registra execuções
 
 ## 12. Financeiro
+
+- [x] Carteira: relatório autenticado de caixa, recebimentos parciais pela data real, diferenças históricas sem data, composição explícita e histórico paginado. Testes e limites: `docs/caixa-carteira-2026-10-07.md`.
 - [ ] TopBar exibe KPIs corretos (Capital, A Receber, Recebido, Lucro)
 - [ ] Filtro de período atualiza todos os KPIs
 - [ ] Despesas debitam de `expense_balance`

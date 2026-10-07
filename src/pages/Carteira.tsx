@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Wallet,
   ArrowUpRight,
@@ -28,9 +28,9 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMultiTableRealtime } from "@/hooks/useRealtimeSubscription";
-import { formatBR, parseLocalDate } from "@/lib/dateUtils";
+import { formatBR } from "@/lib/dateUtils";
 import { useConfirm } from "@/components/ConfirmProvider";
-import { fetchAll } from "@/lib/fetchAll";
+import { walletCashReportSchema } from "@/lib/walletCashReport";
 import { parseFinancialAmount } from "@/lib/financialEntry";
 import {PaymentAllocationNotice} from '@/components/PaymentAllocationNotice';
 
@@ -38,9 +38,6 @@ type PeriodKey = "all" | "7d" | "30d" | "90d";
 const safeNumber = (value: unknown) => {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;
-};
-const safeDateMs = (value: unknown) => {
-  return parseLocalDate(typeof value === "string" || value instanceof Date ? value : null)?.getTime() ?? null;
 };
 
 const Carteira = () => {
@@ -56,96 +53,35 @@ const Carteira = () => {
   const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
 
-  useMultiTableRealtime(
-    ["profits", "expenses", "contract_installments", "transactions"],
-    [
-      ["carteira-profits", user?.id || ""],
-      ["carteira-expenses", user?.id || ""],
-      // Precisa bater EXATAMENTE com o queryKey da consulta abaixo. Estava
-      // "carteira-installments" enquanto a query usava outro nome — o realtime
-      // nunca atualizava a carteira quando um pagamento era registrado.
-      ["carteira-installments-recebidas", user?.id || ""],
-      ["carteira-capital", user?.id || ""],
-      ["carteira-withdrawals", user?.id || ""],
-      ["carteira-receivables", user?.id || ""],
-      ["payment-allocation-review", user?.id || ""],
-    ],
-  );
-
-  const { data: profits = [], isLoading: loadingProfits, error: profitsError } = useQuery({
-    queryKey: ["carteira-profits", user?.id],
-    queryFn: async () => fetchAll((f, t) => supabase.from("profits").select("*").eq("user_id", user!.id).order("date", { ascending: false }).range(f, t)),
-    enabled: !!user,
-  });
-
-  const { data: expenses = [], isLoading: loadingExpenses, error: expensesError } = useQuery({
-    queryKey: ["carteira-expenses", user?.id],
-    queryFn: async () => fetchAll((f, t) => supabase.from("expenses").select("*").eq("user_id", user!.id).order("date", { ascending: false }).range(f, t)),
-    enabled: !!user,
-  });
-
-  const { data: installments = [], isLoading: loadingInst, error: installmentsError } = useQuery({
-    queryKey: ["carteira-installments-recebidas", user?.id],
-    queryFn: async () =>
-      // TODAS as parcelas recebidas, não só as de contrato ativo.
-      //
-      // A consulta anterior limitava a contratos "active"/"overdue" — o dinheiro
-      // que entrou por contratos já quitados sumia da carteira. Em 2026-08-05
-      // eram R$ 121.756,96 de recebimento invisível, mais da metade do total.
-      // Contrato encerrado sai do "capital na rua" (isso é do painel), mas o
-      // dinheiro que ele trouxe continua no caixa.
-      fetchAll((f, t) =>
-        supabase.from("contract_installments")
-          .select("id, amount, paid_amount, paid_at, contract_id, client_id")
-          .eq("user_id", user!.id)
-          .eq("status", "paid")
-          .order("paid_at", { ascending: false })
-          .range(f, t),
-      ),
-    enabled: !!user,
-  });
-
-  const { data: capital = [], isLoading: loadingCapital, error: capitalError } = useQuery({
-    queryKey: ["carteira-capital", user?.id],
-    queryFn: async () => fetchAll((f, t) => supabase.from("transactions").select("*").eq("user_id", user!.id).eq("type", "capital_injection").order("date", { ascending: false }).range(f, t)),
-    enabled: !!user,
-  });
-
-  const { data: withdrawals = [], isLoading: loadingWithdraw, error: withdrawalsError } = useQuery({
-    queryKey: ["carteira-withdrawals", user?.id],
-    queryFn: async () => fetchAll((f, t) => supabase.from("transactions").select("*").eq("user_id", user!.id).eq("type", "capital_withdrawal").order("date", { ascending: false }).range(f, t)),
-    enabled: !!user,
-  });
-
-  const { data: ledgerOutflows = [], isLoading: loadingLedger, error: ledgerError } = useQuery({
-    queryKey: ["carteira-ledger-outflows", user?.id],
-    queryFn: async () => fetchAll((f, t) => supabase.from("transactions").select("*")
-      .eq("user_id", user!.id).in("type", ["loan_disbursement", "expense"])
-      .order("date", { ascending: false }).range(f, t)),
-    enabled: !!user,
-  });
-
-  const { data: receivables = [], isLoading: loadingReceivables, error: receivablesError } = useQuery({
-    queryKey: ["carteira-receivables", user?.id],
-    queryFn: async () => fetchAll((f, t) => supabase.from("contract_installments")
-      .select("id,amount,paid_amount,due_date,status").eq("user_id", user!.id)
-      .neq("status", "paid").neq("status", "cancelled").order("due_date").range(f, t)),
-    enabled: !!user,
-  });
-
-  const { data: reconciliation } = useQuery({
-    queryKey: ["financial-reconciliation", user?.id],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any).rpc("financial_reconciliation");
-      if (error) return null; // Compatível enquanto a migração remota não foi aplicada.
-      return data as { ok: boolean; checked_installments: number; anomaly_count: number };
+  const [searchTerm, setSearchTerm] = useState("");
+  const [historyPage, setHistoryPage] = useState(0);
+  const periodDays: Record<PeriodKey, number | null> = { all: null, "7d": 7, "30d": 30, "90d": 90 };
+  const days = periodDays[period];
+  useEffect(() => {
+    const timer=setTimeout(()=>{setSearchTerm(searchTimeline.trim());setHistoryPage(0);},250);
+    return ()=>clearTimeout(timer);
+  },[searchTimeline]);
+  useMultiTableRealtime(["profits","expenses","contract_installments","transactions","contracts"],
+    [["carteira-cash-report",user?.id||""],["payment-allocation-review",user?.id||""]]);
+  const cashQuery=useQuery({
+    queryKey:["carteira-cash-report",user?.id,period,searchTerm,historyPage],enabled:!!user,
+    queryFn:async({signal})=>{
+      const controller=new AbortController();const cancel=()=>controller.abort();
+      if(signal.aborted)cancel();else signal.addEventListener('abort',cancel,{once:true});
+      const timer=setTimeout(cancel,15_000);
+      try{
+        const {data,error}=await supabase.rpc('wallet_cash_report',{_days:days,_search:searchTerm,_offset:historyPage*50,_limit:50}).abortSignal(controller.signal);
+        if(error)throw error;
+        return walletCashReportSchema.parse(data);
+      }finally{clearTimeout(timer);signal.removeEventListener('abort',cancel);}
     },
-    enabled: !!user,
-    retry: false,
   });
-
-  const loading = loadingProfits || loadingExpenses || loadingInst || loadingCapital || loadingWithdraw || loadingLedger || loadingReceivables;
-  const loadError = profitsError || expensesError || installmentsError || capitalError || withdrawalsError || ledgerError || receivablesError;
+  const invalidateWallet=()=>{
+    void qc.invalidateQueries({queryKey:["carteira-cash-report",user?.id]});
+    void qc.invalidateQueries({queryKey:["payment-allocation-review",user?.id]});
+  };
+  const loading=cashQuery.isPending;
+  const loadError=cashQuery.error;
 
   const handleSave = async () => {
     if (!user || !amount || !description || saving) return;
@@ -177,9 +113,7 @@ const Carteira = () => {
 
     toast({ title: dialogType === "in" ? "✓ Aporte adicionado!" : dialogType === "withdraw" ? "✓ Capital retirado!" : "✓ Saída registrada!" });
     setAmount(""); setDescription(""); setDialogOpen(false); setSaving(false);
-    qc.invalidateQueries({ queryKey: ["carteira-capital"] });
-    qc.invalidateQueries({ queryKey: ["carteira-withdrawals"] });
-    qc.invalidateQueries({ queryKey: ["carteira-expenses"] });
+    invalidateWallet();
     qc.invalidateQueries({ queryKey: ["dashboard-data"] });
   };
 
@@ -189,113 +123,40 @@ const Carteira = () => {
     const { error } = await supabase.from("transactions").delete().eq("id", id).eq("user_id", user.id);
     if (error) { toast({ title: "Erro ao remover", variant: "destructive" }); return; }
     toast({ title: "✓ Lançamento removido" });
-    qc.invalidateQueries({ queryKey: ["carteira-capital"] });
-    qc.invalidateQueries({ queryKey: ["carteira-withdrawals"] });
+    invalidateWallet();
   };
 
-  // === Totais globais (saldo real) ===
-  //
-  // O lucro NÃO é uma entrada separada: ele já está dentro da parcela recebida.
-  // Uma parcela de R$ 250 com R$ 220 de juros gera uma linha em `profits` de
-  // R$ 220 — somar as duas contava R$ 470 de entrada para R$ 250 que entraram.
-  // Na base de 2026-08-05 isso inflava o saldo em R$ 24.159,34.
-  //
-  // O lucro continua visível como composição: quanto do que entrou era juros.
-  const totalCapital = capital.reduce((a: number, c: any) => a + safeNumber(c.amount), 0);
-  const totalWithdrawals = withdrawals.reduce((a: number, w: any) => a + safeNumber(w.amount), 0);
-  const totalLucros = profits.reduce((a: number, p: any) => a + safeNumber(p.amount), 0);
-  const totalParcelas = installments.reduce((a: number, i: any) => a + safeNumber(i.paid_amount || i.amount), 0);
-  // Enquanto a migração ainda não chegou ao ambiente remoto, a diferença
-  // recebimentos-lucro preserva compatibilidade. Após a migração, o razão
-  // passa a fornecer a mesma composição de forma explícita.
-  const principalRecebido = installments.some((i: any) => i.paid_principal != null)
-    ? installments.reduce((a: number, i: any) => a + safeNumber(i.paid_principal), 0)
-    : Math.max(0, totalParcelas - totalLucros);
-  const totalEmprestimosLiberados = ledgerOutflows.filter((t: any) => t.type === "loan_disbursement").reduce((a: number, t: any) => a + safeNumber(t.amount), 0);
-  const totalSaidasRazao = ledgerOutflows.filter((t: any) => t.type === "expense").reduce((a: number, t: any) => a + safeNumber(t.amount), 0);
-  const totalGastos = expenses.reduce((a: number, e: any) => a + safeNumber(e.amount), 0);
-  const totalEntradas = totalCapital + totalParcelas;
-  const totalSaidas = totalGastos + totalWithdrawals + totalEmprestimosLiberados + totalSaidasRazao;
-  const saldo = totalEntradas - totalSaidas;
-
-  // === Filtros de período ===
-  const periodDays: Record<PeriodKey, number | null> = { all: null, "7d": 7, "30d": 30, "90d": 90 };
-  const withinPeriod = (dateStr: string, days: number | null) => {
-    if (days == null) return true;
-    const timestamp = safeDateMs(dateStr);
-    if (timestamp == null) return false;
-    const diff = (Date.now() - timestamp) / 86400000;
-    return diff <= days;
-  };
-
-  const days = periodDays[period];
-  const prevDays = days ? days * 2 : null;
-
-  const sumIn = (arr: any[], key: string, from: number | null, to: number | null) =>
-    arr.filter((r) => {
-      const timestamp = safeDateMs(r.date || r.paid_at);
-      if (timestamp == null) return false;
-      const d = (Date.now() - timestamp) / 86400000;
-      if (from != null && d > from) return false;
-      if (to != null && d <= to) return false;
-      return true;
-    }).reduce((a, r) => a + safeNumber(r[key] ?? r.amount), 0);
-
-  const stats = useMemo(() => {
-    // Sem o lucro na soma: ele já vem embutido na parcela (ver totais acima).
-    const received = installments.map((i: any) => ({ ...i, amount: safeNumber(i.paid_amount || i.amount), date: i.paid_at }));
-    const inCur = sumIn(capital, "amount", days, null) + sumIn(received, "amount", days, null);
-    const outCur = sumIn(expenses, "amount", days, null) + sumIn(withdrawals, "amount", days, null) + sumIn(ledgerOutflows, "amount", days, null);
-    const inPrev = prevDays ? sumIn(capital, "amount", prevDays, days) + sumIn(received, "amount", prevDays, days) : 0;
-    const outPrev = prevDays ? sumIn(expenses, "amount", prevDays, days) + sumIn(withdrawals, "amount", prevDays, days) + sumIn(ledgerOutflows, "amount", prevDays, days) : 0;
-    const inDelta = inPrev > 0 ? ((inCur - inPrev) / inPrev) * 100 : null;
-    const outDelta = outPrev > 0 ? ((outCur - outPrev) / outPrev) * 100 : null;
-    return { inCur, outCur, netCur: inCur - outCur, inDelta, outDelta };
-  }, [capital, installments, expenses, withdrawals, ledgerOutflows, days, prevDays]);
-
-  const closing = useMemo(() => ({
-    openingBalance: period === "all" ? 0 : saldo - stats.netCur,
-    inflows: stats.inCur,
-    outflows: stats.outCur,
-    closingBalance: saldo,
-  }), [period, saldo, stats]);
-
-  // Capital líquido disponível (aportes − retiradas de capital)
-  const capitalLiquido = totalCapital + principalRecebido - totalEmprestimosLiberados - totalWithdrawals;
-
-  const forecast = useMemo(() => {
-    const now = new Date(); now.setHours(23, 59, 59, 999);
-    const sumUntil = (daysAhead: number) => {
-      const end = new Date(now.getTime() + daysAhead * 86400000);
-      return receivables.filter((i: any) => {
-        const due = safeDateMs(i.due_date);
-        return due != null && due <= end.getTime();
-      }).reduce((sum: number, i: any) => sum + Math.max(0, safeNumber(i.amount) - safeNumber(i.paid_amount)), 0);
-    };
-    return { d7: sumUntil(7), d30: sumUntil(30), d90: sumUntil(90) };
-  }, [receivables]);
-
-  const timeline = useMemo(() => {
-    const all = [
-      ...capital.map((c: any) => ({ type: "in" as const, desc: c.description, amount: safeNumber(c.amount), date: c.date, source: "Aporte", removable: true, id: c.id })),
-      ...withdrawals.map((w: any) => ({ type: "out" as const, desc: w.description, amount: safeNumber(w.amount), date: w.date, source: "Retirada de capital", removable: true, id: w.id })),
-      // O lucro NÃO entra na linha do tempo como movimento próprio: ele já está
-      // dentro da parcela recebida logo abaixo. Aparecia duas vezes.
-      ...installments.map((i: any) => ({ type: "in" as const, desc: "Parcela recebida", amount: safeNumber(i.paid_amount || i.amount), date: i.paid_at, source: "Parcela", removable: false, id: i.id })),
-      ...ledgerOutflows.map((t: any) => ({ type: "out" as const, desc: t.description, amount: safeNumber(t.amount), date: t.date, source: t.type === "loan_disbursement" ? "Empréstimo liberado" : "Pagamento a investidor", removable: false, id: t.id })),
-      ...expenses.map((e: any) => ({ type: "out" as const, desc: e.description, amount: safeNumber(e.amount), date: e.date, source: e.category || "Gasto", removable: false, id: e.id })),
-    ].sort((a, b) => (safeDateMs(b.date) ?? 0) - (safeDateMs(a.date) ?? 0));
-
-    return all.filter((t) => {
-      if (!withinPeriod(t.date, days)) return false;
-      if (searchTimeline && !String(t.desc || "").toLowerCase().includes(searchTimeline.toLowerCase()) && !String(t.source || "").toLowerCase().includes(searchTimeline.toLowerCase())) return false;
-      return true;
-    });
-  }, [expenses, installments, capital, withdrawals, ledgerOutflows, days, searchTimeline]);
-
+  const summary=cashQuery.data;
+  const totalCapital=summary?.totals.capital??0;
+  const totalWithdrawals=summary?.totals.withdrawals??0;
+  const totalLucros=summary?.totals.profit??0;
+  const totalParcelas=summary?.totals.receipts??0;
+  const principalRecebido=summary?.totals.principal??0;
+  const unclassified=summary?.totals.unclassified??0;
+  const totalEmprestimosLiberados=summary?.totals.disbursements??0;
+  const totalSaidasRazao=summary?.totals.ledger_expenses??0;
+  const totalGastos=summary?.totals.manual_expenses??0;
+  const totalEntradas=summary?.totals.inflows??0;
+  const totalSaidas=summary?.totals.outflows??0;
+  const saldo=summary?.totals.balance??0;
+  const capitalLiquido=totalCapital+principalRecebido-totalEmprestimosLiberados-totalWithdrawals;
+  const periodCash=summary?.period;
+  const inCur=periodCash?.inflows??0,outCur=periodCash?.outflows??0;
+  const inPrev=periodCash?.previous_inflows??0,outPrev=periodCash?.previous_outflows??0;
+  const stats={inCur,outCur,netCur:inCur-outCur,inDelta:inPrev>0?(inCur-inPrev)/inPrev*100:null,outDelta:outPrev>0?(outCur-outPrev)/outPrev*100:null};
+  const closing={openingBalance:periodCash?.opening_balance??0,inflows:inCur,outflows:outCur,closingBalance:periodCash?.closing_balance??0};
+  const forecast=summary?.forecast??{d7:0,d30:0,d90:0};
+  const timeline=summary?.timeline??[];
   const fmt = (v: number) => safeNumber(v).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
   const fmtCompact = (v: number) =>
     Math.abs(v) >= 1000 ? `R$ ${(v / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}k` : `R$ ${fmt(v)}`;
+
+  const grouped = useMemo(()=>timeline.reduce((acc, t) => {
+    const key = t.date?formatBR(t.date):"Data a conferir";
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(t);
+    return acc;
+  }, {} as Record<string, typeof timeline>),[timeline]);
 
   if (loading) {
     return (
@@ -330,19 +191,13 @@ const Carteira = () => {
   const capitalPct = entradasTotal > 0 ? (totalCapital / entradasTotal) * 100 : 0;
   const lucrosPct = entradasTotal > 0 ? (totalLucros / entradasTotal) * 100 : 0;
   const parcelasPct = entradasTotal > 0 ? (principalRecebido / entradasTotal) * 100 : 0;
+  const unclassifiedPct=entradasTotal>0?unclassified/entradasTotal*100:0;
 
   const saidasTotal = totalSaidas;
   const gastosPct = saidasTotal > 0 ? (totalGastos / saidasTotal) * 100 : 0;
   const withdrawPct = saidasTotal > 0 ? (totalWithdrawals / saidasTotal) * 100 : 0;
   const emprestimosPct = saidasTotal > 0 ? (totalEmprestimosLiberados / saidasTotal) * 100 : 0;
   const razaoPct = saidasTotal > 0 ? (totalSaidasRazao / saidasTotal) * 100 : 0;
-
-  const grouped = timeline.reduce((acc, t) => {
-    const key = formatBR(t.date);
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(t);
-    return acc;
-  }, {} as Record<string, typeof timeline>);
 
   const dayTotals = (items: typeof timeline) =>
     items.reduce((acc, t) => {
@@ -379,7 +234,7 @@ const Carteira = () => {
               </div>
               <p className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1.5">
                 <Sparkles size={12} className="text-primary" />
-                Capital líquido disponível: <span className="font-semibold text-foreground">R$ {fmt(capitalLiquido)}</span>
+                Capital líquido classificado: <span className="font-semibold text-foreground">R$ {fmt(capitalLiquido)}</span>
               </p>
             </div>
           </div>
@@ -410,8 +265,8 @@ const Carteira = () => {
         <div className="mt-5 grid grid-cols-2 gap-2.5 border-t border-white/6 pt-5 text-xs md:grid-cols-3 xl:grid-cols-6">
           {[
             { label: "Aportes", value: totalCapital, color: "text-primary", dot: "bg-primary" },
-            { label: "Lucros", value: totalLucros, color: "text-success", dot: "bg-success" },
-            { label: "Parcelas", value: totalParcelas, color: "text-info", dot: "bg-info" },
+            { label: "Juros e encargos", value: totalLucros, color: "text-success", dot: "bg-success" },
+            { label: "Recebimentos", value: totalParcelas, color: "text-info", dot: "bg-info" },
             { label: "Empréstimos liberados", value: -totalEmprestimosLiberados, color: "text-warning", dot: "bg-warning" },
             { label: "Retiradas", value: -totalWithdrawals, color: "text-warning", dot: "bg-warning" },
             { label: "Gastos", value: -totalGastos, color: "text-destructive", dot: "bg-destructive" },
@@ -429,15 +284,15 @@ const Carteira = () => {
         </div>
 
         <PaymentAllocationNotice />
-        {reconciliation && (
-          <div className={`mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs ${
-            reconciliation.ok ? "border-success/20 bg-success/5 text-success" : "border-destructive/30 bg-destructive/5 text-destructive"
-          }`}>
-            <span className="font-semibold">
-              {reconciliation.ok ? "Razão financeiro conciliado" : `${reconciliation.anomaly_count} divergência(s) financeira(s) detectada(s)`}
-            </span>
-            <span className="text-muted-foreground">{reconciliation.checked_installments} parcelas verificadas</span>
-          </div>
+        {summary && (summary.warnings.undated_amount>0 || summary.warnings.unlinked_receipts>0 || summary.warnings.future_amount>0 || summary.warnings.cash_above_installments>0) && (
+          <section aria-label="Conferência do caixa" className="mt-3 rounded-xl border border-border bg-background/35 p-3 text-sm space-y-1">
+            <p className="font-semibold">O histórico de caixa precisa de conferência</p>
+            {summary.warnings.undated_amount>0&&<p>Sem data de recebimento: R$ {fmt(summary.warnings.undated_amount)}. Incluído no total; fora dos filtros por dias.</p>}
+            {summary.warnings.unlinked_receipts>0&&<p>{summary.warnings.unlinked_receipts} recebimento(s) sem vínculo com uma parcela.</p>}
+            {summary.warnings.cash_above_installments>0&&<p>Caixa acima do acumulado nas parcelas: R$ {fmt(summary.warnings.cash_above_installments)}. Confira os lançamentos antes de conciliar.</p>}
+            {summary.warnings.future_amount>0&&<p>Com data posterior a hoje: R$ {fmt(summary.warnings.future_amount)}. Fora do saldo atual.</p>}
+            <p className="text-xs text-muted-foreground">Nenhum lançamento antigo foi alterado. Capital e juros sem classificação dependem de revisão humana.</p>
+          </section>
         )}
 
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -529,7 +384,7 @@ const Carteira = () => {
           {(["all", "7d", "30d", "90d"] as const).map((f) => (
             <button
               key={f}
-              onClick={() => setPeriod(f)}
+              onClick={() => {setHistoryPage(0);setPeriod(f);}}
               className={`pill-tab text-xs px-3 py-1.5 ${period === f ? "pill-tab-active" : "pill-tab-inactive"}`}
             >
               {f === "all" ? "Total" : f === "7d" ? "7 dias" : f === "30d" ? "30 dias" : "90 dias"}
@@ -573,12 +428,12 @@ const Carteira = () => {
           },
           {
             icon: PiggyBank,
-            label: "Capital Líquido",
+            label: "Capital Classificado",
             value: capitalLiquido,
             color: "text-primary",
             bg: "bg-primary/10",
             ring: "border-primary/20",
-            hint: "disponível p/ emprestar",
+            hint: "composição registrada",
           },
         ].map((s, idx) => {
           const deltaVal = s.delta;
@@ -651,11 +506,13 @@ const Carteira = () => {
             <div className="h-full bg-primary transition-all duration-700" style={{ width: `${capitalPct}%` }} title="Aportes" />
             <div className="h-full bg-success transition-all duration-700" style={{ width: `${lucrosPct}%` }} title="Lucros" />
             <div className="h-full bg-info transition-all duration-700" style={{ width: `${parcelasPct}%` }} title="Principal recebido" />
+            <div className="h-full bg-muted-foreground transition-all duration-700" style={{width:`${unclassifiedPct}%`}} title="Recebimentos sem classificação" />
           </div>
-          <div className="grid grid-cols-1 min-[420px]:grid-cols-3 gap-2 mt-3 text-[11px]">
+          <div className="grid grid-cols-2 min-[520px]:grid-cols-4 gap-2 mt-3 text-[11px]">
             <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-primary" /><span className="text-muted-foreground">Aportes</span><span className="ml-auto font-semibold text-foreground">{capitalPct.toFixed(0)}%</span></div>
-            <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-success" /><span className="text-muted-foreground">Lucros</span><span className="ml-auto font-semibold text-foreground">{lucrosPct.toFixed(0)}%</span></div>
+            <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-success" /><span className="text-muted-foreground">Juros e encargos</span><span className="ml-auto font-semibold text-foreground">{lucrosPct.toFixed(0)}%</span></div>
             <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-info" /><span className="text-muted-foreground">Principal</span><span className="ml-auto font-semibold text-foreground">{parcelasPct.toFixed(0)}%</span></div>
+            <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-muted-foreground" /><span className="text-muted-foreground">A classificar</span><span className="ml-auto font-semibold text-foreground">{unclassifiedPct.toFixed(0)}%</span></div>
           </div>
         </div>
 
@@ -686,7 +543,7 @@ const Carteira = () => {
         <div className="sticky-header flex flex-col items-start justify-between gap-3 border-b border-border px-4 py-4 sm:flex-row sm:items-center sm:px-5">
           <h2 className="font-semibold text-foreground flex items-center gap-2">
             <CreditCard size={18} className="text-primary" /> Histórico
-            <span className="text-xs text-muted-foreground font-normal">({timeline.length})</span>
+            <span className="text-xs text-muted-foreground font-normal">({summary?.timeline_count??0})</span>
           </h2>
           <div className="relative w-full sm:w-auto">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -695,6 +552,7 @@ const Carteira = () => {
               name="portfolio_timeline_search"
               aria-label="Buscar no histórico da carteira"
               autoComplete="off"
+              maxLength={200}
               type="text"
               placeholder="Buscar por descrição ou origem..."
               value={searchTimeline}
@@ -749,9 +607,10 @@ const Carteira = () => {
                         </span>
                         {t.removable && (
                           <button
-                            onClick={() => handleDeleteCapital(t.id)}
+                            onClick={() => t.remove_id && handleDeleteCapital(t.remove_id)}
                             className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive sm:opacity-0 sm:group-hover:opacity-100"
                             title="Remover"
+                            aria-label={`Remover lançamento: ${t.desc}`}
                           >
                             <X size={14} />
                           </button>
@@ -764,6 +623,11 @@ const Carteira = () => {
             })}
           </div>
         )}
+        {(summary?.timeline_count??0)>50&&<div className="flex flex-wrap items-center justify-between gap-2 border-t border-border p-3 text-sm">
+          <button type="button" disabled={historyPage===0||cashQuery.isFetching} onClick={()=>setHistoryPage(value=>value-1)} className="min-h-11 rounded-lg border px-3 disabled:opacity-50">Anterior</button>
+          <span>Página {historyPage+1} de {Math.ceil((summary?.timeline_count??0)/50)}</span>
+          <button type="button" disabled={(historyPage+1)*50>=(summary?.timeline_count??0)||cashQuery.isFetching} onClick={()=>setHistoryPage(value=>value+1)} className="min-h-11 rounded-lg border px-3 disabled:opacity-50">Próxima</button>
+        </div>}
       </div>
     </div>
   );

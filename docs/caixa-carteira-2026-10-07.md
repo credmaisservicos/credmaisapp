@@ -1,0 +1,13 @@
+# Caixa e histórico da carteira
+
+A carteira usa `wallet_cash_report`, uma consulta autenticada que deriva o titular da sessão. O saldo considera lançamentos de caixa, incluindo recebimentos parciais, recebimentos de juros de renovação humana, aportes, retiradas, desembolsos e despesas. O status pago de uma parcela sozinho não comprova uma entrada. Juros e capital são componentes do recebimento, sem somar o lucro novamente ao dinheiro recebido.
+
+Filtros de 7, 30 e 90 dias usam dias civis de São Paulo e a data de cada lançamento. Um pagamento parcial antigo não muda de período quando chega o pagamento final. O fechamento informa saldo inicial, entradas, saídas e saldo final. Lançamentos com data futura ficam fora do caixa atual e aparecem como pendência de conferência.
+
+Recebimentos antigos acumulados na parcela sem lançamento suficiente aparecem como diferença histórica. A cobertura dos lançamentos é verificada pelo mesmo contrato e cliente, incluindo o tipo legado `partial_payment`. Diferenças sem data não recebem uma data inventada: entram no total histórico, ficam fora dos filtros por dias e são sinalizadas. Recibos sem vínculo e dinheiro acima do acumulado das parcelas também exigem conferência humana. O saldo informado não comprova conciliação com extrato bancário.
+
+Somente componentes monetários explícitos, válidos e compatíveis com o recebimento são classificados como principal, juros ou encargos. O restante aparece como valor a classificar. A consulta não altera pagamentos, datas, lucros ou contratos, nem redistribui valores históricos. A previsão usa a cotação canônica das parcelas abertas, incluindo encargos e abatendo o que já foi recebido.
+
+Resumo e histórico vêm na mesma consulta. O histórico traz 50 movimentos por página, com contagem completa e busca literal; busca e paginação não mudam os totais. Falhas na leitura mostram uma ação para tentar novamente, sem substituir o saldo por zero. A composição registrada não é apresentada como disponibilidade comprovada para emprestar.
+
+Validação local: 773 testes unitários, incluindo 27 casos do relatório; 239 casos principais de navegador e 16 de telas autenticadas responsivas. PostgreSQL isolado verificou leitura consistente durante um pagamento concorrente, filtros pela data real e estorno. Na aplicação da função em produção, as leituras das 14 contas passaram pelo papel autenticado e pelo esquema usado no aplicativo; a comparação dos registros de cinco tabelas financeiras permaneceu idêntica. Nenhum pagamento ou mensagem real foi usado nesses testes. A publicação do frontend e sua validação pública são verificadas separadamente.

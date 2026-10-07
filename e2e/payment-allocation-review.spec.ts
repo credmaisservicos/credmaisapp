@@ -1,4 +1,5 @@
 import {test,expect,type Page} from '@playwright/test';
+import {emptyWalletCashReport} from './helpers/walletCash';
 test.use({serviceWorkers:'block'});
 const user={id:'11111111-1111-4111-8111-111111111111',email:'review@example.test',aud:'authenticated',role:'authenticated',app_metadata:{},user_metadata:{},created_at:'2026-01-01T00:00:00Z'};
 const report={allocation_review_count:2,unallocated_received_total:100,overallocated_received_total:20,installments:[
@@ -17,6 +18,7 @@ async function setup(page:Page,firstFailure=false){
   }else if(path==='/auth/v1/user')data=user;
   else if(path==='/rest/v1/profiles')data={...user,name:'Fictício',subscription_type:'lifetime',is_blocked:false,onboarding_completed_at:'2026-01-01T00:00:00Z'};
   else if(path==='/rest/v1/rpc/is_admin')data=false;
+  else if(path==='/rest/v1/rpc/wallet_cash_report')data=emptyWalletCashReport();
   else if(path==='/rest/v1/platform_settings')data={maintenance_mode:false,allow_new_registrations:true};
   else if(path==='/rest/v1/rpc/payment_allocation_review'){
    reviews++;expect(request.postDataJSON()||{}).toEqual({});
