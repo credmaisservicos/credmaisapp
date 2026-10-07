@@ -10,9 +10,11 @@ Uma legenda de comprovante com número de parcela segue o recebimento do arquivo
 
 Áudio transcrito utiliza o mesmo roteamento das mensagens escritas. Falhas de gravação do contexto deixam o evento disponível para nova tentativa e não enviam uma cotação sem registro. As ferramentas de IA não podem trocar a parcela previamente selecionada para gerar PIX. O contexto fornecido ao modelo distingue saldo, valor original, recebido e encargos, incluindo parcelas futuras.
 
+A previsão de pagamento informada pelo cliente segue a parcela explicitamente citada ou a seleção recente. Uma referência ambígua exige escolha antes de salvar a previsão. O registro operacional é vinculado à parcela selecionada e ao saldo correspondente antes da confirmação; falhas de vínculo permitem nova tentativa, sem afirmar que a previsão foi salva. A data prevista não altera o vencimento contratual. O teste SQL verifica que pagar uma outra parcela não cumpre indevidamente essa promessa.
+
 ## Validação
 
-Foram aprovados 467 testes Vitest, 173 testes compartilhados e 114 integrações HTTP: 754 testes locais. A suíte contém 54 novos testes nesta rodada. Os testes HTTP executam sem permissão de rede, com banco e provedores simulados; nenhuma mensagem pode sair para usuários reais. As comparações financeiras usam as migrações reais em PGlite. Tipos das 43 funções, tipos do app, lint, hooks e build foram verificados. A suíte de 224 testes de interface continua no CI, sem mudança visual nesta rodada.
+Foram aprovados 468 testes Vitest, 173 testes compartilhados e 118 integrações HTTP: 759 testes locais. A suíte contém 59 novos testes nesta rodada. Os testes HTTP executam sem permissão de rede, com banco e provedores simulados; nenhuma mensagem pode sair para usuários reais. As comparações financeiras usam as migrações reais em PGlite. Tipos das 43 funções, tipos do app, lint, hooks e build foram verificados. A suíte de 224 testes de interface continua no CI, sem mudança visual nesta rodada.
 
 A publicação das funções utiliza backup dos arquivos e do banco, sem novas migrações ou alteração de clientes, contratos e pagamentos. A restrição de destinatário da conta de testes e o escopo do Gemini são preservados e conferidos após a publicação. O APK utiliza o conteúdo web e a atualização automática existente; uma publicação apenas do servidor não exige novo binário quando o conteúdo web permanece idêntico.
 

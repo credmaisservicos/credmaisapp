@@ -13,6 +13,7 @@ let lead:any=null;
 let clientMemory:string,installment:any,contract:any,failPromise=false,failCancel=false,failContract=false,failReview=false,failMemory=false,geminiStatus=200,portalReceipt=false;
 let additionalInstallments:any[]=[],additionalContracts:any[]=[];
 let profilePix:string|null;
+let failPromiseLink=false;
 const json=(v:any,status=200)=>new Response(JSON.stringify(v),{status,headers:{'Content-Type':'application/json'}});
 const rows=(v:any,req:Request)=>json(req.headers.get('Accept')?.includes('vnd.pgrst.object')?v:(v?[v]:[]));
 function reset(){
@@ -21,6 +22,7 @@ function reset(){
  geminiTranscript=null;
  additionalInstallments=[];additionalContracts=[];
  profilePix='pix@example.test';
+ failPromiseLink=false;
  geminiReply={reply:'Posso orientar sobre suas parcelas e encaminhar pedidos para a equipe.',intent:'duvida',needs_human:false};
  clientMemory=JSON.stringify({service_menu_started:true});failPromise=false;failCancel=false;failContract=false;failReview=false;failMemory=false;geminiStatus=200;portalReceipt=false;
  installment={id:'installment-test',user_id:owner,client_id:clientId,contract_id:'contract-test',amount:100,paid_amount:40,late_fee:0,scheduled_interest:10,status:'pending',due_date:'2099-01-01',installment_number:1,contracts:{status:'active',daily_interest_percent:4}};
@@ -62,7 +64,7 @@ globalThis.fetch=async(input,init)=>{
    return rows(conversation,req);
  }
  if(table==='clients'){if(req.method==='PATCH'&&body.bot_memory){if(failMemory)return json({message:'Unavailable'},503);clientMemory=body.bot_memory;}return rows({id:clientId,user_id:owner,name:'Cliente fictício',phone:'11999999999',bot_memory:clientMemory},req);}
- if(table==='payment_promises'&&req.method==='PATCH')return failCancel?json({message:'Unavailable'},503):new Response(null,{status:204});
+ if(table==='payment_promises'&&req.method==='PATCH')return failCancel||(failPromiseLink&&body.installment_id)?json({message:'Unavailable'},503):new Response(null,{status:204});
  if(table==='audit_logs'&&req.method==='POST'&&['promise_to_pay','payment_promise_changed'].includes(body.action)&&failPromise)return json({message:'Unavailable'},503);
  if(table==='whatsapp_messages'){
    if(req.method==='POST'){messages.push(body);return new Response(null,{status:201});}
@@ -371,6 +373,23 @@ Deno.test('starting a loan flow clears the previous installment and does not tre
  reset();addParcel(2);await turn('parcela 2','payment-before-loan');
  await turn('1','loan-after-payment');assertEquals(paymentQuote().pending_payment_installment_id,'');
  jobs=[];const {body}=await turn('sim','loan-confirmation');assertEquals(body.status,'loan_type_invalid');assert(jobs.every(j=>!j.text.includes('000201')));
+});
+for(const explicit of [true,false])Deno.test(`promise follows ${explicit?'explicit':'previously selected'} installment without changing its due date`,async()=>{
+ reset();const row=addParcel(2);if(!explicit)await turn('parcela 2','promise-context');
+ const {body}=await turn(explicit?'vou pagar parcela 2 amanhã':'vou pagar amanhã','selected-promise');assertEquals(body.status,'promise_registered');
+ const update=calls.find(c=>c.path.endsWith('/payment_promises')&&c.method==='PATCH'&&c.body.installment_id);
+ assertEquals(update.body,{installment_id:row.id,contract_id:row.contract_id,promised_amount:200});assertEquals(update.query.user_id,`eq.${owner}`);assertEquals(update.query.client_id,`eq.${clientId}`);assertEquals(update.query.status,'eq.open');assertEquals(update.query.source,'eq.bot');assertEquals(update.query.promised_for,`eq.${body.promise_date}`);
+ assertEquals(row.due_date,'2099-02-01');assertEquals(calls.filter(c=>c.path.endsWith('/contract_installments')&&c.method==='PATCH').length,0);
+ assertEquals(paymentQuote().pending_payment_installment_id,row.id);assertEquals((await turn('pix','pix-after-promise')).body.installment_id,row.id);
+});
+Deno.test('ambiguous promised installment asks for a contract before recording a payment forecast',async()=>{
+ reset();addParcel(2);addParcel(2,{id:'promise-other',contract_id:'bbbb2222'});
+ const {body}=await turn('vou pagar parcela 2 amanhã','ambiguous-promise');assertEquals(body.status,'installment_ambiguous');
+ assertEquals(calls.filter(c=>['promise_to_pay','payment_promise_changed'].includes(c.body.action)).length,0);assert(jobs.every(j=>!j.text.includes('Registrei')));
+});
+Deno.test('failed promise context linkage remains retryable without acknowledging the wrong installment',async()=>{
+ reset();addParcel(2);await turn('parcela 2','promise-before-failure');jobs=[];failPromiseLink=true;
+ const {response}=await turn('vou pagar amanhã','failed-promise-link');assertEquals(response.status,500);assertEquals(eventCompleted,false);assertEquals(jobs.length,0);
 });
 for(const c of [
  {name:'future without fees',days:-10,rate:0.1,penalty:0,type:'percentage',paid:40,stored:0,cap:0,expected:60},

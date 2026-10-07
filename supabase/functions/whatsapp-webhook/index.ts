@@ -1370,11 +1370,25 @@ serve(async (req) => {
       const changingPromise = /mudar|alterar|corrigir|nova data|na verdade/.test(txtLow);
       const committingPayment = /\b(?:pago|pagarei|vou pagar|consigo pagar|posso pagar|vou depositar|vou transferir)\b/.test(txtLow);
       if (newPromiseDate && (changingPromise || committingPayment) && hasOpen && !/(?:s[oó]|somente|apenas)\s+(?:os\s+)?juros/.test(txtLow)) {
+        const promiseReference=parseInstallmentReference(txtRaw,mem,now);
+        const explicitPromiseReference=promiseReference&&(promiseReference.number!==undefined||promiseReference.contract||promiseReference.order);
+        // A date in this message is a promised payment date, not a due-date filter.
+        const selectedPromiseRows=explicitPromiseReference
+          ? resolveInstallmentReference(openInstQuick,{number:promiseReference!.number,contract:promiseReference!.contract,order:promiseReference!.order,invalid:promiseReference!.invalid},mem,nowBrDay,now)
+          : mem.pending_payment_installment_id?resolveInstallmentReference(openInstQuick,{context:true},mem,nowBrDay,now):[];
+        if((explicitPromiseReference||mem.pending_payment_installment_id)&&selectedPromiseRows.length!==1){
+          return await respondInstallment(explicitPromiseReference?{number:promiseReference!.number,contract:promiseReference!.contract,order:promiseReference!.order,invalid:promiseReference!.invalid}:{context:true});
+        }
+        const promisedInstallment=selectedPromiseRows[0];
         const display = newPromiseDate.split("-").reverse().join("/");
         const promisedAmount = extractPromisedAmount(txtRaw);
         const previous = (Array.isArray(mem.promessas) ? mem.promessas : []).filter((promise: any) => !promise?.data || promise.data < nowBrDay);
         await checkedBotQuery(supabase.from("audit_logs").insert({ user_id: userId, entity_type: "whatsapp_bot", action: changingPromise ? "payment_promise_changed" : "promise_to_pay", entity_id: client.id, details: { promise_date: newPromiseDate, promise_amount: promisedAmount, message: txtRaw.slice(0, 200) } }));
-        await checkedBotQuery(supabase.from("clients").update({ bot_memory: serializeMemory({ ...mem, promessas: [{ data: newPromiseDate, valor: promisedAmount, contexto: changingPromise ? "Data corrigida pelo cliente" : "Previsão informada pelo cliente" }, ...previous] }) }).eq("id", client.id).eq('user_id',userId));
+        if(promisedInstallment)await checkedBotQuery(supabase.from('payment_promises').update({installment_id:promisedInstallment.id,contract_id:promisedInstallment.contract_id,promised_amount:promisedAmount ?? botBalance(promisedInstallment)})
+          .eq('user_id',userId).eq('client_id',client.id).eq('status','open').eq('source','bot').eq('promised_for',newPromiseDate));
+        await checkedBotQuery(supabase.from("clients").update({ bot_memory: serializeMemory({ ...mem,
+          ...(promisedInstallment?{pending_payment_installment_id:promisedInstallment.id,pending_payment_kind:'payment',pending_payment_amount:botBalance(promisedInstallment),pending_payment_set_at:new Date(now).toISOString(),installment_choice_ids:[],installment_choice_set_at:''}:{}),
+          promessas: [{ data: newPromiseDate, valor: promisedAmount, contexto: changingPromise ? "Data corrigida pelo cliente" : "Previsão informada pelo cliente" }, ...previous] }) }).eq("id", client.id).eq('user_id',userId));
         await botSay(`${changingPromise ? 'Atualizei' : 'Registrei'} sua previsão de pagamento${promisedAmount ? ` de ${money(promisedAmount)}` : ''} para ${display}. Quando pagar, envie o comprovante para conferência.`);
         return new Response(JSON.stringify({ status: changingPromise ? "promise_changed" : "promise_registered", promise_date: newPromiseDate }), { headers: corsHeaders });
       }

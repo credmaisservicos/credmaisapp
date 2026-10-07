@@ -210,3 +210,16 @@ it('partial receipt preserves the promise and full settlement fulfills it',async
   await db.query('SELECT confirm_whatsapp_receipt($1::uuid,40)',[id(13)]);
   expect(await scalar('SELECT status FROM payment_promises')).toBe('fulfilled');
 });
+
+it('a promise linked to the selected installment is fulfilled only when that installment is paid',async()=>{
+ await seed(40);
+ await db.query("INSERT INTO contract_installments(id,contract_id,user_id,client_id,installment_number,amount,due_date,status,paid_amount,late_fee) VALUES($1,$2,$3,$3,2,200,current_date+60,'pending',50,10)",[id(14),id(10),owner]);
+ await db.query('INSERT INTO audit_logs VALUES($1,$2,$1,$3,$4)',[owner,'whatsapp_bot','promise_to_pay',{promise_date:'2099-01-01'}]);
+ await db.query("UPDATE payment_promises SET installment_id=$1,contract_id=$2,promised_amount=160 WHERE user_id=$3 AND client_id=$3 AND status='open' AND source='bot' AND promised_for='2099-01-01'",[id(14),id(10),owner]);
+ expect(await scalar('SELECT installment_id FROM payment_promises')).toBe(id(14));expect(Number(await scalar('SELECT promised_amount FROM payment_promises'))).toBe(160);
+ await db.query('SELECT pay_installment($1::uuid,100,true)',[id(11)]);
+ expect(await scalar('SELECT status FROM payment_promises')).toBe('open');
+ await db.query('SELECT pay_installment($1::uuid,210,true)',[id(14)]);
+ expect(await scalar('SELECT status FROM payment_promises')).toBe('fulfilled');
+ expect(await scalar('SELECT due_date::text FROM contract_installments WHERE id=$1',[id(14)])).toBe(String(await scalar('SELECT (current_date+60)::text')));
+});
