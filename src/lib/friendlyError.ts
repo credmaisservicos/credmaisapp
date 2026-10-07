@@ -3,6 +3,9 @@
 import { isTemporaryAuthFailure } from './authFailure';
 
 const FRIENDLY: Array<{ match: RegExp; title: string; description: string }> = [
+  { match: /fee_discount_exceeds_unpaid_fees/, title: "Confira o desconto", description: "O desconto não pode incluir encargos que já foram recebidos. Revise o valor antes de confirmar." },
+  { match: /payment_source_conflict|profit_owner_mismatch/, title: "Pagamento não registrado", description: "Há um conflito no registro financeiro. Confira o comprovante e procure o suporte antes de tentar novamente." },
+  { match: /contract_closed|installment_closed/, title: "Recebimento indisponível", description: "Este contrato ou parcela foi cancelado. Confira o cadastro antes de registrar um pagamento." },
   { match: /duplicate key|already exists|unique constraint/i, title: "Registro duplicado", description: "Já existe um item com esses dados." },
   { match: /violates foreign key/i, title: "Vínculo obrigatório", description: "Este item depende de outro que não foi encontrado." },
   { match: /violates not-null|null value in column/i, title: "Faltam informações", description: "Preencha todos os campos obrigatórios." },

@@ -1,4 +1,5 @@
 import "@/components/cliente-detalhe/client-profile.css";
+import {paymentReviewDescription} from '@/lib/paymentFeedback';
 import "@/components/cliente-detalhe/client-reference.css";
 import "@/components/cliente-detalhe/client-tabs.css";
 import { useState, useMemo, useCallback, useEffect } from "react";
@@ -132,6 +133,7 @@ const ClienteDetalhe = () => {
     ["client-detail", "client-contracts", "client-installments", "client-transactions", "client-profits"].forEach(k => inv(k));
     qc.invalidateQueries({ queryKey: ["dashboard-data"] });
     qc.invalidateQueries({ queryKey: ["cobrancas-installments"] });
+    qc.invalidateQueries({ queryKey: ["payment-allocation-review"] });
   }, [inv, qc]);
 
   useMultiTableRealtime(
@@ -823,10 +825,9 @@ const ClienteDetalhe = () => {
     const patch: any = { status: "paid", paid_at: new Date().toISOString(), paid_amount: amount, payment_method: method };
     if (receiptUrl) patch.receipt_url = receiptUrl;
     const snapshot = patchInstallment(instId, patch);
-    if (announce) toast({ title: "Parcela quitada!" });
     // RPC atômico: parcela + lucro (juros reais) + caixa (só dinheiro novo) +
     // conclusão do contrato, tudo numa transação no servidor.
-    const { error } = await supabase.rpc("pay_installment", {
+    const { data: payment, error } = await supabase.rpc("pay_installment", {
       _installment_id: instId,
       _paid_total: amount,
       _mark_paid: true,
@@ -840,11 +841,12 @@ const ClienteDetalhe = () => {
       const paymentFailure = friendlyError(error, "Não foi possível quitar a parcela.");
       toast({
         ...paymentFailure,
-        description: (error as any)?.message || paymentFailure.description,
+        description: paymentFailure.description,
         variant: "destructive",
       });
       return false;
     }
+    if(announce)toast({title:payment&&typeof payment==='object'&&'status'in payment&&payment.status==='paid'?'Parcela quitada!':'Pagamento registrado!',description:paymentReviewDescription(payment)});
     invAll();
     return true;
   };
@@ -878,9 +880,8 @@ const ClienteDetalhe = () => {
       const patch: any = { paid_amount: alreadyPaid + val, payment_method: payMethod };
       if (receiptUrl) patch.receipt_url = receiptUrl;
       const snapshot = patchInstallment(partialPayModal.id, patch);
-      toast({ title: `R$ ${fmt(val)} registrado!` });
       // RPC atômico (parcial: não quita, lança só o dinheiro novo no caixa).
-      const { error } = await supabase.rpc("pay_installment", {
+      const { data: payment, error } = await supabase.rpc("pay_installment", {
         _installment_id: partialPayModal.id,
         _paid_total: alreadyPaid + val,
         _mark_paid: false,
@@ -893,6 +894,7 @@ const ClienteDetalhe = () => {
         qc.setQueryData(["client-installments", id], snapshot);
         toast({ ...friendlyError(error, "Não foi possível registrar o pagamento."), variant: "destructive" });
       } else {
+        toast({title:`R$ ${fmt(val)} registrado!`,description:paymentReviewDescription(payment)});
         invAll();
       }
     }

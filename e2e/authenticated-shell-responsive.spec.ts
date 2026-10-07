@@ -69,6 +69,8 @@ async function mockBackend(page: Page) {
       body = profile;
     } else if (path === "/rest/v1/rpc/is_admin") {
       body = false;
+    } else if (path === "/rest/v1/rpc/payment_allocation_review") {
+      body = {allocation_review_count:0,unallocated_received_total:0,overallocated_received_total:0,installments:[]};
     } else if (path === "/rest/v1/rpc/list_public_profiles") {
       body = [{ id: user.id, name: "Conta de teste", avatar_url: null, is_admin: false, is_chat_blocked: false }, { id: "66666666-6666-4666-8666-666666666666", name: null, avatar_url: null, is_admin: false, is_chat_blocked: false }];
     } else if (path === "/rest/v1/platform_settings") {

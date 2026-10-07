@@ -63,6 +63,11 @@ beforeAll(async () => {
       interest_amount numeric, fee_amount numeric, source_key text
     );
     CREATE TABLE profits (user_id uuid, amount numeric, description text, client_id uuid, installment_id uuid);
+    CREATE UNIQUE INDEX uq_profit_installment ON profits(installment_id) WHERE installment_id IS NOT NULL;
+    CREATE TABLE collector_tokens(id uuid,token text,collector_id uuid,user_id uuid,is_active boolean);
+    CREATE TABLE collectors(id uuid,is_active boolean,name text);
+    CREATE TABLE collector_assignments(collector_id uuid,user_id uuid,client_id uuid);
+    CREATE TABLE collection_attempts(user_id uuid,client_id uuid,contract_id uuid,installment_id uuid,channel text,message_preview text);
   `);
   await db.exec(sql("20260905110000_contract_lifecycle.sql"));
   await db.exec(sql("20260922130000_dynamic_late_fee_tracks_settlement.sql"));
@@ -71,6 +76,7 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   await db.exec("TRUNCATE contracts, transactions, profits CASCADE");
+  await db.exec(sql("20261007210000_incremental_payment_ledger.sql"));
 });
 
 afterAll(async () => { await db?.close(); });

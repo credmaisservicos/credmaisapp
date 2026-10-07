@@ -10,6 +10,8 @@ let db: PGlite;
 beforeAll(async () => {
   db = new PGlite();
   await db.exec(`
+    CREATE ROLE anon; CREATE ROLE authenticated; CREATE SCHEMA auth;
+    CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS $$ SELECT '${owner}'::uuid $$;
     CREATE TABLE clients(id uuid PRIMARY KEY,user_id uuid,name text,phone text,whatsapp text,cpf_cnpj text,email text,status text,address text,birth_date date);
     CREATE TABLE contracts(id uuid PRIMARY KEY,user_id uuid,client_id uuid,capital numeric,interest_rate numeric,num_installments int,installment_amount numeric,frequency text,start_date date,status text,total_amount numeric,total_interest numeric,payment_method text,created_at timestamptz,late_fee_percent numeric,daily_interest_percent numeric,max_interest_cap_percent numeric,daily_penalty_type text,daily_penalty_value numeric);
     CREATE TABLE contract_installments(id uuid PRIMARY KEY,user_id uuid,client_id uuid,contract_id uuid,installment_number int,amount numeric,due_date date,paid_at timestamptz,paid_amount numeric,late_fee numeric,status text,payment_method text,receipt_url text,pre_settlement_snapshot jsonb);
@@ -29,13 +31,14 @@ beforeAll(async () => {
   `);
   await db.exec(readFileSync('supabase/migrations/20261007193000_portal_financial_payload.sql','utf8'));
   await db.exec(`
-    ALTER TABLE contract_installments ADD scheduled_principal numeric DEFAULT 90, ADD paid_principal numeric DEFAULT 30, ADD paid_interest numeric DEFAULT 10, ADD paid_fees numeric DEFAULT 0;
+    ALTER TABLE contract_installments ADD scheduled_principal numeric DEFAULT 90, ADD scheduled_interest numeric DEFAULT 10, ADD paid_principal numeric DEFAULT 30, ADD paid_interest numeric DEFAULT 10, ADD paid_fees numeric DEFAULT 0;
     CREATE TABLE profits(user_id uuid,amount numeric,description text,client_id uuid,installment_id uuid);
     CREATE UNIQUE INDEX profits_installment_unique ON profits(installment_id) WHERE installment_id IS NOT NULL;
     CREATE TABLE transactions(user_id uuid,amount numeric,type text,category text,description text,client_id uuid,contract_id uuid,installment_id uuid,principal_amount numeric,interest_amount numeric,fee_amount numeric);
     CREATE TABLE collection_attempts(user_id uuid,client_id uuid,contract_id uuid,installment_id uuid,channel text,message_preview text);
   `);
   await db.exec(readFileSync('supabase/migrations/20261007200500_collector_quote_parity.sql','utf8'));
+  await db.exec(readFileSync('supabase/migrations/20261007210000_incremental_payment_ledger.sql','utf8'));
 }, 30_000);
 afterAll(async () => { await db?.close(); });
 async function payload(name: string, value: string) { const result = await db.query<{ data: any }>(`SELECT ${name}($1) AS data`, [value]); return result.rows[0].data; }

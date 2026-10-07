@@ -1,4 +1,5 @@
 import { Credinho } from "@/components/brand/Credinho";
+import {paymentReviewDescription} from '@/lib/paymentFeedback';
 import { isPortalInstallmentOpen as isEmAberto, isPortalInstallmentOverdue as isEmAtraso, portalReceivedAmount } from "@/lib/portalAmounts";
 import { useEffect, useMemo, useState,useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -209,7 +210,7 @@ const CobradorExterno = () => {
       // exibia sucesso. A RPC valida o token, exige que o cliente esteja
       // atribuído a este cobrador e faz a contabilidade completa: parcela,
       // lucro, caixa, conclusão do contrato e registro de quem recebeu.
-      const { error } = await supabase.rpc("collector_register_payment", {
+      const { data: payment, error } = await supabase.rpc("collector_register_payment", {
         _token: accessToken,
         _installment_id: payInstallment.id,
         _paid_total: accumulatedPaymentTotal(payInstallment, amount),
@@ -218,7 +219,7 @@ const CobradorExterno = () => {
       });
       if(epoch!==accessEpoch.current)return;
       if (error) throw error;
-      toast({ title: "✓ Pagamento registrado!", description: `${payMethod.toUpperCase()} • R$ ${amount.toFixed(2)}` });
+      toast({ title: "✓ Pagamento registrado!", description: paymentReviewDescription(payment) ?? `${payMethod.toUpperCase()} • R$ ${amount.toFixed(2)}` });
       setPayOpen(false);
       await loginWithToken(accessToken, true);
     } catch (err: any) {

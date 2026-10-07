@@ -2129,6 +2129,8 @@ export type Database = {
       }
       transactions: {
         Row: {
+          unallocated_amount: number
+          fee_amount: number
           amount: number
           category: string | null
           client_id: string | null
@@ -2147,6 +2149,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          unallocated_amount?: number
           amount: number
           category?: string | null
           client_id?: string | null
@@ -2166,6 +2169,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          unallocated_amount?: number
           amount?: number
           category?: string | null
           client_id?: string | null
@@ -2709,6 +2713,10 @@ export type Database = {
       }
     }
     Functions: {
+      payment_allocation_review: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       admin_set_user_admin: {
         Args: { _make_admin: boolean; _target_user_id: string }
         Returns: undefined

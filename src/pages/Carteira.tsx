@@ -32,6 +32,7 @@ import { formatBR, parseLocalDate } from "@/lib/dateUtils";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { fetchAll } from "@/lib/fetchAll";
 import { parseFinancialAmount } from "@/lib/financialEntry";
+import {PaymentAllocationNotice} from '@/components/PaymentAllocationNotice';
 
 type PeriodKey = "all" | "7d" | "30d" | "90d";
 const safeNumber = (value: unknown) => {
@@ -67,6 +68,7 @@ const Carteira = () => {
       ["carteira-capital", user?.id || ""],
       ["carteira-withdrawals", user?.id || ""],
       ["carteira-receivables", user?.id || ""],
+      ["payment-allocation-review", user?.id || ""],
     ],
   );
 
@@ -426,6 +428,7 @@ const Carteira = () => {
           ))}
         </div>
 
+        <PaymentAllocationNotice />
         {reconciliation && (
           <div className={`mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs ${
             reconciliation.ok ? "border-success/20 bg-success/5 text-success" : "border-destructive/30 bg-destructive/5 text-destructive"

@@ -16,6 +16,7 @@ As verificações automáticas são `npm run check` e `npm run test:e2e:local`.
 | Logout e portais | Dois acessos temporários no servidor confirmam logout local; navegador verifica cliente/cobrador com armazenamento bloqueado, isolamento de rotas e proteção contra respostas atrasadas |
 | Inicialização nativa e erro de conexão | Preferência bloqueada não impede liberar o splash; mensagens distinguem rede, servidor, sessão e permissão; abertura pública em três contextos novos do Chromium, sem comprovação física |
 | Saldos e documentos do portal | PostgreSQL isolado compara quatro cotações com baixa SQL; cancelamentos não cobram, recebimentos parciais somam, PDF inclui saldo e exige pagamento confirmado para recibo |
+| Recebimentos sucessivos e classificação | Índice único real de lucro, centavos, encargos crescentes, passagem credor/cobrador, dados legados, estorno, isolamento e rollback verificados em PostgreSQL isolado; conferência na Carteira testada em 320, 390 e 1366 pixels |
 
 Execute `npm run test:integrations` para os 220 testes dos handlers. Eles usam
 apenas credenciais e dados fictícios, interceptam as chamadas HTTP e rodam sem
