@@ -7,7 +7,7 @@ import {requestsHumanNegotiation, HUMAN_NEGOTIATION_REPLY} from './human_negotia
 // Fluxo:
 //   new         -> saudação + pergunta o nome
 //   qualifying  -> coleta valor -> finalidade -> renda -> CPF -> email
-//   simulated   -> envia simulação da parcela e pergunta se aprova
+//   simulated   -> estágio legado encaminhado para humano
 //   handoff     -> avisa humano; needs_human = true
 //   lost        -> lead pediu para parar / desqualificou
 //
@@ -205,19 +205,6 @@ export function scoreLead(l: Partial<Lead>, settings: any): number {
   return Math.min(100, s);
 }
 
-/* ─────────────── Simulação ─────────────── */
-
-export function simulate(amount: number, term: number, monthlyRatePct: number) {
-  const n = Math.max(1, Math.min(60, Math.round(term || 6)));
-  const total = amount * (1 + (monthlyRatePct / 100) * n);
-  const parcela = total / n;
-  return {
-    total: Math.round(total * 100) / 100,
-    parcela: Math.round(parcela * 100) / 100,
-    n,
-  };
-}
-
 const money = (v: number) => `R$ ${Number(v).toFixed(2).replace(".", ",")}`;
 
 /* ─────────────── Máquina de estados ─────────────── */
@@ -328,7 +315,7 @@ export function decide(ctx: SdrContext): SdrDecision {
   if (!lead.name && !merged.name) {
     const opener = hasHistory
       ? `Pra eu te chamar pelo nome, me diz seu *nome completo*, por favor. 😊`
-      : `Oi! 👋 Aqui é da *${empresa}*, atendimento de empréstimos. Antes de simular pra você, me diz seu *nome completo*, por favor. 😊`;
+      : `Oi! Aqui é da *${empresa}*, atendimento de empréstimos. Para registrar sua solicitação, me diz seu *nome completo*, por favor.`;
     return {
       reply: opener,
       updates: { ...updates, stage: "qualifying" },
@@ -352,11 +339,12 @@ export function decide(ctx: SdrContext): SdrDecision {
   const max = Number(ctx.settings?.max_loan_amount || 100000);
   if (merged.amount_requested < min || merged.amount_requested > max) {
     return {
-      reply: `${oi}o valor solicitado (*${money(merged.amount_requested)}*) está fora da nossa faixa hoje (${money(min)} a ${money(max)}). Consegue ajustar o valor ou prefere que um consultor te chame?`,
-      updates: { ...updates, tags: mergeTags(merged.tags, ["fora_faixa"]) },
-      stage: "qualifying",
-      needsHuman: false,
-      intent: "amount_out_of_range",
+      reply: `${oi}o valor solicitado (*${money(merged.amount_requested)}*) precisa de análise da equipe humana. Encaminhei sua solicitação para um atendente.`,
+      updates: { ...updates, stage:'handoff', tags: mergeTags(merged.tags, ["fora_faixa"]) },
+      stage: "handoff",
+      needsHuman: true,
+      handoffReason: 'Valor solicitado fora da faixa: análise exclusivamente humana',
+      intent: "handoff",
     };
   }
 
@@ -399,7 +387,7 @@ export function decide(ctx: SdrContext): SdrDecision {
 }
 
 /**
- * Após a simulação, detecta aceite / recusa / alteração.
+ * Leads no antigo estágio de simulação seguem para atendimento humano.
  */
 export function handleSimulatedReply(ctx: SdrContext): SdrDecision {
   return {
@@ -521,7 +509,7 @@ export async function polishWithAI(
       temperature: 0.6,
     });
     const cleaned = (out || "").trim().replace(/^"+|"+$/g, "");
-    return cleaned.length > 10 ? cleaned : base;
+    return cleaned.length > 10 && !requestsHumanNegotiation(cleaned) ? cleaned : base;
   } catch (_) {
     return base;
   }
@@ -683,14 +671,6 @@ export function understandLocal(ctx: SdrContext): Understood | null {
 }
 
 
-/** Inversão: quanto o lead consegue tomar dado que quer parcela = P em n meses. */
-export function reverseCalcAmount(monthly: number, term: number, monthlyRatePct: number): number {
-  const n = Math.max(1, Math.min(60, Math.round(term || 6)));
-  const total = monthly * n;
-  const amount = total / (1 + (monthlyRatePct / 100) * n);
-  return Math.round(amount * 100) / 100;
-}
-
 /** Gera resposta factual às perguntas do lead a partir das settings. */
 export function faqAnswer(topic: Understood["topic"], ctx: SdrContext): string {
   const s = ctx.settings || {};
@@ -721,9 +701,9 @@ export function faqAnswer(topic: Understood["topic"], ctx: SdrContext): string {
     case "safety":
       return `Somos a *${company}* e trabalhamos com contrato assinado digitalmente. Seus dados ficam protegidos e só uso o CPF pra análise interna. 🔒`;
     case "company":
-      return `Aqui é a *${company}*, atendimento oficial. Estou aqui pra te ajudar a montar a melhor proposta. 😉`;
+      return `Aqui é a *${company}*, atendimento oficial. Posso registrar sua solicitação para análise da equipe humana.`;
     default:
-      return `Boa pergunta! Se puder me dar um pouco mais de detalhe eu te respondo certinho. Enquanto isso, seguimos com a simulação? 🙂`;
+      return `Pode me dar um pouco mais de detalhe? Posso registrar sua solicitação para análise da equipe humana.`;
   }
 }
 

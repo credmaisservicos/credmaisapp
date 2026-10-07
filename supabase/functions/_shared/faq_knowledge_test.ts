@@ -30,6 +30,13 @@ const CTX: FaqContext = {
   hasOpenInstallments: true,
   isKnownClient: true,
 };
+Deno.test('legacy amount FAQs never offer automatically calculated loan terms',()=>{
+  for(const entry of FAQ.filter(e=>e.category==='sim')) {
+    const answer=entry.answer(CTX);
+    assert(answer.includes('equipe humana'));
+    assert(!/parcela ≈|total ≈|aprovado\?|fecha\?|fechamos\?|\d+x com/i.test(answer));
+  }
+});
 Deno.test('asking to understand better is not mistaken for a compliment',()=>{
   const hit=findFaqMatch('Gostaria de entender melhor minha situação específica antes de decidir.',CTX);
   assert(hit?.entry.id !== 'greet.compliment');

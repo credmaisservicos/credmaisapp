@@ -2,7 +2,7 @@
 
 ## 2026-10-07 — Portal monocromático e negociação exclusivamente humana
 
-Chat de negociação removido do portal, com modos claro e escuro sem brilho ou neon. Negociações, propostas parciais e renovações automáticas encaminhadas para a equipe, com pausa do bot. A função antiga responde HTTP 410 e as simulações de leads exigem análise humana. Validação: 457 testes de frontend, 157 compartilhados, 81 integrações HTTP e 224 de interface, totalizando 919 testes distintos. Tipos de 43 funções, tipos do app, lint e hooks aprovados. Publicação do servidor com backup e sem migração. [Detalhes e limites](docs/portal-cliente-humano-2026-10-07.md).
+Chat de negociação removido do portal, com modos claro e escuro sem brilho ou neon. Negociações, propostas parciais e renovações automáticas encaminhadas para a equipe, com pausa do bot. A função antiga responde HTTP 410 e as simulações de leads exigem análise humana. Validação: 457 testes de frontend, 160 compartilhados, 83 integrações HTTP e 224 de interface, totalizando 924 testes distintos. Tipos de 43 funções, tipos do app, lint e hooks aprovados. Portal publicado conferido em celular e computador nos dois temas, com acesso, filtros, sessão, detalhes, PDF e logout. Publicação do servidor com backup e sem migração. [Detalhes e limites](docs/portal-cliente-humano-2026-10-07.md).
 
 ## 2026-10-07 — Gemini, destinatário de teste e portal
 

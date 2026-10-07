@@ -8,11 +8,13 @@ let calls:any[]=[],messages:any[]=[],reviews:any[]=[],jobs:any[]=[];
 let settings:any,conversation:any,knownClient=true,failSettings=false,ownsLease=true,eventCompleted=false,failHandoff=false;
 let geminiReply:any;
 let testCase=0;
+let lead:any=null;
 let clientMemory:string,installment:any,contract:any,failPromise=false,failCancel=false,failContract=false,failReview=false,failMemory=false,geminiStatus=200,portalReceipt=false;
 const json=(v:any,status=200)=>new Response(JSON.stringify(v),{status,headers:{'Content-Type':'application/json'}});
 const rows=(v:any,req:Request)=>json(req.headers.get('Accept')?.includes('vnd.pgrst.object')?v:(v?[v]:[]));
 function reset(){
  calls=[];messages=[];reviews=[];jobs=[];knownClient=true;failSettings=false;ownsLease=true;eventCompleted=false;failHandoff=false;
+ lead=null;
  geminiReply={reply:'Posso orientar sobre suas parcelas e encaminhar pedidos para a equipe.',intent:'duvida',needs_human:false};
  clientMemory=JSON.stringify({service_menu_started:true});failPromise=false;failCancel=false;failContract=false;failReview=false;failMemory=false;geminiStatus=200;portalReceipt=false;
  installment={id:'installment-test',user_id:owner,client_id:clientId,contract_id:'contract-test',amount:100,paid_amount:40,late_fee:0,scheduled_interest:10,status:'pending',due_date:'2099-01-01',installment_number:1,contracts:{status:'active',daily_interest_percent:4}};
@@ -47,6 +49,7 @@ globalThis.fetch=async(input,init)=>{
  if(table==='settings')return failSettings?json({message:'database unavailable'},503):rows(settings,req);
  if(table==='profiles')return rows({id:owner,is_admin:true,plan_tier:'completo',name:'Teste',pix_key:'pix@example.test'},req);
  if(table==='whatsapp_instances')return json([]);
+ if(table==='leads'&&lead){if(req.method==='PATCH'){Object.assign(lead,body);return new Response(null,{status:204});}return rows(lead,req);}
  if(table==='whatsapp_event_claims')return rows({status:eventCompleted?'completed':'failed'},req);
  if(table==='whatsapp_conversations'){
    if(req.method==='PATCH'){if(failHandoff&&body.needs_human)return json({message:'Unavailable'},503);Object.assign(conversation,body);return new Response(null,{status:204});}
@@ -80,6 +83,19 @@ async function invoke(message:any={conversation:'menu'},valid=true,id='event-tes
 Deno.test('webhook denies invalid secret without processing incoming data',async()=>{reset();const {response}=await invoke(undefined,false);assertEquals(response.status,401);assertEquals(messages.length,0);assertEquals(jobs.length,0);});
 Deno.test('disabled bot still preserves incoming messages in the inbox',async()=>{reset();settings.bot_enabled=false;const {response,body}=await invoke();assertEquals(response.status,200);assertEquals(body.status,'automation_unavailable');assertEquals(messages.length,1);assertEquals(jobs.length,0);});
 Deno.test('human takeover is preserved even after a session timeout',async()=>{reset();conversation.needs_human=true;conversation.bot_paused=true;conversation.last_message_preview='Atendimento encerrado por falta de resposta. Quando precisar continuar, envie uma nova mensagem para abrir o menu novamente.';const {body}=await invoke();assertEquals(body.status,'paused');assert(conversation.bot_paused);assertEquals(jobs.length,0);});
+Deno.test('qualified lead takeover pauses automation before acknowledging human analysis',async()=>{
+ reset();knownClient=false;conversation.client_id=null;
+ lead={id:'lead-test',user_id:owner,name:'Contato Teste',phone:'11999999999',cpf:'00000000000',amount_requested:1000,income_monthly:2000,purpose:'Capital de giro',stage:'qualifying',notes:{service_menu_stage:'main'}};
+ const {response}=await invoke({conversation:'continue'});
+ assertEquals(response.status,200);assert(conversation.needs_human&&conversation.bot_paused);assertEquals(lead.stage,'handoff');
+ assert(jobs.length>0);assert(jobs.every(j=>j.purpose==='handoff_notice'));assert(!jobs.some(j=>/Aprovado\?|Fecha\?|parcela ≈/.test(j.text)));
+});
+Deno.test('failed qualified lead takeover remains retryable without a human acknowledgement',async()=>{
+ reset();knownClient=false;conversation.client_id=null;failHandoff=true;
+ lead={id:'lead-test',user_id:owner,name:'Contato Teste',phone:'11999999999',cpf:'00000000000',amount_requested:1000,income_monthly:2000,purpose:'Capital de giro',stage:'qualifying',notes:{service_menu_stage:'main'}};
+ const {response}=await invoke({conversation:'continue'});
+ assertEquals(response.status,500);assertEquals(jobs.length,0);assert(!eventCompleted);
+});
 Deno.test('manual approval mode queues a draft without sending to WhatsApp',async()=>{reset();const {response}=await invoke();assertEquals(response.status,200);assert(jobs.length>0);assert(jobs.every(j=>j.status==='awaiting_approval'));assertEquals(calls.filter(c=>c.path.includes('/message/send')).length,0);});
 Deno.test('failed settings lookup is retryable and never reported as unknown instance',async()=>{reset();failSettings=true;const {response}=await invoke();assertEquals(response.status,500);assertEquals(messages.length,0);});
 Deno.test('busy response lease keeps the received event retryable',async()=>{reset();ownsLease=false;const {response}=await invoke();assertEquals(response.status,503);assertEquals(eventCompleted,false);assertEquals(jobs.length,0);});

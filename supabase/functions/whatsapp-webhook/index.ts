@@ -1049,15 +1049,6 @@ serve(async (req) => {
           ctx.lead = lead;
         }
 
-        // Reverse calc: lead disse "posso pagar X/mês"
-        if (understood?.kind === "reverse_calc" && understood.monthly_payment) {
-          const rate = Number(settings?.default_interest_rate || 15);
-          const term = lead.term_months || Number(settings?.default_term_months || 6);
-          const amount = sdrMod.reverseCalcAmount(understood.monthly_payment, term, rate);
-          lead.amount_requested = amount;
-          ctx.lead = lead;
-        }
-
         // Se está aguardando documentos, tenta baixar mídia e processar
         let awaitingDocsOpts: { mediaReceived: boolean; docKey?: string } = { mediaReceived: false };
         if (lead.stage === "awaiting_docs" && messageType !== "text" && apiUrl && apiKey) {
@@ -1112,7 +1103,9 @@ serve(async (req) => {
         }
 
         const decision =
-          lead.stage === "awaiting_docs"
+          understood?.kind === 'reverse_calc'
+            ? {reply:HUMAN_NEGOTIATION_REPLY,updates:{stage:'handoff' as const},stage:'handoff' as const,needsHuman:true,handoffReason:'Condições de empréstimo: análise exclusivamente humana',intent:'handoff'}
+          : lead.stage === "awaiting_docs"
             ? sdrMod.handleAwaitingDocsReply(ctx, awaitingDocsOpts)
             : lead.stage === "simulated"
             ? sdrMod.handleSimulatedReply(ctx)
@@ -1199,24 +1192,20 @@ serve(async (req) => {
           finalReply = await sdrMod.polishWithAI(decision.reply, ctx, history);
         } catch { /* mantém fallback */ }
 
-        await botSay(finalReply);
-
-        // Handoff para humano
+        // Persist the takeover before sending the acknowledgement.
         if (decision.needsHuman && convoId) {
-          await supabase.from("whatsapp_conversations").update({
-            needs_human: true,
-            human_takeover_reason: decision.handoffReason || "SDR handoff",
-            updated_at: new Date().toISOString(),
-          }).eq("id", convoId);
+          await escalateToHuman(supabase,convoId,decision.handoffReason || 'SDR handoff');
           // `notifications` não tem coluna `title`. Com ela no payload, o aviso
           // nunca era gravado: o dono não ficava sabendo que um lead pediu
           // atendimento humano. O título virou a primeira linha da mensagem.
-          await supabase.from("notifications").insert({
+          await checkedBotQuery(supabase.from("notifications").insert({
             user_id: userId,
             message: `Lead pronto para atendimento: ${lead.name || "Lead"} (${senderPhone}) — ${decision.handoffReason || "aguardando consultor"}`,
             type: "info",
-          });
+          }));
         }
+
+        await botSay(finalReply);
 
         // Notifica dono quando é a primeira interação relevante
         if (lead.stage === "new" && decision.stage !== "new") {
@@ -1228,8 +1217,9 @@ serve(async (req) => {
           });
         }
       } catch (sdrErr) {
-        console.error("[sdr] falha, caindo no fallback simples:", sdrErr);
-        await botSay(pickGreeting(settings.company_name || profile?.name || "nossa empresa"));
+        // AI helpers already have deterministic fallbacks. Failed persistence
+        // or handoff must stay retryable rather than acknowledge completion.
+        throw sdrErr;
       }
       return new Response(JSON.stringify({ status: "lead" }), { headers: corsHeaders });
 

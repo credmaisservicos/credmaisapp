@@ -14,9 +14,11 @@ Simulações e propostas automáticas de leads foram retiradas. Leads qualificad
 
 ## Validação
 
-- 457 testes do frontend; 157 testes compartilhados sem acesso à rede; 81 integrações HTTP com provedores simulados.
+- 457 testes do frontend; 160 testes compartilhados sem acesso à rede; 83 integrações HTTP com provedores simulados.
 - 224 testes de interface isolada, incluindo seis cenários do portal em 320, 390 e 1366 pixels nos dois temas. Os seis foram repetidos após o ajuste final da paleta.
 - Tipos do aplicativo e de 43 funções, lint, regras de hooks e conferência visual de capturas em celular e computador.
-- Nenhuma migração de banco. Backup anterior à publicação dos 15 arquivos de servidor: `/root/.credmais/bot-source-20261007T123302Z`.
+- Nenhuma migração de banco. Backup anterior à publicação final dos 15 arquivos de servidor: `/root/.credmais/bot-source-20261007T123906Z`.
 
 Os testes externos continuam restritos à conta e ao destinatário autorizados. A validação de negociação usa dados fictícios e provedores simulados; não é uma negociação realizada no WhatsApp de um cliente real. Não houve pagamento ou desembolso para testar esta alteração.
+
+O portal publicado foi conferido nos dois temas em 360 e 1366 pixels: acesso, filtros, sessão após recarregar, detalhes da parcela fictícia, extrato PDF e logout, sem erros de JavaScript ou requisições malsucedidas. Respostas antigas da FAQ não oferecem mais simulações com valores e prazos calculados. A IA que reformula respostas de leads também tem proteção contra ofertas de parcelamento. Falhas ao encaminhar um lead mantêm o evento disponível para nova tentativa, sem confirmar atendimento humano que não foi registrado.
