@@ -34,6 +34,7 @@ import {pendingClientReceipt} from '../_shared/bot_collection.ts';
 import {requestsHumanNegotiation, HUMAN_NEGOTIATION_REPLY} from '../_shared/human_negotiation.ts';
 import {parseInstallmentReference,resolveInstallmentReference,continueInstallmentRequest,freshPaymentContext,type InstallmentReference} from '../_shared/bot_installment_context.ts';
 import {conversationSignal,installmentReplyIntent,generalChargesQuestion,GENERAL_CHARGES_REPLY,clarificationReply} from '../_shared/bot_conversation.ts';
+import {DOCUMENT_LABELS,allowedDocumentTypes,normalizeDocumentReview,documentProgress,documentHelp,documentHelpReply,isPaymentReceiptCaption,type DocumentReview} from '../_shared/bot_documents.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -140,43 +141,6 @@ function loanDocumentsMessage(company: string, type: string): string {
   return `*Solicitação de empréstimo — ${labels[type] || "análise de crédito"}*\n\nPara a análise da *${company}*, envie:\n\n${docs.map((doc, i) => `${i + 1}. ${doc}`).join("\n")}\n\nEnvie arquivos legíveis e sem cortes. O envio dos documentos não garante aprovação: a proposta passa por análise cadastral e de crédito. Nunca envie senha, código de acesso ou token bancário.`;
 }
 
-type DocumentReview = {
-  document_type: string;
-  label: string;
-  readable: boolean;
-  complete: boolean;
-  quality: "good" | "acceptable" | "poor";
-  authenticity_risk: "low" | "medium" | "high";
-  decision: "accepted" | "resend" | "manual_review";
-  reasons: string[];
-};
-
-const DOCUMENT_LABELS: Record<string, string> = {
-  selfie_id: "selfie segurando RG ou CNH",
-  identity_front: "documento de identificação — frente",
-  identity_back: "documento de identificação — verso",
-  address_proof: "comprovante de endereço",
-  bank_statement: "extrato bancário",
-  cnpj_card: "cartão CNPJ",
-  work_card: "carteira de trabalho",
-  payslip: "contracheque",
-  vehicle_document: "documento do veículo",
-  rental_contract: "documento da locadora",
-  app_profile: "perfil no aplicativo",
-  app_income: "faturamento no aplicativo",
-  business_proof: "comprovante do comércio",
-  unknown: "arquivo não identificado",
-};
-
-function requiredDocumentTypes(profile: string): string[] {
-  const common = ["selfie_id", "identity_front", "identity_back", "address_proof", "bank_statement"];
-  if (profile === "clt") return [...common, "work_card"];
-  if (profile === "cnpj") return [...common, "cnpj_card"];
-  if (profile === "motorista_app") return [...common, "vehicle_document", "app_profile", "app_income"];
-  if (profile === "comercio_app") return [...common, "business_proof", "app_profile", "app_income"];
-  return common;
-}
-
 async function reviewUploadedDocument(mediaData: string, mimeType: string, loanProfile: string, userId: string): Promise<DocumentReview> {
   const fallback: DocumentReview = {
     document_type: "unknown", label: DOCUMENT_LABELS.unknown, readable: false, complete: false,
@@ -189,7 +153,7 @@ async function reviewUploadedDocument(mediaData: string, mimeType: string, loanP
   const lovableKey = Deno.env.get("LOVABLE_API_KEY");
   const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (!lovableKey && !anthropicKey && !geminiConfigured(userId)) return fallback;
-  const allowedTypes = requiredDocumentTypes(loanProfile).join(", ");
+  const allowedTypes = allowedDocumentTypes(loanProfile).join(", ");
   const prompt = `Analise este arquivo de cadastro de crédito. Tipos esperados para este perfil: ${allowedTypes}.
 Classifique SEM afirmar autenticidade jurídica. Verifique: tipo do documento; legibilidade; cortes; frente/verso; nome/datas/campos essenciais visíveis; sinais VISUAIS de edição, montagem, sobreposição, fonte inconsistente ou conteúdo incompatível.
 Para extrato bancário, confira se parece PDF/relatório bancário e se cobre aproximadamente 3 meses; não invente períodos invisíveis.
@@ -201,17 +165,7 @@ Responda SOMENTE JSON: {"document_type":"selfie_id|identity_front|identity_back|
     const match = String(raw).match(/\{[\s\S]*\}/);
     if (!match) throw new Error("vision_invalid_json");
     const parsed = JSON.parse(match[0]);
-    const type = DOCUMENT_LABELS[parsed.document_type] ? parsed.document_type : "unknown";
-    return {
-      document_type: type,
-      label: String(parsed.label || DOCUMENT_LABELS[type]).slice(0, 120),
-      readable: parsed.readable === true,
-      complete: parsed.complete === true,
-      quality: ["good", "acceptable", "poor"].includes(parsed.quality) ? parsed.quality : "poor",
-      authenticity_risk: ["low", "medium", "high"].includes(parsed.authenticity_risk) ? parsed.authenticity_risk : "medium",
-      decision: ["accepted", "resend", "manual_review"].includes(parsed.decision) ? parsed.decision : "manual_review",
-      reasons: Array.isArray(parsed.reasons) ? parsed.reasons.map((x: any) => String(x).slice(0, 180)).slice(0, 4) : [],
-    };
+    return normalizeDocumentReview(parsed,loanProfile);
   };
 
   if (geminiConfigured(userId)) {
@@ -926,7 +880,39 @@ serve(async (req) => {
       return new Response(JSON.stringify({ status: "ambiguous_ask_cpf" }), { headers: corsHeaders });
     }
 
-    if(!client && messageType!=="text" && (messageType==="audio" || settings.bot_use_ai!==true || !(anthropicApiKey||Deno.env.get("LOVABLE_API_KEY")||geminiConfigured(userId)))){
+    // Reuse the private attachment already stored in the inbox. No second download/upload.
+    const processLoanDocument=async(subject:any,isLead:boolean)=>{
+      if(!mediaData||!inboundAttachmentPath)throw Error('document_attachment_unavailable');
+      const current=isLead?(subject.notes || {}):parseMemory(subject.bot_memory);
+      const docs=isLead?(current.docs || {}):current;
+      const loanProfile=String(current.loan_profile || 'pf');
+      const review=settings.bot_use_ai===true
+        ? await reviewUploadedDocument(mediaData,mimeType || 'application/octet-stream',loanProfile,userId)
+        : normalizeDocumentReview(null,loanProfile);
+      const {received,missing,completed}=documentProgress(loanProfile,isLead?docs.received:docs.loan_documents_received,review);
+      const previous=isLead?docs.validations:docs.loan_document_validations;
+      const validations=[...(Array.isArray(previous)?previous:[]).filter(row=>row?.path!==inboundAttachmentPath),
+        {...review,path:inboundAttachmentPath,wa_message_id:msgId,reviewed_at:new Date().toISOString()}].slice(-20);
+      if(isLead)await checkedBotQuery(supabase.from('leads').update({stage:completed?'handoff':'awaiting_docs',
+        notes:{...current,service_menu_stage:completed?'human':'documents',docs:{...docs,received,validations,missing,completed_at:completed?new Date().toISOString():null}},
+        last_message_at:new Date().toISOString()}).eq('id',subject.id).eq('user_id',userId));
+      else await checkedBotQuery(supabase.from('clients').update({bot_memory:serializeMemory({...current,
+        service_menu_stage:completed?'human':'documents',loan_documents_received:received,loan_document_validations:validations,loan_documents_missing:missing})})
+        .eq('id',subject.id).eq('user_id',userId));
+      if(review.decision==='manual_review'||completed){
+        const reason=review.decision==='manual_review'?'Documento recebido para conferência humana':'Documentos recebidos na triagem; conferência final humana';
+        if(convoId)await escalateToHuman(supabase,convoId,reason);
+        await checkedBotQuery(supabase.from('notifications').insert({user_id:userId,type:review.decision==='manual_review'?'warning':'info',
+          message:`${reason}: ${subject.name || senderPhone}. Confira o arquivo na conversa ${convoId}.`}));
+      }
+      if(review.decision==='manual_review')await botSay('Recebi o arquivo e encaminhei para conferência humana. Pausei o atendimento automático; a equipe continuará por aqui.');
+      else if(review.decision==='resend')await botSay(`Não consegui validar este arquivo. ${review.reasons.join('; ') || 'A imagem está incompleta ou ilegível.'}\n\nEnvie novamente com boa iluminação, sem cortes, reflexos ou desfoque.`);
+      else if(completed)await botSay(`Documento identificado como *${review.label}* na triagem. Todos os documentos solicitados foram recebidos. A equipe fará a conferência final; isso não significa aprovação do empréstimo.`);
+      else await botSay(`Documento identificado como *${review.label}* na triagem.\n\n${documentHelpReply(loanProfile,received)}`);
+      return new Response(JSON.stringify({status:'document_reviewed',review,missing}),{headers:corsHeaders});
+    };
+
+    if(!client && messageType==="audio"){
       if(messageType==="audio"&&settings.bot_process_audio!==true){await botSay("O atendimento por áudio está desativado. Envie sua mensagem por escrito.");}
       else{if(convoId)await escalateToHuman(supabase,convoId,"Arquivo recebido de novo contato para conferência");await botSay("Recebi seu arquivo e encaminhei para atendimento da equipe.");}
       return new Response(JSON.stringify({status:"lead_attachment_received"}),{headers:corsHeaders});
@@ -937,16 +923,16 @@ serve(async (req) => {
         const companyName = settings.company_name || profile?.name || "CredMais Digital Pay";
 
         // Carrega (ou cria) o lead persistente
-        const { data: existingLead } = await supabase
+        const { data: existingLead } = await checkedBotQuery(supabase
           .from("leads")
           .select("*")
           .eq("user_id", userId)
           .eq("phone", senderPhone)
-          .maybeSingle();
+          .maybeSingle());
 
         let lead: any = existingLead;
         if (!lead) {
-          const { data: created } = await supabase
+          const { data: created } = await checkedBotQuery(supabase
             .from("leads")
             .insert({
               user_id: userId,
@@ -957,7 +943,7 @@ serve(async (req) => {
               notes: { pushName: pushName || null },
             })
             .select("*")
-            .single();
+            .single());
           lead = created;
         }
 
@@ -966,6 +952,29 @@ serve(async (req) => {
         const leadNotes = (lead?.notes || {}) as Record<string, any>;
         const leadMenuStage = leadNotes.service_menu_stage || null;
         const leadText = normalizeMenuText(incomingText);
+        if(messageType==='text'&&(matchesAny(incomingText,HUMAN_WORDS)||matchesAny(incomingText,STOP_WORDS))){
+          const stopped=matchesAny(incomingText,STOP_WORDS);
+          if(convoId)await escalateToHuman(supabase,convoId,stopped?'Novo contato pediu parar o bot':'Novo contato pediu atendente');
+          await checkedBotQuery(supabase.from('leads').update({stage:'handoff',notes:{...leadNotes,service_menu_stage:'human'}}).eq('id',lead.id).eq('user_id',userId));
+          await checkedBotQuery(supabase.from('notifications').insert({user_id:userId,type:'warning',message:`${senderPhone}: solicitou atendimento humano.`}));
+          await botSay(stopped?'Bot pausado. Seu atendimento foi encaminhado para a equipe.':'Encaminhei seu atendimento para uma pessoa da equipe.');
+          return new Response(JSON.stringify({status:stopped?'stopped':'human_handoff'}),{headers:corsHeaders});
+        }
+        if(messageType==='image'||messageType==='document'){
+          const replay=leadNotes.docs?.validations?.some((row:any)=>row.path===inboundAttachmentPath);
+          if(leadMenuStage==='documents'||(leadMenuStage==='human'&&replay))return await processLoanDocument(lead,true);
+          if(convoId)await escalateToHuman(supabase,convoId,'Arquivo recebido de novo contato para conferência');
+          await checkedBotQuery(supabase.from('notifications').insert({user_id:userId,type:'warning',message:`Arquivo de novo contato na conversa ${convoId}: conferir na caixa de entrada.`}));
+          await botSay('Recebi seu arquivo e encaminhei para atendimento da equipe.');
+          return new Response(JSON.stringify({status:'lead_attachment_received'}),{headers:corsHeaders});
+        }
+        if(leadMenuStage==='documents'&&documentHelp(incomingText)){
+          await botSay(documentHelpReply(String(leadNotes.loan_profile || 'pf'),leadNotes.docs?.received));
+          return new Response(JSON.stringify({status:'document_help'}),{headers:corsHeaders});
+        }
+        if(leadMenuStage==='loan_type'&&/^(?:ajuda|opcoes)[.!?\s]*$/.test(leadText)){
+          await botSay(LOAN_TYPE_MENU);return new Response(JSON.stringify({status:'lead_loan_type_help'}),{headers:corsHeaders});
+        }
         const leadMainChoice = /^([1-5])(?:[.)\s]*)$/.exec(leadText)?.[1]
           || (/pedir.*emprest|quero.*emprest/.test(leadText) ? "1" : null)
           || (/consult.*parcela/.test(leadText) ? "2" : null)
@@ -974,10 +983,10 @@ serve(async (req) => {
           || (/atendente|humano|pessoa do time/.test(leadText) ? "5" : null);
 
         if (!leadMenuStage || /^(oi|ola|bom dia|boa tarde|boa noite|menu|opcoes|ajuda)$/.test(leadText)) {
-          await supabase.from("leads").update({
+          await checkedBotQuery(supabase.from("leads").update({
             notes: { ...leadNotes, service_menu_stage: "main", service_menu_started_at: new Date().toISOString() },
             last_message_at: new Date().toISOString(),
-          }).eq("id", lead.id);
+          }).eq("id", lead.id).eq('user_id',userId));
           await botSay(`Olá! Você está falando com o atendimento virtual da *${companyName}*.\n\n${SERVICE_MENU}`);
           return new Response(JSON.stringify({ status: "lead_menu" }), { headers: corsHeaders });
         }
@@ -988,26 +997,26 @@ serve(async (req) => {
             await botSay(`Não consegui identificar a modalidade. Responda somente com uma das opções abaixo:\n\n${LOAN_TYPE_MENU}`);
             return new Response(JSON.stringify({ status: "lead_loan_type_invalid" }), { headers: corsHeaders });
           }
-          await supabase.from("leads").update({
+          await checkedBotQuery(supabase.from("leads").update({
             stage: "awaiting_docs",
             notes: { ...leadNotes, service_menu_stage: "documents", loan_profile: type },
             last_message_at: new Date().toISOString(),
-          }).eq("id", lead.id);
+          }).eq("id", lead.id).eq('user_id',userId));
           await botSay(`${loanDocumentsMessage(companyName, type)}\n\nPode enviar os documentos por aqui, um arquivo por vez.`);
           return new Response(JSON.stringify({ status: "lead_documents", type }), { headers: corsHeaders });
         }
 
         if (leadMenuStage === "main" && leadMainChoice) {
           if (leadMainChoice === "1") {
-            await supabase.from("leads").update({ notes: { ...leadNotes, service_menu_stage: "loan_type", request_kind: "new_customer" } }).eq("id", lead.id);
+            await checkedBotQuery(supabase.from("leads").update({ notes: { ...leadNotes, service_menu_stage: "loan_type", request_kind: "new_customer" } }).eq("id", lead.id).eq('user_id',userId));
             await botSay(LOAN_TYPE_MENU);
           } else if (leadMainChoice === "2" || leadMainChoice === "4") {
             await botSay("Não localizei sua ficha por este número. Para consultar parcelas ou pedir um novo empréstimo como cliente, envie seu CPF com 11 números. Usarei o CPF somente para localizar seu cadastro.");
           } else {
             const reason = leadMainChoice === "3" ? "Lead solicitou renegociação" : "Lead solicitou atendente";
-            await supabase.from("leads").update({ stage: "handoff", notes: { ...leadNotes, service_menu_stage: "human", handoff_reason: reason } }).eq("id", lead.id);
-            if (convoId) await supabase.from("whatsapp_conversations").update({ needs_human: true, bot_paused: true, human_takeover_reason: reason }).eq("id", convoId);
-            await supabase.from("notifications").insert({ user_id: userId, message: `${reason}: ${senderPhone}`, type: "warning" });
+            if(convoId)await escalateToHuman(supabase,convoId,reason);
+            await checkedBotQuery(supabase.from("leads").update({ stage: "handoff", notes: { ...leadNotes, service_menu_stage: "human", handoff_reason: reason } }).eq("id", lead.id).eq('user_id',userId));
+            await checkedBotQuery(supabase.from("notifications").insert({ user_id: userId, message: `${reason}: ${senderPhone}`, type: "warning" }));
             await botSay(`Certo. Encaminhei seu atendimento para uma pessoa da equipe da *${companyName}*. O bot não negocia valores ou condições.`);
           }
           return new Response(JSON.stringify({ status: "lead_menu_choice", choice: leadMainChoice }), { headers: corsHeaders });
@@ -1050,58 +1059,7 @@ serve(async (req) => {
           ctx.lead = lead;
         }
 
-        // Se está aguardando documentos, tenta baixar mídia e processar
-        let awaitingDocsOpts: { mediaReceived: boolean; docKey?: string } = { mediaReceived: false };
-        if (lead.stage === "awaiting_docs" && messageType !== "text" && apiUrl && apiKey) {
-          try {
-            const resp = await evolutionFetch(apiUrl, apiKey, `/chat/getBase64FromMediaMessage/${instanceName}`, { message: { key, message: msgContent }, convertToMp4: false });
-            if (resp?.ok) {
-              const b64 = (await resp.json()).base64 as string | undefined;
-              if (b64) {
-                mediaData = b64;
-                const loanProfile = String((lead.notes as any)?.loan_profile || "pf");
-                const review = await reviewUploadedDocument(b64, mimeType || "application/octet-stream", loanProfile, userId);
-                const ext = mimeType === "application/pdf" ? "pdf" : (mimeType?.split("/")[1] || "jpg");
-                const path = `${userId}/leads/${lead.id}/${review.document_type}-${Date.now()}.${ext}`;
-                const cleanB64 = b64.replace(/^data:[^;]+;base64,/, "");
-                const bytes = Uint8Array.from(atob(cleanB64), c => c.charCodeAt(0));
-                const upload = await supabase.storage.from("uploads").upload(path, bytes, {
-                  contentType: mimeType || "application/octet-stream", upsert: false,
-                });
-
-                const currentNotes = (lead.notes || {}) as Record<string, any>;
-                const docs = (currentNotes.docs || {}) as Record<string, any>;
-                const received: string[] = Array.isArray(docs.received) ? [...docs.received] : [];
-                if (review.decision === "accepted" && !received.includes(review.document_type)) received.push(review.document_type);
-                const validations = Array.isArray(docs.validations) ? [...docs.validations] : [];
-                validations.push({ ...review, path: upload.error ? null : path, reviewed_at: new Date().toISOString() });
-                const required = requiredDocumentTypes(loanProfile);
-                const missing = required.filter(type => !received.includes(type));
-                const completed = missing.length === 0;
-                await supabase.from("leads").update({
-                  stage: completed ? "handoff" : "awaiting_docs",
-                  notes: { ...currentNotes, service_menu_stage: completed ? "human" : "documents", docs: { ...docs, received, validations, missing, completed_at: completed ? new Date().toISOString() : null } },
-                  last_message_at: new Date().toISOString(),
-                }).eq("id", lead.id);
-
-                if (review.decision === "resend") {
-                  await botSay(`Não consegui validar este arquivo. ${review.reasons.join("; ") || "A imagem está incompleta ou ilegível."}\n\nEnvie novamente com boa iluminação, sem cortes, reflexos ou desfoque.`);
-                } else if (review.decision === "manual_review") {
-                  await supabase.from("notifications").insert({ user_id: userId, message: `Documento de ${lead.name || senderPhone} precisa de revisão manual: ${review.reasons.join("; ")}`, type: "warning" });
-                  await botSay(`Recebi o arquivo, mas ele precisa de revisão humana antes de ser aceito. Motivo: ${review.reasons.join("; ") || "não foi possível confirmar os elementos visuais"}. A equipe foi avisada.`);
-                } else if (completed) {
-                  if (convoId) await supabase.from("whatsapp_conversations").update({ needs_human: true, bot_paused: true, human_takeover_reason: "Documentação validada e completa" }).eq("id", convoId);
-                  await supabase.from("notifications").insert({ user_id: userId, message: `Documentação completa de ${lead.name || senderPhone}; revisar para decisão final.`, type: "info" });
-                  await botSay(`Documento identificado como *${review.label}* e aceito na triagem. Todos os documentos solicitados foram recebidos. A equipe fará a conferência final.`);
-                } else {
-                  const missingLabels = missing.map(type => DOCUMENT_LABELS[type] || type).join(", ");
-                  await botSay(`Documento identificado como *${review.label}* e aceito na triagem.\n\nAinda falta enviar: ${missingLabels}.`);
-                }
-                return new Response(JSON.stringify({ status: "document_reviewed", review, missing }), { headers: corsHeaders });
-              }
-            }
-          } catch (e) { console.warn("[docs] falha ao salvar mídia do lead:", e); }
-        }
+        const awaitingDocsOpts: { mediaReceived: boolean; docKey?: string } = { mediaReceived: false };
 
         const decision =
           understood?.kind === 'reverse_calc'
@@ -1256,6 +1214,17 @@ serve(async (req) => {
 
       // Estado leve do cliente (memória bot)
       const mem = parseMemory(client.bot_memory);
+      if((messageType==='image'||messageType==='document')&&!isPaymentReceiptCaption(txtRaw)){
+        const replay=mem.loan_document_validations?.some((row:any)=>row.path===inboundAttachmentPath);
+        if(mem.service_menu_stage==='documents'||(mem.service_menu_stage==='human'&&replay))return await processLoanDocument(client,false);
+      }
+      if(hasTextRequest&&mem.service_menu_stage==='documents'&&documentHelp(txtRaw)){
+        await botSay(documentHelpReply(String(mem.loan_profile || 'pf'),mem.loan_documents_received));
+        return new Response(JSON.stringify({status:'document_help'}),{headers:corsHeaders});
+      }
+      if(hasTextRequest&&mem.service_menu_stage==='loan_type'&&/^(?:ajuda|opcoes)[.!?\s]*$/.test(normalizeMenuText(txtRaw))){
+        await botSay(LOAN_TYPE_MENU);return new Response(JSON.stringify({status:'loan_type_help'}),{headers:corsHeaders});
+      }
       if(conversationalSignal==='thanks'||conversationalSignal==='decline'){
         await botSay(conversationalSignal==='thanks'?'Por nada. Se precisar, pode falar por aqui.':'Tudo bem. Se quiser continuar depois, pode falar por aqui.');
         return new Response(JSON.stringify({status:'courtesy_reply'}),{headers:corsHeaders});
@@ -1268,7 +1237,7 @@ serve(async (req) => {
       // application. Numeric replies still select the requested loan profile.
       const serviceInterrupt = /\b(?:parcelas?|prestacoes?|debito|divida|renegociacao|acordo|portal|pix|saldo|vencimento|encargos)\b/.test(normalizeMenuText(txtRaw))
         || matchesAny(txtRaw, HUMAN_WORDS);
-      const receiptCaption=messageType!=='text'&&/comprovante|paguei|transferi/i.test(txtRaw);
+      const receiptCaption=messageType!=='text'&&isPaymentReceiptCaption(txtRaw);
       if (((hasTextRequest && serviceInterrupt)||receiptCaption) && ['loan_type','documents'].includes(String(mem.service_menu_stage))) {
         mem.service_menu_stage = 'main';
         await checkedBotQuery(supabase.from('clients').update({bot_memory:serializeMemory(mem)}).eq('id',client.id).eq('user_id',userId));
@@ -1436,7 +1405,7 @@ serve(async (req) => {
       const menuBody = `${SERVICE_MENU}\n\n_Você também pode escrever a opção. Digite *menu* para voltar._`;
 
       const showMenu = async (prefix?: string) => {
-        Object.assign(mem,clearPaymentContext);
+        Object.assign(mem,clearPaymentContext,{service_menu_started:true,service_menu_stage:'main'});
         const header = prefix ? `${prefix}\n\n` : "";
         await checkedBotQuery(supabase.from("clients").update({
           bot_memory: serializeMemory({ ...mem, last_menu_at: now }),
@@ -1444,65 +1413,16 @@ serve(async (req) => {
         await botSay(`${header}*Menu — ${empresa}*\n${menuBody}`);
       };
 
-      if (mem.service_menu_stage === "documents" && !hasTextRequest && apiUrl && apiKey) {
-        const mediaResponse = await evolutionFetch(apiUrl, apiKey, `/chat/getBase64FromMediaMessage/${instanceName}`, { message: { key, message: msgContent }, convertToMp4: false });
-        const b64 = mediaResponse?.ok ? (await mediaResponse.json()).base64 as string | undefined : undefined;
-        if (!b64) {
-          await botSay("Não consegui abrir esse arquivo. Envie novamente como imagem nítida ou PDF.");
-          return new Response(JSON.stringify({ status: "document_download_failed" }), { headers: corsHeaders });
-        }
-        const loanProfile = String(mem.loan_profile || "pf");
-        const review = await reviewUploadedDocument(b64, mimeType || "application/octet-stream", loanProfile, userId);
-        const ext = mimeType === "application/pdf" ? "pdf" : (mimeType?.split("/")[1] || "jpg");
-        const path = `${userId}/clients/${client.id}/documents/${review.document_type}-${Date.now()}.${ext}`;
-        const cleanB64 = b64.replace(/^data:[^;]+;base64,/, "");
-        const bytes = Uint8Array.from(atob(cleanB64), c => c.charCodeAt(0));
-        const upload = await supabase.storage.from("uploads").upload(path, bytes, { contentType: mimeType || "application/octet-stream", upsert: false });
-        const received: string[] = Array.isArray(mem.loan_documents_received) ? [...mem.loan_documents_received] : [];
-        if (review.decision === "accepted" && !received.includes(review.document_type)) received.push(review.document_type);
-        const validations = Array.isArray(mem.loan_document_validations) ? [...mem.loan_document_validations] : [];
-        validations.push({ ...review, path: upload.error ? null : path, reviewed_at: new Date().toISOString() });
-        const missing = requiredDocumentTypes(loanProfile).filter(type => !received.includes(type));
-        const completed = missing.length === 0;
-        await checkedBotQuery(supabase.from("clients").update({ bot_memory: serializeMemory({
-          ...mem,
-          service_menu_stage: completed ? "human" : "documents",
-          loan_documents_received: received,
-          loan_document_validations: validations,
-          loan_documents_missing: missing,
-        }) }).eq("id", client.id).eq("user_id", userId));
-
-        if (review.decision === "resend") {
-          await botSay(`Não consegui validar este arquivo. ${review.reasons.join("; ") || "A imagem está incompleta ou ilegível."}\n\nEnvie novamente com boa iluminação, sem cortes, reflexos ou desfoque.`);
-        } else if (review.decision === "manual_review") {
-          await supabase.from("notifications").insert({ user_id: userId, message: `Documento de ${client.name} precisa de revisão manual: ${review.reasons.join("; ")}`, type: "warning" });
-          await botSay(`Recebi o arquivo, mas ele precisa de revisão humana antes de ser aceito. Motivo: ${review.reasons.join("; ") || "não foi possível confirmar os elementos visuais"}. A equipe foi avisada.`);
-        } else if (completed) {
-          if (convoId) await supabase.from("whatsapp_conversations").update({ needs_human: true, bot_paused: true, human_takeover_reason: "Documentação validada e completa" }).eq("id", convoId);
-          await supabase.from("notifications").insert({ user_id: userId, message: `Documentação completa de ${client.name}; revisar para decisão final.`, type: "info" });
-          await botSay(`Documento identificado como *${review.label}* e aceito na triagem. Todos os documentos solicitados foram recebidos. A equipe fará a conferência final.`);
-        } else {
-          await botSay(`Documento identificado como *${review.label}* e aceito na triagem.\n\nAinda falta enviar: ${missing.map(type => DOCUMENT_LABELS[type] || type).join(", ")}.`);
-        }
-        return new Response(JSON.stringify({ status: "document_reviewed", review, missing }), { headers: corsHeaders });
-      }
-
       // Requests for a specific debt are handled above. Other first text
       // messages introduce the menu and loan choices preserve their stage.
       if (!mem.service_menu_started && hasTextRequest && /^(oi+|ol[aá]|bom dia|boa tarde|boa noite|opa|e a[ií]|tudo bem)[.!?\s]*$/i.test(txtRaw)) {
         await showMenu(`Olá ${firstName}! Você está falando com o atendimento virtual da *${empresa}*.`);
-        await checkedBotQuery(supabase.from("clients").update({
-          bot_memory: serializeMemory({ ...mem, service_menu_started: true, service_menu_stage: "main", last_menu_at: now }),
-        }).eq("id", client.id).eq("user_id", userId));
         return new Response(JSON.stringify({ status: "menu_first_interaction" }), { headers: corsHeaders });
       }
 
       if (mem.service_menu_stage === "loan_type") {
         if (/^(menu|opcoes|opções|voltar|inicio|início)$/.test(txtLow)) {
           await showMenu();
-          await checkedBotQuery(supabase.from("clients").update({
-            bot_memory: serializeMemory({ ...mem, service_menu_stage: "main", last_menu_at: now }),
-          }).eq("id", client.id).eq("user_id", userId));
           return new Response(JSON.stringify({ status: "menu_shown" }), { headers: corsHeaders });
         }
         const type = loanTypeFromText(txtRaw);

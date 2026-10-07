@@ -1,5 +1,9 @@
 # QA Report — CredMais
 
+## 2026-10-07 — Documentos e ajuda no atendimento
+
+A triagem de clientes e novos contatos reutiliza o arquivo privado da conversa e verifica a gravação antes de orientar o próximo envio. Arquivos ilegíveis, incompletos ou com risco visual não completam os requisitos; documentos opcionais não substituem os obrigatórios. Revisão manual e documentação completa chegam à equipe com pausa do bot, sem aprovação automática. Comprovante de endereço não vira comprovante de pagamento. Ajuda mostra as pendências sem perder a etapa, menu retorna ao início e pedidos de atendente têm prioridade nos fluxos de novos contatos. Validação local: 468 testes Vitest, 198 compartilhados e 194 integrações HTTP sem rede, totalizando 860 testes, com 48 regressões novas. Tipos de 43 funções, tipos do app, lint, hooks e build aprovados. A suíte de 224 testes de interface permanece no CI. [Cenários e limites](docs/agente-documentos-ajuda-2026-10-07.md).
+
 ## 2026-10-07 — Pedidos fragmentados e retomada de atendimento
 
 PIX, vencimento, saldo e encargos mantêm a intenção durante a escolha da parcela ou contrato. Referências expiram em 48 horas e opções inválidas não selecionam outra dívida; o saldo é recalculado após pagamentos novos. Sessões encerradas processam o pedido recebido na retomada, incluindo áudio transcrito, sem desfazer a pausa humana. Pedidos com acentos abrem a solicitação de empréstimo; a etapa de documentos é salva antes da orientação. Validação local: 468 testes Vitest, 185 compartilhados e 159 integrações HTTP sem rede, totalizando 812 testes, com 29 regressões novas. Tipos de 43 funções, tipos do app, lint, hooks e build aprovados. A suíte de 224 testes de interface permanece no CI. [Cenários e limites](docs/agente-continuidade-2026-10-07.md).

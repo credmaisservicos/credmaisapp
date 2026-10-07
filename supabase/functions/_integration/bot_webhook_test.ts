@@ -14,6 +14,8 @@ let clientMemory:string,installment:any,contract:any,failPromise=false,failCance
 let additionalInstallments:any[]=[],additionalContracts:any[]=[];
 let profilePix:string|null;
 let failPromiseLink=false;
+let failLead=false,failStorage=false,failNotification=false;
+let fixtureMedia:string|null=null;
 const json=(v:any,status=200)=>new Response(JSON.stringify(v),{status,headers:{'Content-Type':'application/json'}});
 const rows=(v:any,req:Request)=>json(req.headers.get('Accept')?.includes('vnd.pgrst.object')?v:(v?[v]:[]));
 function reset(){
@@ -23,6 +25,7 @@ function reset(){
  additionalInstallments=[];additionalContracts=[];
  profilePix='pix@example.test';
  failPromiseLink=false;
+ failLead=false;failStorage=false;failNotification=false;fixtureMedia=null;
  geminiReply={reply:'Posso orientar sobre suas parcelas e encaminhar pedidos para a equipe.',intent:'duvida',needs_human:false};
  clientMemory=JSON.stringify({service_menu_started:true});failPromise=false;failCancel=false;failContract=false;failReview=false;failMemory=false;geminiStatus=200;portalReceipt=false;
  installment={id:'installment-test',user_id:owner,client_id:clientId,contract_id:'contract-test',amount:100,paid_amount:40,late_fee:0,scheduled_interest:10,status:'pending',due_date:'2099-01-01',installment_number:1,contracts:{status:'active',daily_interest_percent:4}};
@@ -39,11 +42,11 @@ globalThis.fetch=async(input,init)=>{
    ? json({candidates:[{finishReason:'STOP',content:{parts:[{text:geminiTranscript!==null&&body.contents?.some((c:any)=>c.parts?.some((p:any)=>p.inlineData?.mimeType?.startsWith('audio/')))?geminiTranscript:JSON.stringify(geminiReply)}]}}]})
    : json({error:{message:'isolated-provider-error'}},geminiStatus);
  if(u.origin===provider){
-   if(u.pathname.includes('getBase64FromMediaMessage'))return json({base64:btoa(body.message?.message?.audioMessage?'x'.repeat(600):'isolated fictional receipt')});
+   if(u.pathname.includes('getBase64FromMediaMessage'))return json({base64:fixtureMedia || btoa(body.message?.message?.audioMessage?'x'.repeat(600):'isolated fictional receipt')});
    return json({key:{id:'provider-test'}});
  }
  if(u.origin!==backend)throw Error(`Unexpected external request: ${u.origin}`);
- if(u.pathname.startsWith('/storage/v1/object/uploads/'))return json({Key:'private-test'});
+ if(u.pathname.startsWith('/storage/v1/object/uploads/'))return failStorage?json({message:'Unavailable'},503):json({Key:'private-test'});
  const table=u.pathname.split('/').at(-1);
  if(u.pathname.includes('/rpc/')){
    if(table==='try_consume_rate_limit')return json({allowed:true,remaining:100});
@@ -58,7 +61,8 @@ globalThis.fetch=async(input,init)=>{
  if(table==='profiles')return rows({id:owner,is_admin:true,plan_tier:'completo',name:'Teste',pix_key:profilePix},req);
  if(table==='whatsapp_instances')return json([]);
  if(table==='portal_sessions'&&req.method==='POST')return rows({token:'isolated-portal-session'},req);
- if(table==='leads'&&lead){if(req.method==='PATCH'){Object.assign(lead,body);return new Response(null,{status:204});}return rows(lead,req);}
+ if(table==='leads'&&lead){if(req.method==='PATCH'){if(failLead)return json({message:'Unavailable'},503);Object.assign(lead,body);return new Response(null,{status:204});}return rows(lead,req);}
+ if(table==='notifications'&&req.method==='POST'&&failNotification)return json({message:'Unavailable'},503);
  if(table==='whatsapp_event_claims')return rows({status:eventCompleted?'completed':'failed'},req);
  if(table==='whatsapp_conversations'){
    if(req.method==='PATCH'){if(failHandoff&&body.needs_human)return json({message:'Unavailable'},503);Object.assign(conversation,body);return new Response(null,{status:204});}
@@ -554,4 +558,117 @@ Deno.test('transcribed audio resumes and answers the spoken request rather than 
  Deno.env.set(keys[0],'isolated-gemini-key');Deno.env.set(keys[1],owner);
  try{geminiTranscript='PIX parcela 2';const {body}=await invoke({audioMessage:{mimetype:'audio/ogg'}},true,'resume-audio');assertEquals(body.installment_id,'installment-2');assertEquals(pixAmount(),200);assert(paymentQuote().resumed_at);}
  finally{keys.forEach((k,i)=>before[i]===undefined?Deno.env.delete(k):Deno.env.set(k,before[i]!));}
+});
+
+const requiredDocs=['selfie_id','identity_front','identity_back','address_proof','bank_statement'];
+const acceptedDocument={document_type:'identity_front',label:'Empréstimo aprovado',readable:true,complete:true,quality:'good',authenticity_risk:'low',decision:'accepted'};
+function documentScenario(isLead:boolean,received:string[]=[]){
+ reset();fixtureMedia=btoa('fictitious document '.repeat(200));settings.bot_use_ai=true;geminiReply={...acceptedDocument};
+ clientMemory=JSON.stringify({service_menu_started:true,service_menu_stage:'documents',loan_profile:'pf',loan_documents_received:received});
+ if(isLead){knownClient=false;conversation.client_id=null;lead={id:'lead-test',user_id:owner,phone:'11999999999',name:'Contato fictício',stage:'awaiting_docs',notes:{service_menu_stage:'documents',loan_profile:'pf',docs:{received}}};}
+}
+function documentState(isLead:boolean){return isLead?lead.notes.docs:{received:paymentQuote().loan_documents_received,validations:paymentQuote().loan_document_validations};}
+async function documentTurn(id='doc-event',caption=''){eventCompleted=false;return await invoke({documentMessage:{mimetype:'application/pdf',caption}},true,id);}
+async function documentProvider(work:()=>Promise<void>){
+ const keys=['GEMINI_API_KEY','GEMINI_ALLOWED_USER_IDS'],before=keys.map(k=>Deno.env.get(k));Deno.env.set(keys[0],'isolated-gemini-key');Deno.env.set(keys[1],owner);
+ try{await work();}finally{keys.forEach((k,i)=>before[i]===undefined?Deno.env.delete(k):Deno.env.set(k,before[i]!));}
+}
+for(const isLead of [false,true]){
+ const target=isLead?'lead':'client';
+ Deno.test(`document intake ${target}: one private file, current progress and no automatic approval`,async()=>{
+  documentScenario(isLead);await documentProvider(async()=>{
+   const {body}=await documentTurn();assertEquals(body.status,'document_reviewed');assertEquals(documentState(isLead).received,['identity_front']);
+   assertEquals(calls.filter(c=>c.path.includes('getBase64FromMediaMessage')).length,1);assertEquals(calls.filter(c=>c.path.startsWith('/storage/v1/object/uploads/')).length,1);
+   assertEquals(documentState(isLead).validations[0].path,messages[0].metadata.storage_path);assert(jobs.every(j=>!j.text.includes('Empréstimo aprovado')));
+   assertEquals(conversation.bot_paused,false);assertEquals(reviews.length,0);
+   const writes=calls.filter(c=>c.path.endsWith(isLead?'/leads':'/clients')&&c.method==='PATCH');assert(writes.every(c=>c.query.user_id===`eq.${owner}`));
+  });
+ });
+ Deno.test(`document intake ${target}: accepted but illegible file stays missing`,async()=>{
+  documentScenario(isLead);geminiReply={...acceptedDocument,readable:false};await documentProvider(async()=>{
+   const {body}=await documentTurn();assertEquals(body.review.decision,'resend');assertEquals(documentState(isLead).received,[]);assertEquals(conversation.bot_paused,false);
+   assert(jobs.some(j=>j.text.includes('Envie novamente')));
+  });
+ });
+ Deno.test(`document intake ${target}: risky file routes to humans and pauses further automation`,async()=>{
+  documentScenario(isLead);geminiReply={...acceptedDocument,authenticity_risk:'high'};await documentProvider(async()=>{
+   const {body}=await documentTurn();assertEquals(body.review.decision,'manual_review');assertEquals(documentState(isLead).received,[]);assert(conversation.needs_human&&conversation.bot_paused);
+   assert(jobs.every(j=>j.purpose==='handoff_notice'));assert(calls.some(c=>c.path.endsWith('/notifications')&&c.method==='POST'));
+   jobs=[];await turn('PIX','after-risky-doc');assertEquals(jobs.length,0);
+  });
+ });
+ Deno.test(`document intake ${target}: complete triage requires human decision without granting credit`,async()=>{
+  documentScenario(isLead,requiredDocs.filter(type=>type!=='identity_front'));await documentProvider(async()=>{
+   const {body}=await documentTurn();assertEquals(body.missing,[]);assert(conversation.needs_human&&conversation.bot_paused);assert(jobs.some(j=>j.text.includes('não significa aprovação')));
+   assertEquals(calls.filter(c=>/system_pay_installment|system_renew_installment_interest/.test(c.path)).length,0);
+  });
+ });
+ Deno.test(`document intake ${target}: failed progress write does not acknowledge the file as validated`,async()=>{
+  documentScenario(isLead);if(isLead)failLead=true;else failMemory=true;await documentProvider(async()=>{
+   const {response}=await documentTurn();assertEquals(response.status,500);assertEquals(jobs.length,0);assertEquals(eventCompleted,false);assertEquals(documentState(isLead).received,[]);
+  });
+ });
+ Deno.test(`document intake ${target}: failed storage does not accept or advance the document`,async()=>{
+  documentScenario(isLead);failStorage=true;const {response}=await documentTurn();assertEquals(response.status,500);assertEquals(jobs.length,0);assertEquals(eventCompleted,false);assertEquals(documentState(isLead).received,[]);
+ });
+ Deno.test(`document intake ${target}: failed final handoff retries without duplicate files or validations`,async()=>{
+  documentScenario(isLead,requiredDocs.filter(type=>type!=='identity_front'));failHandoff=true;await documentProvider(async()=>{
+   const first=await documentTurn();assertEquals(first.response.status,500);assertEquals(jobs.length,0);assertEquals(eventCompleted,false);
+   failHandoff=false;const second=await documentTurn();assertEquals(second.body.status,'document_reviewed');assert(conversation.bot_paused&&conversation.needs_human);assertEquals(documentState(isLead).validations.length,1);
+   assertEquals(new Set(calls.filter(c=>c.path.startsWith('/storage/v1/object/uploads/')).map(c=>c.path)).size,1);
+  });
+ });
+ Deno.test(`document intake ${target}: notification failure never claims the team was notified`,async()=>{
+  documentScenario(isLead);failNotification=true;geminiReply={...acceptedDocument,authenticity_risk:'high'};await documentProvider(async()=>{
+   const {response}=await documentTurn();assertEquals(response.status,500);assertEquals(jobs.length,0);assertEquals(eventCompleted,false);
+  });
+ });
+ Deno.test(`document intake ${target}: disabled AI stores progress for human review without provider calls`,async()=>{
+  documentScenario(isLead);settings.bot_use_ai=false;await documentProvider(async()=>{
+   const {body}=await documentTurn();assertEquals(body.review.decision,'manual_review');assert(conversation.bot_paused&&conversation.needs_human);assertEquals(documentState(isLead).received,[]);
+   assertEquals(calls.filter(c=>c.origin==='https://generativelanguage.googleapis.com').length,0);
+  });
+ });
+ for(const question of ['ajuda','quais documentos faltam?'])Deno.test(`document assistance ${target}: ${question}`,async()=>{
+  documentScenario(isLead,['identity_front']);const {body}=await turn(question,`doc-help-${question}`);assertEquals(body.status,'document_help');
+  assert(jobs.some(j=>j.text.includes('extrato bancário')));assert(jobs.every(j=>!j.text.includes('identificação — frente')));
+  assertEquals(isLead?lead.notes.service_menu_stage:paymentQuote().service_menu_stage,'documents');assertEquals(calls.filter(c=>c.path.endsWith('/contract_installments')).length,0);
+ });
+}
+Deno.test('address proof caption stays in registration triage instead of becoming a payment receipt',async()=>{
+ documentScenario(false);geminiReply={...acceptedDocument,document_type:'address_proof'};await documentProvider(async()=>{
+  const {body}=await documentTurn('address-proof-caption','comprovante de endereço');assertEquals(body.status,'document_reviewed');assertEquals(reviews.length,0);assertEquals(documentState(false).received,['address_proof']);
+ });
+});
+Deno.test('optional CLT payslip is stored without replacing the pending work card',async()=>{
+ documentScenario(false);clientMemory=JSON.stringify({service_menu_started:true,service_menu_stage:'documents',loan_profile:'clt',loan_documents_received:requiredDocs});
+ geminiReply={...acceptedDocument,document_type:'payslip'};await documentProvider(async()=>{
+  const {body}=await documentTurn('optional-payslip');assertEquals(body.review.decision,'accepted');assertEquals(body.missing,['work_card']);
+  assert(jobs.some(j=>j.text.includes('carteira de trabalho')));assert(jobs.every(j=>!j.text.includes('Envie novamente')));assertEquals(documentState(false).validations[0].document_type,'payslip');assertEquals(conversation.bot_paused,false);
+ });
+});
+Deno.test('payment proof caption can interrupt registration and still requires human confirmation',async()=>{
+ documentScenario(false);settings.bot_use_ai=false;const {body}=await documentTurn('payment-proof-caption','comprovante PIX parcela 1');assert(body.status!=='document_reviewed');assertEquals(reviews.length,1);assert(conversation.needs_human);
+ assertEquals(documentState(false).received,[]);assertEquals(calls.filter(c=>/system_pay_installment/.test(c.path)).length,0);
+});
+for(const stage of ['main','loan_type','documents'])Deno.test(`lead human request has priority over the ${stage} step`,async()=>{
+ documentScenario(true);lead.notes.service_menu_stage=stage;const {body}=await turn('atendente','lead-priority-human');assertEquals(body.status,'human_handoff');assert(conversation.bot_paused&&conversation.needs_human);assertEquals(lead.stage,'handoff');
+});
+Deno.test('lead stop request pauses document collection instead of restarting the menu',async()=>{
+ documentScenario(true);const {body}=await turn('pare bot','lead-stop-docs');assertEquals(body.status,'stopped');assert(conversation.bot_paused&&conversation.needs_human);
+});
+for(const isLead of [false,true])Deno.test(`loan type assistance preserves the stage for ${isLead?'lead':'client'}`,async()=>{
+ documentScenario(isLead);if(isLead)lead.notes.service_menu_stage='loan_type';else clientMemory=JSON.stringify({service_menu_started:true,service_menu_stage:'loan_type'});
+ const {body}=await turn('ajuda','help-loan-type');assertEquals(body.status,isLead?'lead_loan_type_help':'loan_type_help');assertEquals(isLead?lead.notes.service_menu_stage:paymentQuote().service_menu_stage,'loan_type');
+});
+for(const stage of ['loan_type','documents'])Deno.test(`explicit client menu exits ${stage} before the next numeric choice`,async()=>{
+ documentScenario(false);clientMemory=JSON.stringify({service_menu_started:true,service_menu_stage:stage});
+ const {body}=await turn('menu','exit-to-main');assertEquals(body.status,'menu_shown');assertEquals(paymentQuote().service_menu_stage,'main');jobs=[];
+ const next=await turn('1','main-new-loan');assertEquals(next.body.status,'loan_type_menu');assertEquals(paymentQuote().service_menu_stage,'loan_type');
+});
+Deno.test('failed lead profile save never requests documents for an unsaved stage',async()=>{
+ documentScenario(true);lead.notes.service_menu_stage='loan_type';failLead=true;const {response}=await turn('2','failed-lead-profile');assertEquals(response.status,500);assertEquals(jobs.length,0);assertEquals(lead.notes.service_menu_stage,'loan_type');assertEquals(eventCompleted,false);
+});
+Deno.test('failed lead human handoff does not claim the conversation was forwarded',async()=>{
+ documentScenario(true);failHandoff=true;const {response}=await turn('atendente','failed-lead-human');assertEquals(response.status,500);assertEquals(jobs.length,0);assertEquals(eventCompleted,false);
 });
