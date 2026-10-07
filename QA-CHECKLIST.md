@@ -12,18 +12,21 @@ As verificações automáticas são `npm run check` e `npm run test:e2e:local`.
 | WhatsApp | Handler real de `whatsapp-send`; envio, falha do provedor, agendamento e proteção de conversa de outro dono verificados |
 | Assinatura | Handler real de `mercadopago-webhook`; HMAC inválido, valor insuficiente, ativação, validade, evento duplicado e plano vitalício verificados |
 | Instalação | Android/iPhone e computadores em testes de navegador; critérios de instalação Chrome no site HTTPS verificados |
+| Acesso e recuperação | SDK real com armazenamento bloqueado e navegador com quota excedida; login, painel e clientes carregam; senha recusada permite correção; confirmação física e entrega real de e-mail pendentes |
 
-Execute `npm run test:integrations` para os 14 testes dos handlers. Eles usam
+Execute `npm run test:integrations` para os 220 testes dos handlers. Eles usam
 apenas credenciais e dados fictícios, interceptam as chamadas HTTP e rodam sem
 permissão de rede. Essas evidências não substituem o checklist manual com
 aparelhos físicos, banco de staging e contas sandbox dos provedores.
 
 ## 1. Autenticação
-- [ ] Cadastro novo (e-mail + senha) cria perfil e `trial_ends_at` = +3 dias
+- [ ] Cadastro abre o checkout com nome e e-mail; pagamento e conclusão do cadastro vinculam a conta correta, sem duplicação
 - [ ] Login com credenciais válidas → redireciona para `/dashboard`
 - [ ] Login com credenciais inválidas exibe mensagem clara
 - [ ] "Lembrar-me" mantém sessão após fechar o navegador (localStorage)
 - [ ] Sem "Lembrar-me" sessão expira ao fechar (sessionStorage)
+- [ ] Armazenamento cheio ou bloqueado permite login nesta janela e avisa sobre a sessão temporária
+- [ ] Aparelho que apresentou erro consegue entrar e carregar o próprio perfil
 - [ ] "Esqueceu a senha" envia e-mail e `/reset-password` atualiza senha
 - [ ] Logout limpa sessão e redireciona para `/login`
 
@@ -62,17 +65,19 @@ aparelhos físicos, banco de staging e contas sandbox dos provedores.
 - [ ] Bot envia automaticamente conforme regras de escalonamento
 - [ ] `bot_stop_on_payment=true` interrompe ao receber pagamento
 
-## 7. Agente IA (DeepSeek)
+## 7. Agente IA (provedor configurado; Gemini na conta de testes)
 - [ ] Mensagem recebida no WA é processada pela IA
 - [ ] Áudio é transcrito (se `bot_process_audio=true`)
 - [ ] Comprovante é interpretado (se `bot_process_receipts=true`)
-- [ ] Negociação automática segue regras de `bot_negotiation_enabled`
+- [ ] Pedidos de negociação, desconto, prazo ou condições diferentes pausam o bot e chegam a uma pessoa; o bot não negocia
+- [ ] Previsão voluntária mantém as condições originais, vincula a parcela correta e não confirma recebimento
 
 ## 8. Portal do Cliente (externo)
 - [ ] Login somente por CPF (`portal_client_login`), com limite de tentativas e recusa de CPF ambíguo
 - [ ] Cliente vê apenas seus contratos e parcelas
 - [ ] PIX exibido corretamente
 - [ ] Branding (cores/logo) reflete configuração do dono
+- [ ] Aparência clara/escura em preto e branco, sem neon; negociação disponível somente com uma pessoa
 
 ## 9. Portal do Cobrador
 - [ ] Login via token (`collector_tokens`)

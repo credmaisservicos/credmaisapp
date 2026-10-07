@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { fetchAll } from "@/lib/fetchAll";
+import {readLocalPreference} from '@/lib/browserStorage';
 
 /**
  * Counts unread chat messages across all channels the user is a member of
@@ -53,7 +54,7 @@ export function useChatUnread() {
           return unread || 0;
         });
         const dmCounts = dms.map(async (dm) => {
-          const watermark = localStorage.getItem(`chat-dm-read-${dm.id}`) || new Date(0).toISOString();
+          const watermark = readLocalPreference(`chat-dm-read-${dm.id}`) || new Date(0).toISOString();
           const { count: unread, error } = await supabase
             .from("chat_messages")
             .select("*", { count: "exact", head: true })

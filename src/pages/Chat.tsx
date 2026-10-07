@@ -2,6 +2,7 @@ import { Credinho } from "@/components/brand/Credinho";
 import { useEffect, useMemo, useRef, useState, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import {writeLocalPreference} from '@/lib/browserStorage';
 import {
   Hash, Search, Send, Paperclip, Smile, MoreVertical, Reply, Trash2, Pin, PinOff,
   Ban, ShieldCheck, LogIn, LogOut, MessageSquarePlus, X, Check, CheckCheck,
@@ -276,7 +277,7 @@ const Chat = () => {
           .eq("channel_id", scope.id)
           .eq("user_id", user.id);
       } else if (scope.kind === "dm") {
-        localStorage.setItem(`chat-dm-read-${scope.id}`, now);
+        writeLocalPreference(`chat-dm-read-${scope.id}`,now);
       }
       window.dispatchEvent(new CustomEvent("chat:read"));
     })().catch((error) => {

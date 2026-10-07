@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { X, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import {readLocalPreference,writeLocalPreference} from '@/lib/browserStorage';
 
 interface Step {
   selector?: string;
@@ -61,7 +62,6 @@ export const useOnboardingTour = () => {
   const [open, setOpen] = useState(false);
   const start = useCallback(() => setOpen(true), []);
   const reset = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY);
     setOpen(true);
   }, []);
   return { open, start, reset, setOpen };
@@ -95,15 +95,14 @@ const OnboardingTour = ({ open, onClose }: { open: boolean; onClose: () => void 
   }, [open, step]);
 
   const finish = useCallback(() => {
-    localStorage.setItem(STORAGE_KEY, "1");
     if (user) {
-      localStorage.setItem(`${STORAGE_KEY}_${user.id}`, "1");
+      writeLocalPreference(`${STORAGE_KEY}_${user.id}`,'1');
       // Persist server-side so it never reappears on other devices/sessions
       supabase
         .from("profiles")
         .update({ onboarding_completed_at: new Date().toISOString() } as any)
         .eq("id", user.id)
-        .then(() => {});
+        .then(() => {}, () => {});
     }
     setStepIdx(0);
     onClose();
@@ -239,24 +238,24 @@ export const OnboardingTourAuto = () => {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
+    setOpen(false);
     if (!user) return;
     let cancelled = false;
+    let launchTimer: ReturnType<typeof setTimeout> | undefined;
     (async () => {
       // Check server-side flag first (source of truth across devices)
-      const { data } = await supabase
+      const { data,error } = await supabase
         .from("profiles")
         .select("onboarding_completed_at" as any)
         .eq("id", user.id)
         .maybeSingle();
-      if (cancelled) return;
+      if (cancelled||error) return;
       const serverCompleted = !!(data as any)?.onboarding_completed_at;
       if (serverCompleted) {
-        localStorage.setItem(`${STORAGE_KEY}_${user.id}`, "1");
+        writeLocalPreference(`${STORAGE_KEY}_${user.id}`,'1');
         return;
       }
-      const localCompleted =
-        localStorage.getItem(STORAGE_KEY) === "1" ||
-        localStorage.getItem(`${STORAGE_KEY}_${user.id}`) === "1";
+      const localCompleted=readLocalPreference(`${STORAGE_KEY}_${user.id}`)==='1';
       if (localCompleted) {
         // Sync local → server so it never reappears
         await supabase
@@ -265,11 +264,11 @@ export const OnboardingTourAuto = () => {
           .eq("id", user.id);
         return;
       }
-      const t = setTimeout(() => !cancelled && setOpen(true), 1200);
-      return () => clearTimeout(t);
-    })();
+      launchTimer = setTimeout(() => !cancelled && setOpen(true), 1200);
+    })().catch(()=>{/* Optional guidance must not interrupt the app. */});
     return () => {
       cancelled = true;
+      clearTimeout(launchTimer);
     };
   }, [user]);
 

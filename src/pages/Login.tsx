@@ -4,7 +4,7 @@ import { hasPortalSession } from "@/lib/portalSession";
 import { z } from "zod";
 import defaultLogo from "@/assets/credmais-mark.svg";
 import { supabase } from "@/integrations/supabase/client";
-import { setRememberMe, getRememberMe } from "@/integrations/supabase/remember";
+import { setRememberMe, getRememberMe,isAuthSessionTemporary } from "@/integrations/supabase/remember";
 import { useToast } from "@/hooks/use-toast";
 import {
   ArrowLeft,
@@ -197,6 +197,7 @@ const Login = () => {
     // vitalício, administrador e a tabela de assinaturas. Duplicar a regra aqui
     // mandava contas válidas ao checkout antes da verificação completa.
     setLoading(false);
+    if(isAuthSessionTemporary())toast({title:'Sessão temporária',description:'Você entrou. Será preciso entrar novamente ao recarregar ou fechar este app.'});
     navigate(nextPath ?? "/dashboard", { replace: true });
   };
 

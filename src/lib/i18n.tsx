@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, ReactNode } from "react";
+import {readLocalPreference,writeLocalPreference} from '@/lib/browserStorage';
 
 type Lang = "pt-BR" | "en-US" | "es-ES";
 
@@ -66,7 +67,7 @@ const Ctx = createContext<I18nCtx>({ lang: "pt-BR", setLang: () => {}, t: (k) =>
 
 export const I18nProvider = ({ children }: { children: ReactNode }) => {
   const [lang, setLangState] = useState<Lang>(() => {
-    const stored = localStorage.getItem("app-lang") as Lang | null;
+    const stored = readLocalPreference("app-lang") as Lang | null;
     return stored && DICT[stored] ? stored : "pt-BR";
   });
 
@@ -78,7 +79,7 @@ export const I18nProvider = ({ children }: { children: ReactNode }) => {
     () => ({
       lang,
       setLang: (l) => {
-        localStorage.setItem("app-lang", l);
+        writeLocalPreference("app-lang",l);
         setLangState(l);
       },
       t: (key) => DICT[lang][key] ?? DICT["pt-BR"][key] ?? key,

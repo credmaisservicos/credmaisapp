@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import {readLocalPreference,writeLocalPreference} from '@/lib/browserStorage';
 import { parseLocalDate } from "@/lib/dateUtils";
 
 // VAPID public key: seguro expor no bundle (é a metade pública do par usado
@@ -108,7 +109,7 @@ export function usePushNotifications() {
 
     // Initialize last-seen
     const key = `push-last-seen-${user.id}`;
-    const stored = localStorage.getItem(key);
+    const stored = readLocalPreference(key);
     const storedNumber = Number(stored);
     lastSeenRef.current = stored && Number.isFinite(storedNumber) ? storedNumber : Date.now();
 
@@ -125,7 +126,7 @@ export function usePushNotifications() {
           const ts = parsedTs;
           if (ts <= lastSeenRef.current) return;
           lastSeenRef.current = ts;
-          localStorage.setItem(key, String(ts));
+          writeLocalPreference(key,String(ts));
 
           if (Notification.permission === "granted") {
             const n = new Notification(row.from || "Sistema", {

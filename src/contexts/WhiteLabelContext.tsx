@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
+import {readLocalPreference,writeLocalPreference} from '@/lib/browserStorage';
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -187,7 +188,7 @@ function applyThemeMode(mode: "light" | "dark") {
   } else {
     root.classList.remove("dark");
   }
-  localStorage.setItem("theme", mode);
+  writeLocalPreference("theme",mode);
 }
 
 function getSystemTheme(): "light" | "dark" {
@@ -218,8 +219,8 @@ export const WhiteLabelProvider = ({ children }: { children: React.ReactNode }) 
       setConfig(publicBrand);
       applyConfig(publicBrand);
       setIsLoaded(true);
-      const stored = localStorage.getItem("theme") as "light" | "dark" | null;
-      const resolved = stored || "dark";
+      const stored=readLocalPreference('theme');
+      const resolved=stored==='light'?'light':'dark';
       setEffectiveTheme(resolved);
       applyThemeMode(resolved);
       return;
@@ -250,7 +251,7 @@ export const WhiteLabelProvider = ({ children }: { children: React.ReactNode }) 
       };
       setConfig(newConfig);
       // Cache restrito a dados públicos mantém a marca na tela de login após logout.
-      localStorage.setItem("credmais-public-brand", JSON.stringify({
+      writeLocalPreference("credmais-public-brand", JSON.stringify({
         companyName: newConfig.companyName, companyLogo: newConfig.companyLogo,
         faviconUrl: newConfig.faviconUrl, primaryColor: newConfig.primaryColor,
         accentColor: newConfig.accentColor, loginTitle: newConfig.loginTitle,

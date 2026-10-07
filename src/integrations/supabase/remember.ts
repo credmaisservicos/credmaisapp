@@ -1,52 +1,71 @@
-// Persistência opcional de "Lembrar-me" para o login.
-// Mantido em arquivo separado porque src/integrations/supabase/client.ts
-// é regenerado automaticamente.
+const REMEMBER_KEY='sj_remember_me';
+const authKey=(key:string)=>key.includes('-auth-token');
+type Store=()=>Storage;
 
-const REMEMBER_KEY = "sj_remember_me";
-
-const authStorage = () => (getRememberMe() ? localStorage : sessionStorage);
-
-const moveAuthSession = (from: Storage, to: Storage) => {
-  try {
-    for (let index = from.length - 1; index >= 0; index -= 1) {
-      const key = from.key(index);
-      if (!key || !key.includes("-auth-token")) continue;
-      const value = from.getItem(key);
-      if (value !== null) to.setItem(key, value);
-      from.removeItem(key);
+/** Browser storage is optional; an unavailable disk must not prevent login. */
+export function createRememberMeStorage(local:Store=()=>localStorage,temporary:Store=()=>sessionStorage){
+  const shadow=new Map<string,string|null>();
+  const pending=new Set<string>();
+  let preference:boolean|undefined;
+  const getRememberMe=()=>{
+    if(preference!==undefined)return preference;
+    try{return local().getItem(REMEMBER_KEY)!=='false';}catch{return true;}
+  };
+  const selected=()=>getRememberMe()?local():temporary();
+  const keys=(store:Store)=>{
+    const found=new Set<string>();
+    try{const disk=store();for(let i=0;i<disk.length;i++){const key=disk.key(i);if(key!==null)found.add(key);}}catch{/* Use the session held in this window. */}
+    return found;
+  };
+  const adapter:Storage={
+    get length(){return visibleKeys().length;},
+    key:(index)=>visibleKeys()[index]??null,
+    getItem:(key)=>{
+      if(pending.has(key))return shadow.get(key)??null;
+      try{const value=selected().getItem(key);shadow.set(key,value);return value;}catch{return shadow.get(key)??null;}
+    },
+    setItem:(key,value)=>{
+      shadow.set(key,String(value));pending.add(key);
+      try{selected().setItem(key,String(value));pending.delete(key);}catch{/* Keep this session only in memory. */}
+    },
+    removeItem:(key)=>{
+      shadow.set(key,null);pending.add(key);
+      let removed=true;
+      // Remove inactive copies too, so changing the preference cannot revive logout.
+      for(const source of authKey(key)?[local,temporary]:[selected]){
+        try{source().removeItem(key);}catch{removed=false;/* The tombstone still applies in this window. */}
+      }
+      if(removed)pending.delete(key);
+    },
+    clear:()=>{
+      const found=new Set([...keys(local),...keys(temporary),...shadow.keys()]);
+      for(const key of found)if(authKey(key))adapter.removeItem(key);
+    },
+  };
+  function visibleKeys(){
+    const found=keys(selected);for(const [key,value] of shadow)if(pending.has(key)){if(value===null)found.delete(key);else found.add(key);}
+    return [...found];
+  }
+  const setRememberMe=(remember:boolean)=>{
+    const previous=getRememberMe();
+    preference=remember;
+    try{local().setItem(REMEMBER_KEY,String(remember));preference=undefined;}catch{/* Honor the choice for this window even without storage. */}
+    if(previous===remember)return;
+    const source=previous?local:temporary;
+    const target=remember?local:temporary;
+    const found=new Set([...keys(source),...shadow.keys()]);
+    for(const key of found){
+      if(!authKey(key))continue;
+      let value=shadow.get(key)??null;
+      if(!pending.has(key)){try{value=source().getItem(key);}catch{/* Reuse the last value read by the SDK. */}}
+      if(value===null)continue;
+      shadow.set(key,value);pending.add(key);
+      try{target().setItem(key,value);pending.delete(key);}catch{/* Migration still retains the session in this window. */}
+      try{source().removeItem(key);}catch{/* The active store and memory take precedence. */}
     }
-  } catch {
-    // Storage may be blocked in private browsing; Supabase handles the failure.
-  }
-};
+  };
+  const isAuthSessionTemporary=()=>[...pending].some(key=>key.endsWith('-auth-token')&&shadow.get(key)!=null);
+  return {rememberMeStorage:adapter,getRememberMe,setRememberMe,isAuthSessionTemporary};
+}
 
-export const setRememberMe = (remember: boolean) => {
-  try {
-    const previous = getRememberMe();
-    localStorage.setItem(REMEMBER_KEY, remember ? "true" : "false");
-    if (previous !== remember) {
-      if (remember) moveAuthSession(sessionStorage, localStorage);
-      else moveAuthSession(localStorage, sessionStorage);
-    }
-  } catch {
-    /* noop */
-  }
-};
-
-/** Storage adapter that follows the preference for every Supabase read/write. */
-export const rememberMeStorage: Storage = {
-  get length() { return authStorage().length; },
-  clear: () => authStorage().clear(),
-  getItem: (key) => authStorage().getItem(key),
-  key: (index) => authStorage().key(index),
-  removeItem: (key) => authStorage().removeItem(key),
-  setItem: (key, value) => authStorage().setItem(key, value),
-};
-
-export const getRememberMe = (): boolean => {
-  try {
-    return localStorage.getItem(REMEMBER_KEY) !== "false";
-  } catch {
-    return true;
-  }
-};
+export const {rememberMeStorage,getRememberMe,setRememberMe,isAuthSessionTemporary}=createRememberMeStorage();

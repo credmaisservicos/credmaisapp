@@ -7,6 +7,9 @@ import ConstellationBackground from "@/components/ConstellationBackground";
 import defaultLogo from "@/assets/credmais-mark.svg";
 import { useWhiteLabel } from "@/contexts/WhiteLabelContext";
 import { ArrowLeft, ArrowRight, Eye, EyeOff, Lock, Mail, CheckCircle2, Loader2, Send, Check, Clock, AlertTriangle } from "lucide-react";
+import {withTimeout} from '@/lib/withTimeout';
+import {authFailureMessage,isTemporaryAuthFailure} from '@/lib/authFailure';
+import {Capacitor} from '@capacitor/core';
 
 type Mode = "request" | "update" | "done" | "error";
 
@@ -90,8 +93,8 @@ const friendlyError = (err: unknown): FriendlyError => {
   if (status && status >= 500) {
     return { title: "Servidor indisponível", description: "Estamos com instabilidade. Tente novamente em instantes." };
   }
-  if (msg.includes("network") || msg.includes("failed to fetch") || e.name === "TypeError") {
-    return { title: "Sem conexão", description: "Falha de rede ao falar com o servidor. Verifique sua internet." };
+  if (isTemporaryAuthFailure(err) || e.name === "TypeError") {
+    return { title: navigator.onLine?'Conexão indisponível':'Sem conexão', description: authFailureMessage(err) };
   }
 
   return { title: "Não foi possível concluir", description: e.message || "Algo deu errado. Tente novamente." };
@@ -113,9 +116,10 @@ const ResetPassword = () => {
   }, [searchParams]);
 
   const loginHref = nextPath ? `/login?next=${encodeURIComponent(nextPath)}` : "/login";
+  const recoveryOrigin=Capacitor.isNativePlatform()?'https://credmaisapp.com.br':window.location.origin;
   const recoveryRedirect = nextPath
-    ? `${window.location.origin}/reset-password?next=${encodeURIComponent(nextPath)}`
-    : `${window.location.origin}/reset-password`;
+    ? `${recoveryOrigin}/reset-password?next=${encodeURIComponent(nextPath)}`
+    : `${recoveryOrigin}/reset-password`;
 
   const { toast } = useToast();
   const { config } = useWhiteLabel();
@@ -138,6 +142,8 @@ const ResetPassword = () => {
   const [redirectIn, setRedirectIn] = useState(0);
   const redirectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const redirectIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const resendTimerRef=useRef<ReturnType<typeof setTimeout>|null>(null);
+  const requestInProgress=useRef(false);
 
   const clearRedirectTimers = () => {
     if (redirectTimeoutRef.current) clearTimeout(redirectTimeoutRef.current);
@@ -146,7 +152,7 @@ const ResetPassword = () => {
     redirectIntervalRef.current = null;
   };
 
-  useEffect(() => () => clearRedirectTimers(), []);
+  useEffect(() => () => {clearRedirectTimers();if(resendTimerRef.current)clearTimeout(resendTimerRef.current);}, []);
 
   const goToLoginNow = async () => {
     clearRedirectTimers();
@@ -184,28 +190,23 @@ const ResetPassword = () => {
     date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 
   const sendRecoveryEmail = async (targetEmail: string) => {
-    const { error } = await supabase.auth.resetPasswordForEmail(targetEmail, {
+    const { error } = await withTimeout(supabase.auth.resetPasswordForEmail(targetEmail, {
       redirectTo: recoveryRedirect,
-    });
+    }),15_000);
     return error;
   };
 
   const handleResend = async () => {
-    if (!email.trim() || resendCooldown > 0 || resendState === "sending") return;
+    if (!email.trim() || resendCooldown > 0 || resendState === "sending" || requestInProgress.current) return;
+    requestInProgress.current=true;
     setResendState("sending");
-    const error = await sendRecoveryEmail(email.trim());
-    if (error) {
-      setResendState("idle");
-      const f = friendlyError(error);
-      toast({ title: f.title, description: f.description, variant: "destructive" });
-      return;
-    }
-    setResendState("success");
-    setLastSentAt(new Date());
-    setResendCount((c) => c + 1);
-    setResendCooldown(45);
-    toast({ title: "✉️ Link reenviado", description: `Novo e-mail enviado para ${email}.` });
-    setTimeout(() => setResendState("idle"), 2500);
+    try{
+      const error=await sendRecoveryEmail(email.trim());if(error)throw error;
+      setResendState('success');setLastSentAt(new Date());setResendCount(c=>c+1);setResendCooldown(45);
+      toast({title:'✉️ Link reenviado',description:`Novo e-mail enviado para ${email}.`});
+      resendTimerRef.current=setTimeout(()=>setResendState('idle'),2500);
+    }catch(error){const failure=friendlyError(error);setResendState('idle');toast({...failure,variant:'destructive'});}
+    finally{requestInProgress.current=false;}
   };
 
   // Detecta token de recuperação na URL (Supabase usa hash: #access_token=...&type=recovery)
@@ -229,32 +230,25 @@ const ResetPassword = () => {
 
   const handleRequest = async (e: React.FormEvent) => {
     e.preventDefault();
+    if(requestInProgress.current)return;
     if (!email.trim()) {
       toast({ title: "Informe o e-mail", variant: "destructive" });
       return;
     }
+    requestInProgress.current=true;
     setLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: recoveryRedirect,
-    });
-    setLoading(false);
-    if (error) {
-      const f = friendlyError(error);
-      toast({ title: f.title, description: f.description, variant: "destructive" });
-      return;
-    }
-    toast({
-      title: "✉️ E-mail enviado",
-      description: "Verifique sua caixa de entrada (e o spam) para redefinir a senha.",
-    });
-    setLastSentAt(new Date());
-    setMode("done");
+    try{
+      const error=await sendRecoveryEmail(email.trim());if(error)throw error;
+      toast({title:'✉️ E-mail enviado',description:'Verifique sua caixa de entrada (e o spam) para redefinir a senha.'});
+      setLastSentAt(new Date());setResendCooldown(45);setMode('done');
+    }catch(error){toast({...friendlyError(error),variant:'destructive'});}
+    finally{setLoading(false);requestInProgress.current=false;}
   };
 
   const finishAndRedirect = async (delayMs = 600) => {
     // Sempre limpa a sessão de recuperação (best-effort) e redireciona.
     try {
-      await supabase.auth.signOut();
+      await withTimeout(supabase.auth.signOut({scope:'local'}),20_000);
     } catch (e) {
       console.warn("[reset-password] signOut falhou, prosseguindo com redirect", e);
     }
@@ -272,6 +266,7 @@ const ResetPassword = () => {
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if(requestInProgress.current)return;
     // Validações locais — usuário pode corrigir sem perder a sessão de recuperação.
     if (password.length < 6) {
       toast({ title: "Senha muito curta", description: "Mínimo de 6 caracteres.", variant: "destructive" });
@@ -282,10 +277,10 @@ const ResetPassword = () => {
       return;
     }
 
-    setLoading(true);
+    requestInProgress.current=true;setLoading(true);
     let failure: FriendlyError | null = null;
     try {
-      const { error } = await supabase.auth.updateUser({ password });
+      const { error } = await withTimeout(supabase.auth.updateUser({ password }),15_000);
       if (error) {
         failure = friendlyError(error);
       } else {
@@ -297,11 +292,15 @@ const ResetPassword = () => {
       failure = friendlyError(err);
     } finally {
       setLoading(false);
+      requestInProgress.current=false;
     }
 
-    // Qualquer falha (API ou exceção) sempre cai aqui e segue o mesmo caminho:
-    // toast → estado de erro → logout → redirect para /login.
+    // Only an invalid recovery session ends this flow; other errors allow correction.
     if (failure) {
+      // A rejected password or transient failure does not invalidate a valid link.
+      if(!['Sessão expirou','Link inválido ou expirado'].includes(failure.title)){
+        toast({...failure,variant:'destructive'});return;
+      }
       try {
         toast({
           title: failure.title,
@@ -310,7 +309,7 @@ const ResetPassword = () => {
         });
         setErrorInfo({
           title: failure.title,
-          description: `${failure.description} Por segurança, sua sessão de recuperação foi encerrada.`,
+          description: `${failure.description} Solicite um novo link para recuperar o acesso.`,
         });
         setMode("error");
       } catch (uiErr) {
@@ -441,7 +440,7 @@ const ResetPassword = () => {
               </div>
               <h2 className="font-display text-xl font-semibold text-white mb-2">Verifique seu e-mail</h2>
               <p className="text-white/50 text-sm mb-4">
-                Enviamos um link de recuperação para <span className="text-white">{email}</span>. O link expira em 1 hora.
+                Enviamos um link de recuperação para <span className="text-white">{email}</span>. Use o link mais recente enviado para sua conta.
               </p>
 
               {lastSentAt && (

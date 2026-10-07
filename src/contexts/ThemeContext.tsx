@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import { useWhiteLabel } from "@/contexts/WhiteLabelContext";
+import {readLocalPreference} from '@/lib/browserStorage';
 
 type Theme = "light" | "dark";
 
@@ -18,8 +19,7 @@ export const useTheme = () => useContext(ThemeContext);
 export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
   const { effectiveTheme, setThemeMode, isLoaded } = useWhiteLabel();
   const [theme, setTheme] = useState<Theme>(() => {
-    const stored = localStorage.getItem("theme");
-    return (stored as Theme) || "dark";
+    return readLocalPreference('theme')==='light'?'light':'dark';
   });
 
   useEffect(() => {

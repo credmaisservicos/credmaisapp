@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import {readLocalPreference,writeLocalPreference} from '@/lib/browserStorage';
 import {
   Plus, Search, Users, Trash2, Eye, X, ChevronRight, LayoutGrid, List,
   Phone, Mail, Upload, FileSpreadsheet, CheckCircle, AlertCircle,
@@ -87,7 +88,7 @@ const Clientes = () => {
   const [page, setPage] = useState(1);
 
   const [viewMode, setViewMode] = useState<"list" | "cards">(() => {
-    return (localStorage.getItem("clients-view") as "list" | "cards") || "list";
+    return readLocalPreference('clients-view')==='cards'?'cards':'list';
   });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [importOpen, setImportOpen] = useState(false);
@@ -98,7 +99,7 @@ const Clientes = () => {
 
   const toggleView = (mode: "list" | "cards") => {
     setViewMode(mode);
-    localStorage.setItem("clients-view", mode);
+    writeLocalPreference('clients-view',mode);
   };
 
   // Keyboard shortcuts: "/" focus search, "Esc" clears search
