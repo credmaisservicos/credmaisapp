@@ -17,7 +17,7 @@ describe("portalInstallmentAmount", () => {
   });
 
   it('inclui multa fixa e mantém configurações da parcela quando presentes', () => {
-    const now = new Date(2026, 7, 23, 16);
+    const now = new Date('2026-08-23T19:00:00Z');
     const row = { amount: 100, paid_amount: 40, due_date: '2026-08-21', status: 'pending' };
     const contract = { daily_interest_percent: 1, daily_penalty_type: 'fixed', daily_penalty_value: 3 };
     expect(portalInstallmentAmount(withPortalContract(row, contract), now)).toBeCloseTo(68.01, 2);
@@ -30,12 +30,12 @@ describe("portalInstallmentAmount", () => {
       { amount: 100, due_date: '2026-08-21', status: 'paid', paid_amount: 110 },
       { amount: 500, due_date: '2026-08-01', status: 'cancelled', paid_amount: 10 },
     ] }, { status: 'cancelled', installments: [{ amount: 900, due_date: '2026-08-01', status: 'pending', paid_amount: 20 }] }];
-    expect(portalFinancialSummary(contracts, new Date(2026, 7, 23, 16))).toEqual({ activeContracts: 1, openAmount: 68.01, paidAmount: 180, overdueAmount: 68.01, openCount: 1, overdueCount: 1, paidCount: 1, progressPct: 50 });
+    expect(portalFinancialSummary(contracts, new Date('2026-08-23T19:00:00Z'))).toEqual({ activeContracts: 1, openAmount: 68.01, paidAmount: 180, overdueAmount: 68.01, openCount: 1, overdueCount: 1, paidCount: 1, progressPct: 50 });
   });
 
   it('o dia de vencimento não está atrasado, mesmo depois do meio-dia', () => {
-    expect(isPortalInstallmentOverdue({ amount: 100, due_date: '2026-08-23', status: 'overdue' }, new Date(2026, 7, 23, 22))).toBe(false);
-    expect(isPortalInstallmentOverdue({ amount: 100, due_date: '2026-08-22', status: 'pending' }, new Date(2026, 7, 23, 1))).toBe(true);
+    expect(isPortalInstallmentOverdue({ amount: 100, due_date: '2026-08-23', status: 'overdue' }, new Date('2026-08-24T01:00:00Z'))).toBe(false);
+    expect(isPortalInstallmentOverdue({ amount: 100, due_date: '2026-08-22', status: 'pending' }, new Date('2026-08-23T04:00:00Z'))).toBe(true);
   });
   it("faz fallback para zero com valores financeiros inválidos", () => {
     expect(portalInstallmentAmount({ amount: "valor-legado-invalido", paid_amount: null, due_date: "2026-08-21", status: "paid" })).toBe(0);

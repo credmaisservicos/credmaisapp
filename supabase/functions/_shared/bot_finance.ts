@@ -38,7 +38,8 @@ export function botRenewalQuote(inst: any, contract: any): number | null {
   const quote=roundQuote(Math.max(0,interest)+money(inst.stored_late_fee ?? inst.late_fee));
   return Number.isFinite(quote) && quote>0 ? quote : null;
 }
-import Decimal from 'https://esm.sh/decimal.js-light@2.5.1';
+// This build initializes in the server's Edge Runtime as well as Deno 2.
+import Decimal from 'https://esm.sh/decimal.js@10.6.0';
 import {financialDay} from './financial_calendar.ts';
 import {financialLateFee} from './financial_quote.ts';
 const ChargeDecimal=Decimal.clone({precision:40});

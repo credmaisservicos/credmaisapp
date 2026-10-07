@@ -22,6 +22,8 @@ Testes com `timestamptz` real comparam cálculo SQL, portal e bot, arredondament
 
 Duas sessões de PostgreSQL em banco isolado confirmaram que um pagamento bloqueado não é sobrescrito e que execuções simultâneas não duplicam encargos ou notificações. Não foram feitas chamadas financeiras nem envios de mensagens à produção para testar.
 
+A inicialização da biblioteca decimal do bot também foi verificada em um contêiner isolado com a mesma imagem do servidor. A primeira escolha falhou ao inicializar `LN10` nesse ambiente, apesar dos testes em Deno 2; os helpers anteriores foram restaurados durante a correção. O bot usa `decimal.js` 10.6.0, validada nessa imagem com os helpers reais, cotação de centavos e plano de cobrança. O frontend mantém `decimal.js-light` 2.5.1. Ambas as versões já estavam na árvore de dependências e são fixadas diretamente; os cálculos compartilhados recebem a implementação adequada ao ambiente. [API da biblioteca decimal](https://mikemcl.github.io/decimal.js/).
+
 A publicação exige backup completo, definições e permissões anteriores para rollback, conferência do código remoto antes da troca e comparação dos registros de contratos, parcelas, transações e lucros antes/depois da migração. O SQL da migração só define funções e permissões; não executa atualização de encargos. A versão publicada e as evidências finais ficam no relatório de entrega privado.
 
 ## Pendências de entrega

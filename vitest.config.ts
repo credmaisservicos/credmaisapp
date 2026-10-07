@@ -18,7 +18,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
-      "https://esm.sh/decimal.js-light@2.5.1": "decimal.js-light",
+      "https://esm.sh/decimal.js@10.6.0": "decimal.js",
     },
   },
 });
