@@ -1,5 +1,9 @@
 # QA Report — CredMais
 
+## 2026-10-07 — Clareza das respostas e saída de atendimento
+
+Consultas de vencimento, saldo e encargos recebem respostas específicas; o código PIX é enviado quando solicitado. Agradecimentos e recusas recebem respostas curtas. Saudações não iniciam cobrança e pedidos diretos de portal são atendidos antes da apresentação. Contestações de titularidade, dívida ou valor pausam o bot e chegam à equipe antes da exposição de parcelas. Duas tentativas de esclarecimento oferecem atendimento humano, incluindo IA. Mensagens e exemplos da IA deixam de prometer retorno ou baixa em prazo não confirmado. Validação local: 468 testes Vitest, 179 compartilhados e 136 integrações HTTP sem rede, totalizando 783 testes. Tipos de 43 funções, tipos do app, lint, hooks e build aprovados. A suíte de 224 testes de interface permanece no CI. [Cenários e limites](docs/agente-conversa-2026-10-07.md).
+
 ## 2026-10-07 — Contexto e seleção de parcelas no atendimento
 
 Pedidos de parcelas são tratados antes do menu e da IA, sem bloquear a troca imediata por cooldown. A seleção fica vinculada ao cliente, contrato e parcela; números repetidos exigem escolha. Saldo e PIX consideram recebimentos, encargos e limites do contrato. Previsões de pagamento seguem a parcela selecionada sem alterar seu vencimento. Comprovantes sem referência única aguardam conferência humana, sem associação à primeira parcela nem valor inferido da cotação. Áudio transcrito usa a mesma seleção; parar o bot e pedir uma pessoa têm prioridade. Validação local: 468 testes Vitest, 173 compartilhados e 118 integrações HTTP sem rede, totalizando 759 testes. Tipos de 43 funções, tipos do app, lint, hooks e build aprovados. A suíte de 224 testes de interface permanece na verificação de CI. [Cenários e limites](docs/agente-contexto-parcelas-2026-10-07.md).

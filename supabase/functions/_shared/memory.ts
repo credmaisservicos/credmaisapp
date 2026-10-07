@@ -28,7 +28,7 @@ export type MemorySection = typeof MEMORY_SECTIONS[number];
 function flowState(raw: any): Record<string, unknown> {
   const state: Record<string, unknown> = {};
   const strings = ['service_menu_stage','last_menu_choice','loan_profile','request_kind','pending_payment_kind','pending_payment_installment_id','pending_payment_set_at','installment_choice_set_at','payment_promise_cancelled_at','resumed_at'];
-  const numbers = ['last_menu_at','human_reason_asked_at','pending_payment_amount'];
+  const numbers = ['last_menu_at','human_reason_asked_at','pending_payment_amount','clarification_count'];
   for (const key of strings) if (typeof raw?.[key] === 'string' && raw[key].length <= 150) state[key] = raw[key];
   for (const key of numbers) if (typeof raw?.[key] === 'number' && Number.isFinite(raw[key]) && raw[key] >= 0) state[key] = raw[key];
   if (typeof raw?.service_menu_started === 'boolean') state.service_menu_started = raw.service_menu_started;

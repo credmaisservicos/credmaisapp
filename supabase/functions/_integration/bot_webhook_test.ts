@@ -57,6 +57,7 @@ globalThis.fetch=async(input,init)=>{
  if(table==='settings')return failSettings?json({message:'database unavailable'},503):rows(settings,req);
  if(table==='profiles')return rows({id:owner,is_admin:true,plan_tier:'completo',name:'Teste',pix_key:profilePix},req);
  if(table==='whatsapp_instances')return json([]);
+ if(table==='portal_sessions'&&req.method==='POST')return rows({token:'isolated-portal-session'},req);
  if(table==='leads'&&lead){if(req.method==='PATCH'){Object.assign(lead,body);return new Response(null,{status:204});}return rows(lead,req);}
  if(table==='whatsapp_event_claims')return rows({status:eventCompleted?'completed':'failed'},req);
  if(table==='whatsapp_conversations'){
@@ -271,7 +272,8 @@ Deno.test('first specific installment inquiry is answered before the welcome men
 Deno.test('immediate changes and short followups preserve the actual installment rather than menu cooldown',async()=>{
  reset();addParcel(2);addParcel(3,{amount:300,paid_amount:100});
  for(const [text,id,expected] of [['parcela 2','select-2','installment-2'],['parcela 3','select-3','installment-3'],['manda o PIX','follow-pix','installment-3'],['quando vence?','follow-date','installment-3']] as const){
-  jobs=[];const {body}=await turn(text,id);assertEquals(body.status,'installment_selected');assertEquals(body.installment_id,expected);assertEquals(paymentQuote().pending_payment_installment_id,expected);assertEquals(pixAmount(),200);
+  jobs=[];const {body}=await turn(text,id);assertEquals(body.status,'installment_selected');assertEquals(body.installment_id,expected);assertEquals(paymentQuote().pending_payment_installment_id,expected);
+  if(text.includes('PIX'))assertEquals(pixAmount(),200);else assert(jobs.every(j=>!j.text.includes('000201')));
  }
  assert(jobs.some(j=>j.text.includes('01/03/2099')));
 });
@@ -279,8 +281,9 @@ Deno.test('duplicate installment numbers require a choice and keep that contract
  reset();addParcel(2);const other=addParcel(2,{id:'other-contract-2',contract_id:'bbbb2222',amount:500,paid_amount:20});
  const first=await turn('parcela 2','duplicate-number');assertEquals(first.body.status,'installment_ambiguous');
  assertEquals(paymentQuote().pending_payment_installment_id,'');assert(jobs.every(j=>!j.text.includes('000201')));
- jobs=[];const second=await turn('escolher 2','choose-contract');assertEquals(second.body.installment_id,other.id);assertEquals(pixAmount(),480);
- jobs=[];const third=await turn('qual o valor?','same-contract');assertEquals(third.body.installment_id,other.id);assertEquals(pixAmount(),480);
+ jobs=[];const second=await turn('escolher 2','choose-contract');assertEquals(second.body.installment_id,other.id);assertEquals(paymentQuote().pending_payment_amount,480);
+ jobs=[];const third=await turn('qual o valor?','same-contract');assertEquals(third.body.installment_id,other.id);assert(jobs.every(j=>!j.text.includes('000201')));
+ jobs=[];await turn('PIX','pix-same-contract');assertEquals(pixAmount(),480);
 });
 Deno.test('last installment belongs to the requested contract and never completes earlier debt',async()=>{
  reset();addParcel(2);addParcel(3);addParcel(2,{id:'last-other',contract_id:'bbbb2222'});
@@ -344,7 +347,7 @@ for(const stage of ['loan_type','documents'])Deno.test(`receipt caption exits ${
  assert(conversation.bot_paused);assert(jobs.every(j=>!j.text.includes('000201')));
 });
 Deno.test('missing PIX key routes the selected installment to humans without generating a code',async()=>{
- reset();profilePix=null;const {body}=await turn('parcela 1','missing-pix');
+ reset();profilePix=null;const {body}=await turn('PIX parcela 1','missing-pix');
  assertEquals(body.status,'installment_selected');assert(conversation.needs_human&&conversation.bot_paused);
  assert(jobs.every(j=>!j.text.includes('000201')));assert(jobs.some(j=>j.text.includes('chave PIX ainda não')));
 });
@@ -402,7 +405,65 @@ for(const c of [
  reset();installment.paid_amount=c.paid;installment.late_fee=c.stored;
  installment.due_date=new Date(Date.now()-c.days*86400000).toISOString().slice(0,10);
  installment.contracts={status:'active',daily_interest_percent:c.rate,daily_penalty_value:c.penalty,daily_penalty_type:c.type,max_interest_cap_percent:c.cap};
- const {body}=await turn('parcela 1','financial-case');assertEquals(body.status,'installment_selected');
+ const {body}=await turn('PIX parcela 1','financial-case');assertEquals(body.status,'installment_selected');
  assertEquals(paymentQuote().pending_payment_amount,c.expected);assertEquals(pixAmount(),c.expected);
  assert(jobs.every(j=>j.status==='awaiting_approval'));assertEquals(calls.filter(c=>c.path.includes('/message/send')).length,0);
+});
+
+for(const [text,intent] of [['quando vence a parcela 1?','due_date'],['quanto preciso pagar da parcela 1?','balance'],['qual a multa da parcela 1?','charges']] as const)Deno.test(`conversation answers ${intent} without unsolicited PIX`,async()=>{
+ reset();const {body}=await turn(text,'topic-specific');assertEquals(body.reply_intent,intent);
+ assert(jobs.every(j=>!j.text.includes('000201')&&!j.text.includes('Chave PIX')));
+ if(intent==='due_date')assert(jobs.every(j=>!j.text.includes('Já recebido')));
+ assertEquals(paymentQuote().pending_payment_installment_id,installment.id);
+});
+for(const text of ['obrigado','valeu','agora não'])Deno.test(`courtesy preserves financial context without restarting the menu: ${text}`,async()=>{
+ reset();await turn('PIX parcela 1','before-courtesy');jobs=[];
+ const {body}=await turn(text,'courtesy');assertEquals(body.status,'courtesy_reply');assertEquals(paymentQuote().pending_payment_installment_id,installment.id);
+ assert(jobs.every(j=>!j.text.includes('000201')&&!j.text.includes('Menu')));assertEquals(conversation.bot_paused,false);
+});
+for(const text of ['número errado da parcela 1','valor da parcela 1 errado','já paguei e vocês estão cobrando'])Deno.test(`dispute pauses before sending any debt or payment info: ${text}`,async()=>{
+ reset();const {body}=await turn(text,'dispute');assertEquals(body.status,'human_handoff');assert(conversation.bot_paused&&conversation.needs_human);
+ assert(jobs.every(j=>!j.text.includes('000201')&&!j.text.includes('60,00')));
+ assertEquals(calls.filter(c=>c.path.endsWith('/contract_installments')).length,0);
+});
+Deno.test('total balance is an explicit list request rather than the previously selected installment',async()=>{
+ reset();addParcel(2);await turn('parcela 2','selected-before-total');jobs=[];
+ const {body}=await turn('qual saldo total?','total-all');assertEquals(body.status,'installment_list');assertEquals(body.count,2);
+ assert(jobs.some(j=>j.text.includes('260,00')&&j.text.includes('inclui parcelas futuras')));assert(jobs.every(j=>!j.text.includes('000201')));
+});
+Deno.test('general charge question explains rules without guessing a parcel or sending PIX',async()=>{
+ reset();addParcel(2);clientMemory='{}';const {body}=await turn('como funciona a multa?','explain-charge');assertEquals(body.status,'charges_explanation');
+ assert(jobs.every(j=>!j.text.includes('000201')&&!j.text.includes('Encontrei mais de uma')));
+});
+Deno.test('first portal request is answered directly without an introductory menu',async()=>{
+ reset();clientMemory='{}';const {response,body}=await turn('portal','first-portal');assertEquals(response.status,200);assertEquals(body.choice,'portal');
+ assert(jobs.some(j=>j.text.includes('/portal?t=')));assert(jobs.every(j=>!j.text.includes('Escolha uma opção respondendo com o número:')));
+});
+Deno.test('greeting never promises to send PIX or asks the customer to settle automatically',async()=>{
+ reset();installment.due_date='2026-01-01';installment.contracts={status:'active',daily_interest_percent:0.1,max_interest_cap_percent:10};
+ await turn('oi','greeting');assert(jobs.every(j=>!j.text.includes('quitar')&&!j.text.includes('Vou te enviar o PIX')));
+});
+Deno.test('two unclear requests route to humans instead of an endless clarification loop',async()=>{
+ reset();await turn('asdfgh','unclear-first');assertEquals(paymentQuote().clarification_count,1);assertEquals(conversation.bot_paused,false);
+ jobs=[];await turn('qwerty','unclear-second');assertEquals(paymentQuote().clarification_count,2);assert(conversation.bot_paused&&conversation.needs_human);
+ assert(jobs.some(j=>j.text.includes('Não consegui entender')));assert(jobs.every(j=>!j.text.includes('entendi')));
+});
+Deno.test('failed clarification handoff does not pretend that a human was notified',async()=>{
+ reset();clientMemory=JSON.stringify({service_menu_started:true,clarification_count:1});failHandoff=true;
+ const {response}=await turn('asdfgh','unclear-failed');assertEquals(response.status,500);assertEquals(jobs.length,0);assertEquals(eventCompleted,false);
+});
+Deno.test('AI clarification also offers a human exit after two attempts',async()=>{
+ reset();settings.bot_use_ai=true;geminiReply={reply:'Pode explicar melhor?',intent:'duvida',needs_human:false,requires_clarification:true};
+ const keys=['GEMINI_API_KEY','GEMINI_ALLOWED_USER_IDS'],before=keys.map(k=>Deno.env.get(k));
+ Deno.env.set(keys[0],'isolated-gemini-key');Deno.env.set(keys[1],owner);
+ try{
+   await turn('Não sei como explicar isso aqui.','ai-clarify-first');assertEquals(paymentQuote().clarification_count,1);assertEquals(conversation.bot_paused,false);
+   await turn('Ainda não consegui explicar minha situação.','ai-clarify-second');assert(conversation.needs_human&&conversation.bot_paused);assertEquals(paymentQuote().clarification_count,2);
+ }finally{keys.forEach((k,i)=>before[i]===undefined?Deno.env.delete(k):Deno.env.set(k,before[i]!));}
+});
+Deno.test('numeric human choice never claims a handoff when persistence fails',async()=>{
+ reset();failHandoff=true;const {response}=await turn('5','numeric-human-failed');assertEquals(response.status,500);assertEquals(jobs.length,0);assertEquals(eventCompleted,false);
+});
+Deno.test('menu state failure does not queue an introductory message with unsaved context',async()=>{
+ reset();clientMemory='{}';failMemory=true;const {response}=await turn('oi','first-menu-failed');assertEquals(response.status,500);assertEquals(jobs.length,0);assertEquals(eventCompleted,false);
 });

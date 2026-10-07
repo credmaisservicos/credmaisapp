@@ -27,6 +27,7 @@ export function parseInstallmentReference(text:string,memory:any={},now=Date.now
     && /^(?:e\s+)?(?:a\s+)?(?:primeira|segunda|terceira|quarta|quinta|sexta|setima|oitava|nona|decima(?: primeira| segunda)?|ultima|proxima)[.!?\s]*$/.test(t);
   const option=/^(?:escolher|opcao)\s+(\d{1,2})[.!]?$/i.exec(t) || (choices?/^(\d{1,2})[.)\s]*$/.exec(t):null);
   if(option)return {option:Number(option[1])};
+  if(/saldo total|total (?:da divida|em aberto|das parcelas)|todas.*parcelas|todos.*contratos/.test(t))return {list:true};
   const contract=/contrato\s*(?:numero\s*|n[ºo]\s*|#\s*)?([a-z0-9][a-z0-9-]{3,35})\b/.exec(t)?.[1];
   const number=/(?:parcela|prestacao)\s*(?:numero\s*|n[ºo]\s*|#\s*)?(\d{1,4})\b/.exec(t)
     || /\b(\d{1,4})[ªºa]\s*(?:parcela|prestacao)\b/.exec(t)

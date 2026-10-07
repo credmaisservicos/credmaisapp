@@ -33,6 +33,7 @@ import {testRecipientScope} from '../_shared/bot_test_scope.ts';
 import {pendingClientReceipt} from '../_shared/bot_collection.ts';
 import {requestsHumanNegotiation, HUMAN_NEGOTIATION_REPLY} from '../_shared/human_negotiation.ts';
 import {parseInstallmentReference,resolveInstallmentReference,freshPaymentContext,type InstallmentReference} from '../_shared/bot_installment_context.ts';
+import {conversationSignal,installmentReplyIntent,generalChargesQuestion,GENERAL_CHARGES_REPLY,clarificationReply} from '../_shared/bot_conversation.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -281,13 +282,10 @@ function buildLocalBotResult(params: {
   hasMedia?: boolean;
   history?: Array<{ role: string; content: string }>;
 }) {
-  const { client, incomingText, overdue, dueToday, totalOverdue, totalDueToday, profile, tone, messageType, hasMedia, history } = params;
+  const { client, incomingText, overdue, dueToday, profile, tone, messageType, hasMedia, history } = params;
   const txt = (incomingText || "").toLowerCase();
   const firstName = (client?.name || "").split(" ").filter(Boolean)[0] || "tudo bem";
   const hasDebt = overdue.length > 0 || dueToday.length > 0;
-  const total = totalOverdue + totalDueToday;
-  const oldest = overdue[0] || dueToday[0];
-  const pix = profile?.pix_key ? `\nPIX: *${profile.pix_key}*` : "";
   const lastBot = [...(history || [])].reverse().find(item => item.role === "assistant")?.content || "";
 
   if (/^(sim|pode|isso|essa|esse|manda|envia|ok)$/i.test(txt.trim()) && /pix|chave/i.test(lastBot) && profile?.pix_key) {
@@ -345,14 +343,11 @@ function buildLocalBotResult(params: {
 
   const wantsDeal = /renegoci|fazer acordo|quero desconto|tem desconto|parcelar (?:a d[ií]vida|o valor|essa conta)|dividir (?:a d[ií]vida|o valor)|mudar (?:a data|o vencimento)|n[aã]o consigo pagar|consigo pagar s[oó]|deixar por|fazer por/i.test(txt);
   if (wantsDeal) {
-    const base = hasDebt
-      ? `Oi ${firstName}, consigo te ajudar sim. Consta ${oldest ? `a parcela #${oldest.installment_number}` : "pendência"} e o total em aberto está em *${money(total)}*.`
-      : `Oi ${firstName}, consigo te ajudar sim. Não localizei parcela vencida agora, mas vou registrar seu pedido.`;
     return {
-      reply: `${base}\nEntendi o que você precisa. Vou passar seu caso para uma pessoa do nosso time avaliar a melhor condição com você.`,
+      reply: 'Esse pedido precisa de avaliação da equipe. Encaminhei para atendimento humano, que continuará por aqui.',
       is_receipt: false,
       is_rollover: false,
-      is_promise: /dia|amanh|hoje|semana|pago|pagar/i.test(txt),
+      is_promise: false,
       promise_date: null,
       receipt_value: 0,
       needs_human: true,
@@ -367,15 +362,8 @@ function buildLocalBotResult(params: {
 
   const asksInstallment = /quanto (?:falta|resta)|saldo|(?:qual|quanto|consult|ver|manda|enviar|pr[oó]xima|minha).*(?:parcela|vencimento|valor|pix)|(?:parcela|vencimento|pix).*(?:qual|quanto|quando|manda|enviar)/i.test(txt);
   if (asksInstallment) {
-    if (!hasDebt) return {
-      reply: `${firstName}, não encontrei parcela vencida ou vencendo hoje. Sua situação está em dia. Se quiser, posso informar o próximo vencimento.`,
-      is_receipt: false, is_rollover: false, is_promise: false, promise_date: null,
-      receipt_value: 0, needs_human: false, intent: "consulta_parcelas", sentiment: "neutro",
-      urgencia: "baixa", dificuldade_financeira: false, desconto_pct: 0, summary: "Cliente sem pendência atual",
-    };
-    const due = String(oldest?.due_date || "").slice(0, 10).split("-").reverse().join("/");
     return {
-      reply: `${firstName}, a parcela #${oldest?.installment_number || 1} vence em ${due || "data não informada"}. O valor atualizado é *${money(total)}*.${pix}`,
+      reply: 'Para consultar o saldo ou vencimento, informe o número da parcela. Se tiver mais de um contrato, informe também o código do contrato.',
       is_receipt: false, is_rollover: false, is_promise: false, promise_date: null,
       receipt_value: 0, needs_human: false, intent: "consulta_parcelas", sentiment: "neutro",
       urgencia: overdue.length ? "alta" : "media", dificuldade_financeira: false, desconto_pct: 0, summary: "Consulta de parcela respondida",
@@ -383,7 +371,8 @@ function buildLocalBotResult(params: {
   }
 
   return {
-    reply: `${firstName}, entendi. Pode me explicar um pouco melhor o que você precisa? Se preferir, escreva “parcelas”, “pagamento” ou “atendente”.`,
+    reply: clarificationReply(1),
+    requires_clarification:true,
     is_receipt: false,
     is_rollover: false,
     is_promise: false,
@@ -1234,6 +1223,14 @@ serve(async (req) => {
       const txtRaw = (incomingText || "").trim();
       const txtLow = txtRaw.toLowerCase();
       const hasTextRequest=messageType==='text'||(messageType==='audio'&&!!mediaData&&!!txtRaw);
+      const conversationalSignal=hasTextRequest?conversationSignal(txtRaw):null;
+      if(conversationalSignal==='identity_dispute'||conversationalSignal==='billing_dispute'){
+        if(convoId)await escalateToHuman(supabase,convoId,conversationalSignal==='identity_dispute'?'Titularidade contestada; conferir cadastro':'Cliente contestou a cobrança');
+        await checkedBotQuery(supabase.from('notifications').insert({user_id:userId,type:'warning',message:`Conferir ${conversationalSignal==='identity_dispute'?'titularidade':'cobrança'} na conversa ${convoId}.`}));
+        await botSay(conversationalSignal==='identity_dispute'?'Obrigado por avisar. Pausei o atendimento automático e encaminhei a situação para a equipe conferir o cadastro.'
+          :'Encaminhei a cobrança para conferência da equipe e pausei o atendimento automático. A equipe continuará por aqui.');
+        return new Response(JSON.stringify({status:'human_handoff',reason:conversationalSignal}),{headers:corsHeaders});
+      }
       if(hasTextRequest&&(matchesAny(txtRaw,STOP_WORDS)||matchesAny(txtRaw,HUMAN_WORDS))){
         const stopped=matchesAny(txtRaw,STOP_WORDS);
         if(convoId)await escalateToHuman(supabase,convoId,stopped?'Cliente solicitou parar o bot':'Cliente pediu atendente humano');
@@ -1248,6 +1245,14 @@ serve(async (req) => {
 
       // Estado leve do cliente (memória bot)
       const mem = parseMemory(client.bot_memory);
+      if(conversationalSignal==='thanks'||conversationalSignal==='decline'){
+        await botSay(conversationalSignal==='thanks'?'Por nada. Se precisar, pode falar por aqui.':'Tudo bem. Se quiser continuar depois, pode falar por aqui.');
+        return new Response(JSON.stringify({status:'courtesy_reply'}),{headers:corsHeaders});
+      }
+      if(hasTextRequest&&generalChargesQuestion(txtRaw)){
+        await botSay(GENERAL_CHARGES_REPLY);
+        return new Response(JSON.stringify({status:'charges_explanation'}),{headers:corsHeaders});
+      }
       // A text request for an existing debt or a human can interrupt a loan
       // application. Numeric replies still select the requested loan profile.
       const serviceInterrupt = /\b(?:parcelas?|prestacoes?|debito|divida|renegociacao|acordo|portal|pix|saldo|vencimento|encargos)\b/.test(normalizeMenuText(txtRaw))
@@ -1301,21 +1306,22 @@ serve(async (req) => {
       const hasOpen = openInstQuick.length > 0;
       const hasPix = !!profile?.pix_key;
       const humanRequested = !!(convoExisting as any)?.needs_human;
-      const clearPaymentContext={pending_payment_installment_id:'',pending_payment_set_at:'',pending_payment_kind:'',pending_payment_amount:0,installment_choice_ids:[],installment_choice_set_at:''};
+      const clearPaymentContext={pending_payment_installment_id:'',pending_payment_set_at:'',pending_payment_kind:'',pending_payment_amount:0,installment_choice_ids:[],installment_choice_set_at:'',clarification_count:0};
 
       const respondInstallment = async (reference:InstallmentReference) => {
         const selected=resolveInstallmentReference(openInstQuick,reference,mem,nowBrDay,now);
         const due=(row:any)=>String(row.due_date).split('-').reverse().join('/');
         const label=(row:any)=>`Parcela #${row.installment_number} · contrato ${String(row.contract_id).slice(0,8)} · vence ${due(row)} · ${money(botBalance(row))}`;
         const saveContext=async(patch:Record<string,unknown>)=>{
-          Object.assign(mem,patch,{service_menu_started:true});
+          Object.assign(mem,patch,{service_menu_started:true,clarification_count:0});
           await checkedBotQuery(supabase.from('clients').update({bot_memory:serializeMemory(mem)}).eq('id',client.id).eq('user_id',userId));
         };
         const clearQuote=clearPaymentContext;
         if(reference.list) {
           await saveContext({...clearQuote,installment_choice_ids:[],installment_choice_set_at:''});
           const lines=selected.slice(0,20).map(label).join('\n');
-          await botSay(lines?`Suas parcelas em aberto:\n\n${lines}\n\n${selected.length>20?`Exibindo 20 de ${selected.length} parcelas. `:''}Para consultar ou receber o PIX de uma parcela, informe o número e, se necessário, o código do contrato.`:'Não há parcelas ativas com saldo em aberto.');
+          const total=selected.reduce((sum,row)=>sum+botBalance(row),0);
+          await botSay(lines?`Suas parcelas em aberto:\n\n${lines}\n\n*Saldo total em aberto: ${money(total)}* (inclui parcelas futuras).\n${selected.length>20?`Exibindo 20 de ${selected.length} parcelas. `:''}Para consultar uma parcela, informe o número e, se necessário, o código do contrato.`:'Não há parcelas ativas com saldo em aberto.');
           return new Response(JSON.stringify({status:'installment_list',count:selected.length}),{headers:corsHeaders});
         }
         if(selected.length!==1) {
@@ -1327,18 +1333,24 @@ serve(async (req) => {
           return new Response(JSON.stringify({status:options.length?'installment_ambiguous':'installment_not_found'}),{headers:corsHeaders});
         }
         const installment=selected[0],amount=botBalance(installment);
+        const replyIntent=installmentReplyIntent(txtRaw);
         await saveContext({pending_payment_installment_id:installment.id,pending_payment_kind:'payment',pending_payment_amount:amount,
           pending_payment_set_at:new Date(now).toISOString(),installment_choice_ids:[],installment_choice_set_at:''});
-        await botSay(`${label(installment)}\n\nValor da parcela: ${money(installment.amount)}\nJá recebido: ${money(installment.paid_amount ?? 0)}\nEncargos de atraso: ${money(installment.late_fee ?? 0)}\n*Saldo atualizado: ${money(amount)}*`);
-        if(hasPix) {
+        const detail=`Valor original: ${money(installment.amount)}\nJá recebido: ${money(installment.paid_amount ?? 0)}\nEncargos de atraso: ${money(installment.late_fee ?? 0)}\n*Saldo atualizado: ${money(amount)}*`;
+        if(replyIntent==='due_date')await botSay(`A parcela #${installment.installment_number} do contrato ${String(installment.contract_id).slice(0,8)} ${installment.due_date<nowBrDay?'venceu':'vence'} em *${due(installment)}*.`);
+        else if(replyIntent==='charges')await botSay(`${label(installment)}\n\n${detail}\nOs encargos seguem as regras do contrato. Se discordar, escreva “atendente” para pedir uma conferência.`);
+        else if(replyIntent==='balance')await botSay(`${label(installment)}\n\n${detail}`);
+        else if(replyIntent==='summary')await botSay(`${label(installment)}\n\n${detail}\nPara receber o código de pagamento, escreva “PIX”.`);
+        else await botSay(`${label(installment)}\n*Valor para pagamento: ${money(amount)}*`);
+        if(replyIntent==='payment'&&hasPix) {
           const emv=buildPixEmv({key:profile.pix_key!,amount,merchantName:profile.name||empresa,merchantCity:'SAO PAULO',txid:`P${installment.id.replace(/[^a-zA-Z0-9]/g,'').slice(0,24)}`});
           await botSay(`*PIX da parcela #${installment.installment_number} · contrato ${String(installment.contract_id).slice(0,8)}*\n*Favorecido:* ${profile.name||empresa}\n*Chave PIX:* ${profile.pix_key}\n*PIX Copia e Cola:*\n\`${emv}\``);
-        } else {
+        } else if(replyIntent==='payment') {
           if(convoId)await escalateToHuman(supabase,convoId,'Parcela consultada sem chave PIX cadastrada');
           await checkedBotQuery(supabase.from('notifications').insert({user_id:userId,type:'warning',message:`Cliente ${client.name}: chave PIX não cadastrada; orientar pagamento.`}));
           await botSay('A chave PIX ainda não foi cadastrada. Encaminhei seu atendimento para a equipe.');
         }
-        return new Response(JSON.stringify({status:'installment_selected',installment_id:installment.id}),{headers:corsHeaders});
+        return new Response(JSON.stringify({status:'installment_selected',installment_id:installment.id,reply_intent:replyIntent}),{headers:corsHeaders});
       };
 
       if (/status.*comprovante|comprovante.*(?:status|aprov|analis|rejeit)|foi aprovado/i.test(txtLow)) {
@@ -1412,10 +1424,10 @@ serve(async (req) => {
       const showMenu = async (prefix?: string) => {
         Object.assign(mem,clearPaymentContext);
         const header = prefix ? `${prefix}\n\n` : "";
-        await botSay(`${header}📋 *Menu — ${empresa}*\n${menuBody}`);
         await checkedBotQuery(supabase.from("clients").update({
           bot_memory: serializeMemory({ ...mem, last_menu_at: now }),
         }).eq("id", client.id).eq("user_id", userId));
+        await botSay(`${header}*Menu — ${empresa}*\n${menuBody}`);
       };
 
       if (mem.service_menu_stage === "documents" && !hasTextRequest && apiUrl && apiKey) {
@@ -1463,7 +1475,7 @@ serve(async (req) => {
 
       // Requests for a specific debt are handled above. Other first text
       // messages introduce the menu and loan choices preserve their stage.
-      if (!mem.service_menu_started && hasTextRequest && !/comprovante|paguei|transferi/i.test(incomingText)) {
+      if (!mem.service_menu_started && hasTextRequest && /^(oi+|ol[aá]|bom dia|boa tarde|boa noite|opa|e a[ií]|tudo bem)[.!?\s]*$/i.test(txtRaw)) {
         await showMenu(`Olá ${firstName}! Você está falando com o atendimento virtual da *${empresa}*.`);
         await checkedBotQuery(supabase.from("clients").update({
           bot_memory: serializeMemory({ ...mem, service_menu_started: true, service_menu_stage: "main", last_menu_at: now }),
@@ -1566,19 +1578,19 @@ serve(async (req) => {
             openInstQuick.length ? `${openInstQuick.length} parcela(s) em aberto` : "Sem parcelas em aberto",
           ].filter(Boolean).join(" · ");
           if (convoId) {
-            await supabase.from("whatsapp_conversations").update({
+            await checkedBotQuery(supabase.from("whatsapp_conversations").update({
               needs_human: true,
               bot_paused: true,
               bot_status: "handoff",
               human_takeover_reason: recentContext,
               updated_at: new Date().toISOString(),
-            }).eq("id", convoId);
+            }).eq("id", convoId).eq('user_id',userId));
           }
-          await supabase.from("notifications").insert({
+          await checkedBotQuery(supabase.from("notifications").insert({
             user_id: userId,
             message: `${reason}: ${client.name || senderPhone} (${senderPhone})`,
             type: "warning",
-          });
+          }));
           await botSay(choice === "3"
             ? `Entendi. A renegociação é feita somente por uma pessoa da equipe da *${empresa}*. O bot não altera valores, prazos ou condições. Já encaminhei seu pedido.`
             : `Certo. Pausei o atendimento automático e avisei uma pessoa da equipe da *${empresa}*. Ela continuará por aqui.`);
@@ -1604,7 +1616,7 @@ serve(async (req) => {
 
         // Persiste última escolha
         await checkedBotQuery(supabase.from("clients").update({
-          bot_memory: serializeMemory({ ...mem, last_menu_at: now, last_menu_choice: choice }),
+          bot_memory: serializeMemory({ ...mem, last_menu_at: now, last_menu_choice: choice,clarification_count:0 }),
         }).eq("id", client.id).eq("user_id", userId));
 
         // Log estruturado
@@ -1670,8 +1682,6 @@ serve(async (req) => {
         const bucket = await loadClientInstallments(supabase, client.id, todayStr, userId);
         const overdueQ = bucket.overdue;
         const dueTodayQ = bucket.dueToday;
-        const totOver = bucket.totalOverdue;
-        const totToday = bucket.totalDueToday;
 
         const {data:openPromise} = await checkedBotQuery(supabase.from('payment_promises').select('promised_for,promised_amount')
           .eq('user_id',userId).eq('client_id',client.id).eq('status','open').gte('promised_for',todayStr).limit(1).maybeSingle());
@@ -1680,10 +1690,9 @@ serve(async (req) => {
         if (openPromise) {
           greeting = `Oi ${firstName}! Aqui é da *${empresa}*. Sua previsão de pagamento está registrada para *${openPromise.promised_for.split('-').reverse().join('/')}*${openPromise.promised_amount ? ` (${money(Number(openPromise.promised_amount))})` : ""}. Como posso te ajudar?`;
         } else if (overdueQ.length > 0) {
-          const oldest = overdueQ[0];
-          greeting = `Oi ${firstName}! 👋 Aqui é da *${empresa}*. Sua parcela #${oldest.installment_number} está em atraso — total a regularizar: *${money(totOver)}*. Vou te enviar o PIX agora pra você quitar. 🙏`;
+          greeting = `Olá, ${firstName}. Aqui é o atendimento virtual da *${empresa}*. Posso consultar suas parcelas, enviar os dados de pagamento ou encaminhar para a equipe. Como posso ajudar?`;
         } else if (dueTodayQ.length > 0) {
-          greeting = `Oi ${firstName}! 👋 Aqui é da *${empresa}*. Sua parcela de *${money(totToday)}* vence *hoje*. Quer que eu te envie o PIX?`;
+          greeting = `Olá, ${firstName}. Aqui é o atendimento virtual da *${empresa}*. Como posso ajudar?`;
         } else {
           const generic = [
             `Oi ${firstName}! 👋 Aqui é da *${empresa}*. Como posso te ajudar hoje?`,
@@ -1736,7 +1745,7 @@ serve(async (req) => {
     }
 
     if (messageType==="text" && !isWithinBusinessHours(settings)) {
-      await botSay(`Olá! Recebi sua mensagem fora do horário (${settings.bot_business_start || "08:00"} às ${settings.bot_business_end || "18:00"}). Retorno em breve! 🙏`);
+      await botSay(`Recebi sua mensagem fora do horário de atendimento (${settings.bot_business_start || "08:00"} às ${settings.bot_business_end || "18:00"}). A equipe poderá continuar no próximo período de atendimento.`);
       return new Response(JSON.stringify({ status: "off_hours" }), { headers: corsHeaders });
     }
 
@@ -1983,8 +1992,6 @@ serve(async (req) => {
     const empresaNome = settings.company_name || profile?.name || 'CredMais Digital Pay';
     const agenteNome = settings.bot_agent_name || 'Assistente';
     const canalVendas = settings.sales_channel_url || settings.company_name || '(canal oficial de vendas)';
-    const prazoNegociacao = settings.negotiation_sla || '1 dia útil';
-    const prazoBaixa = settings.payment_settlement_days || '2 dias úteis';
 
     const systemPrompt = `Você é ${agenteNome}, atendente virtual oficial da ${empresaNome}, empresa de empréstimo pessoal. Você cuida do atendimento de cobrança: entende o que o cliente quis dizer, responde dúvidas sobre as parcelas, ajuda a regularizar e registra o resultado. Você é PRECISO, EMPÁTICO, RESPEITOSO e NUNCA inventa fatos.
 
@@ -1997,6 +2004,7 @@ Antes de responder, pense em silêncio: (1) o que ele realmente quer agora? (2) 
 Use contrações naturais quando combinarem com o tom ("pra", "tá", "te envio"), sem exagerar em gírias. Varie o começo das respostas. Evite bordões repetidos como "Entendo, [nome]" e "Posso ajudar em algo mais?".
 Não transforme toda resposta em cobrança. Primeiro responda exatamente ao que foi perguntado; depois, se fizer sentido, conduza um único próximo passo. Faça apenas UMA pergunta por mensagem.
 Se algo estiver ambíguo, pergunte de forma simples em vez de supor. Se houver emoção ou dificuldade, reconheça isso em uma frase genuína antes de tratar da pendência.
+Se precisar pedir esclarecimento porque não compreendeu o pedido, retorne requires_clarification=true. Não diga que entendeu. O sistema oferece uma saída humana após duas tentativas.
 Se perguntarem, diga com transparência que você é o atendente virtual da ${empresaNome} e que pode chamar uma pessoa do time. Nunca finja ser uma pessoa real.
 
 ═══ 🚧 LIMITES INEGOCIÁVEIS DO SEU PAPEL ═══
@@ -2073,15 +2081,15 @@ ${loopSignal.loop ? `⚠️ Respostas repetitivas (sim=${loopSignal.similarity})
 2. IDENTIDADE: se ainda não confirmada nesta conversa, peça 1 dado (nome completo + CPF parcial OU data de nascimento) ANTES de citar valores.
 3. VALIDAR NÚMEROS: qualquer valor citado precisa bater LITERAL com as seções ATRASADAS / VENCE HOJE. Se não bater, needs_human=true.
 4. DECIDIR CAMINHO (apenas UM dos 6 abaixo).
-5. RESPONDER: máx 3–4 linhas, tom humano, sem emojis (exceto 1 leve na confirmação de pagamento).
+5. RESPONDER: máx 3–4 linhas, tom natural, sem emojis. Não repita apresentação, menu ou explicações já dadas. Agradecimentos recebem uma resposta breve. Não transforme dúvidas em convite para pagar.
 
 ═══ 🎭 OS ÚNICOS 6 CAMINHOS QUE VOCÊ EXECUTA ═══
-▸ 1) Cliente aceita pagar agora → envie PIX/valor exato + informe: "Identificado o pagamento, a baixa sai em até ${prazoBaixa}."
-▸ 2) Cliente indica DATA de pagamento → registre promessa (is_promise=true, promise_date), confirme por escrito: "Combinado: R$ X até DD/MM. Qualquer imprevisto, me avisa antes."
-▸ 3) Cliente pede desconto/parcelamento/prazo/qualquer condição diferente → NÃO NEGOCIE. needs_human=true, motivo negociação. Diga: "Essa condição quem avalia é nosso time. Já encaminhei, retornam em até ${prazoNegociacao}."
-▸ 4) Cliente diz "já paguei" → se houver comprovante (imagem/PDF): is_receipt=true, agradeça e informe prazo de baixa. Se NÃO houver: peça o comprovante educadamente ("Pode me enviar o comprovante? Assim que chegar registro e pauso a cobrança.").
+▸ 1) Cliente pede PIX ou aceita pagar agora → envie os dados oficiais e o saldo da parcela confirmada. Não ofereça pagamento em resposta a uma dúvida sobre vencimento ou encargos.
+▸ 2) Cliente indica DATA de pagamento → registre uma previsão (is_promise=true, promise_date). Não chame de acordo nem afirme que mudou o vencimento.
+▸ 3) Cliente pede desconto/parcelamento/prazo/qualquer condição diferente → NÃO NEGOCIE. needs_human=true, motivo negociação. A equipe continuará por aqui; não prometa prazo de retorno sem confirmação operacional.
+▸ 4) Cliente diz "já paguei" → se houver comprovante (imagem/PDF): is_receipt=true; informe que a baixa depende de conferência humana. Se NÃO houver: peça o comprovante em imagem ou PDF. Não confirme recebimento de dinheiro por uma mensagem ou cotação.
 ▸ 5) Cliente contesta a dívida, fala em fraude, Procon, advogado, processo → needs_human=true PRIORIDADE ALTA e SUSPENDA a cobrança nessa mensagem.
-▸ 6) Cliente sem condição e sem data → acolha ("Sinto muito por esse momento. Sem pressão.") e ofereça encaminhar ao time (needs_human=true) OU combinar novo contato em X dias.
+▸ 6) Cliente sem condição de pagar → encaminhe para uma pessoa avaliar. Não pressione, não ofereça novas condições nem solicite uma data para obter um compromisso.
 
 ═══ 🕊 ESCUTA E EMPATIA ═══
 Se contar dificuldade, acolha ANTES de qualquer coisa: "Entendo, [nome], imprevistos acontecem. Obrigado por me contar." Nunca julgue. Nunca "você deveria ter...". Não poder negociar não significa ser frio.
@@ -2103,27 +2111,27 @@ Se contar dificuldade, acolha ANTES de qualquer coisa: "Entendo, [nome], imprevi
 
 ═══ ✅ EXEMPLOS ═══
 Ex1 — "quanto to devendo?" (identidade já confirmada):
-"Consultei aqui, ${client.name.split(' ')[0]}: parcela #N do contrato #abc em aberto, hoje em R$ X (valor atualizado). Te envio o PIX pra regularizar agora?"
+"O saldo da parcela #N do contrato #abc é R$ X, já considerando os encargos e pagamentos registrados." Se houver mais de uma parcela sem seleção, peça a referência em vez de escolher uma.
 
 Ex2 — "faz por 400 que eu pago hoje" (desconto):
-"Entendo, ${client.name.split(' ')[0]}. Eu não consigo alterar valores por aqui, mas nosso time de negociação pode avaliar. Já encaminhei seu caso — retornam em até ${prazoNegociacao}." [needs_human=true]
+"Esse pedido precisa ser avaliado pela equipe. Encaminhei para atendimento humano, que continuará por aqui." [needs_human=true]
 
 Ex3 — "da pra dividir em 3x?":
-"Esse tipo de condição é com o time de negociação, ${client.name.split(' ')[0]}. Acabei de encaminhar. Enquanto isso, precisa da 2ª via de algo?" [needs_human=true]
+"A equipe precisa avaliar esse pedido. Encaminhei para atendimento humano, que continuará por aqui." [needs_human=true]
 
 Ex4 — "paguei ontem" sem comprovante:
 "Beleza! Pra confirmar aqui, pode me mandar o comprovante (print ou PDF)? Assim que chegar registro e pauso a cobrança."
 
 Ex5 — "to desempregado, não sei quando pago":
-"Sinto muito por esse momento, ${client.name.split(' ')[0]}. Sem pressão. Quer que eu encaminhe seu caso pro nosso time ver alguma condição, ou prefere que eu te chame de novo em uns dias?"
+"Entendo que está difícil. Encaminhei seu atendimento para a equipe, que poderá avaliar a situação com você." [needs_human=true]
 
 Ex6 — "queria mais 3 mil emprestado":
 "Esse canal é só do atendimento de cobrança, ${client.name.split(' ')[0]}. Pra novo empréstimo é pelo ${canalVendas}. Posso te ajudar com a parcela em aberto?"
 
 ═══ 📤 FORMATO DE SAÍDA (JSON puro, SEM markdown, SEM cercas) ═══
 {
-  "thought": "1)OBSERVAR ... 2)IDENTIDADE ok/pendente 3)VALIDAÇÃO NUMÉRICA: R$ X bate com parcela #N contrato #abc ✓ 4)CAMINHO escolhido (1..6) 5)RASCUNHO",
   "reply": "sua resposta final ao cliente em PT-BR (máx 3–4 linhas, sem emoji em cobrança)",
+  "requires_clarification": boolean,
   "is_receipt": boolean,
   "is_promise": boolean,
   "promise_date": "YYYY-MM-DD ou null",
@@ -2225,6 +2233,20 @@ Ex6 — "queria mais 3 mil emprestado":
       });
     }
     const result: any = sanitizeAiResult(parsed);
+    if(parsed.requires_clarification===true&&!result.needs_human&&!result.is_receipt){
+      const count=Math.min(2,(Number(memoryObj.clarification_count)||0)+1);
+      Object.assign(memoryObj,{clarification_count:count});
+      await checkedBotQuery(supabase.from('clients').update({bot_memory:serializeMemory(memoryObj)}).eq('id',client.id).eq('user_id',userId));
+      if(count>=2){
+        if(convoId)await escalateToHuman(supabase,convoId,'Pedido não compreendido após duas tentativas');
+        await checkedBotQuery(supabase.from('notifications').insert({user_id:userId,type:'warning',message:`Ajudar ${client.name}: pedido não compreendido após duas tentativas.`}));
+        result.needs_human=true;
+      }
+      result.reply=clarificationReply(count);
+    }else if(Number(memoryObj.clarification_count)>0){
+      Object.assign(memoryObj,{clarification_count:0});
+      await checkedBotQuery(supabase.from('clients').update({bot_memory:serializeMemory(memoryObj)}).eq('id',client.id).eq('user_id',userId));
+    }
 
 
     // Preserva campos novos que o sanitizer estrito descarta (backward-compat).
