@@ -14,6 +14,8 @@ Portal, painel e bot compartilham cálculo decimal com arredondamento de centavo
 
 A atualização automática percorre lotes por cursor e bloqueia parcela e contrato antes de ler o saldo. Parcelas bloqueadas por outra transação são deixadas para a execução seguinte. Alteração e aviso ao cliente são atômicos; uma falha de aviso desfaz a alteração daquela parcela e é reportada. Só contratos ativos ou atrasados, com relações consistentes de dono e cliente, podem ser atualizados. Recebimentos, razão financeira e lucro não são criados pela rotina. Notificações usam o dia brasileiro e contadores de inserções efetivas. Falhas parciais retornam erro HTTP; não são apresentadas como sucesso.
 
+O job diário existente foi encontrado às 00h05 GMT, equivalentes a 21h05 em São Paulo. O agendamento é alinhado para `5 3 * * *`: 00h05 no horário brasileiro atual. A configuração geral do cron continua GMT; comando, autenticação e demais jobs são preservados. A migração altera somente esse agendamento existente, não cria automações nem dispara cobranças. Se o fuso do cron mudar, a alteração exige revisão explícita; futuras mudanças legais no horário brasileiro exigem conferir também esse horário fixo do scheduler.
+
 Quitar ou cancelar uma parcela só cancela cobranças quando não há outro saldo em contrato ativo do mesmo cliente e dono. Saldos apenas de encargos e status NULL são conferidos. Mensagens de atendimento genérico, outros donos e entregas já iniciadas não são cancelados pelo gatilho. Propostas, descontos e renovações continuam exigindo pessoas; o bot não ganha autorização para negociar.
 
 ## Validação e publicação

@@ -1,7 +1,7 @@
 """Start the real financial helpers in the production Edge Runtime image.
 
-No application credentials, database connection, WhatsApp provider or published
-public port are supplied. Only the synthetic quote fixture is copied into the container.
+No application credentials, database connection, WhatsApp provider or public
+port are supplied. Only the synthetic quote fixture is copied into the container.
 """
 from pathlib import Path
 import json
