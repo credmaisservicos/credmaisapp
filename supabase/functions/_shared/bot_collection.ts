@@ -1,30 +1,26 @@
-import { activeDebt, botBalance, botLateFee, cents } from './bot_finance.ts';
+import { activeDebtAt, botBalance, botLateFee, cents } from './bot_finance.ts';
+import {financialDay,financialDaysBetween} from './financial_calendar.ts';
 
 export function saoPauloDay(now = new Date()) {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
-  }).formatToParts(now);
-  const part = (type: string) => parts.find(p => p.type === type)!.value;
-  return `${part('year')}-${part('month')}-${part('day')}`;
+  return financialDay(now)!;
 }
 
 /** Overdue collection excludes future installments; reminders share one due date. */
 export function collectionPlan(rows: any[], rules: any[], today: string) {
-  const debts = rows.filter(activeDebt).sort((a, b) =>
+  const debts = rows.filter(row=>activeDebtAt(row,today)).sort((a, b) =>
     String(a.due_date).localeCompare(String(b.due_date)) || String(a.id).localeCompare(String(b.id)));
   if (!debts.length) return null;
   const selected = debts[0];
-  const days = Math.round((Date.parse(`${today}T12:00:00Z`) -
-    Date.parse(`${String(selected.due_date).slice(0, 10)}T12:00:00Z`)) / 86400000);
+  const days = financialDaysBetween(selected.due_date,today);
   const rule = days > 0
     ? rules.filter(r => Number(r.days) > 0).sort((a, b) => Number(b.days) - Number(a.days)).find(r => days >= Number(r.days))
     : rules.find(r => Number(r.days) === days);
   if (!rule) return null;
   const installments = debts.filter(r => days > 0
-    ? String(r.due_date).slice(0, 10) <= today
-    : String(r.due_date).slice(0, 10) === String(selected.due_date).slice(0, 10));
-  const amount = cents(installments.reduce((sum, r) => sum + botBalance(r), 0));
-  const fees = cents(installments.reduce((sum, r) => sum + Math.min(botLateFee(r), botBalance(r)), 0));
+    ? financialDay(r.due_date)! <= today
+    : financialDay(r.due_date) === financialDay(selected.due_date));
+  const amount = cents(installments.reduce((sum, r) => sum + botBalance(r,today), 0));
+  const fees = cents(installments.reduce((sum, r) => sum + Math.min(botLateFee(r,today), botBalance(r,today)), 0));
   return { installments, rule, days, isPreDue: days <= 0, amount, fees };
 }
 

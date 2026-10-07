@@ -37,7 +37,8 @@ import {
 } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import ErrorState from "@/components/feedback/ErrorState";
-import { formatBR, parseLocalDate, todayLocalISO } from "@/lib/dateUtils";
+import { formatBR, parseLocalDate, todayLocalISO, localNoonISO } from "@/lib/dateUtils";
+import {financialDay} from '../../supabase/functions/_shared/financial_calendar';
 import { useConfirm } from "@/components/ConfirmProvider";
 import { calculateLoan, generateInstallmentSchedule, LOAN_MODE_LABEL, type LoanMode, type Frequency, type DailyMode } from "@/lib/loanMath";
 import { getSignedUploadUrl } from "@/lib/storage";
@@ -450,7 +451,7 @@ const ClienteDetalhe = () => {
         capital: parseFloat(loanCapital),
         interest_rate: effectiveRate, num_installments: nReal,
         installment_amount: loanCalc.installmentAmount, frequency: loanFreq,
-        start_date: new Date(loanStartDate + "T12:00:00").toISOString(),
+        start_date: localNoonISO(loanStartDate),
         late_fee_percent: 0, daily_interest_percent: parseFloat(loanDailyFee) || DEFAULT_DAILY_LATE_RATE,
         total_amount: loanCalc.total, total_interest: loanCalc.totalInterest,
         status: signatureRequired ? "pending_signature" : "active",
@@ -527,7 +528,7 @@ const ClienteDetalhe = () => {
         num_installments: payload.numInstallments,
         installment_amount: payload.installmentAmount,
         frequency: payload.frequency,
-        start_date: new Date(payload.startDate + "T12:00:00").toISOString(),
+        start_date: localNoonISO(payload.startDate),
         late_fee_percent: payload.lateFeePercent,
         daily_interest_percent: payload.dailyInterestPercent,
         total_amount: payload.totalAmount,
@@ -574,7 +575,7 @@ const ClienteDetalhe = () => {
       installment_amount: String(c.installment_amount ?? ""),
       frequency: baseFreq,
       daily_mode: dailyMode,
-      start_date: parseLocalDate(c.start_date)?.toISOString().split("T")[0] || "",
+      start_date: financialDay(c.start_date) || "",
       late_fee_percent: String(c.late_fee_percent ?? "0"),
       daily_interest_percent: String(c.daily_interest_percent ?? "0"),
       notes: c.notes || "",
@@ -658,7 +659,7 @@ const ClienteDetalhe = () => {
         num_installments: n,
         installment_amount: instAmt,
         frequency: freqValue,
-        start_date: startDate.toISOString(),
+        start_date: localNoonISO(f.start_date),
         late_fee_percent: lateFee,
         daily_interest_percent: dailyInterest,
         total_amount: totalAmount,
@@ -773,7 +774,7 @@ const ClienteDetalhe = () => {
     setEditInst(inst);
     setEditInstForm({
       amount: String(inst.amount ?? ""),
-      due_date: parseLocalDate(inst.due_date)?.toISOString().split("T")[0] || "",
+      due_date: financialDay(inst.due_date) || "",
     });
   };
 
@@ -1301,7 +1302,7 @@ const ClienteDetalhe = () => {
       const contractPayload = {
         capital: last.capital, interest_rate: last.interest_rate,
         num_installments: last.num_installments, installment_amount: last.installment_amount,
-        frequency: last.frequency, start_date: new Date(today + "T12:00:00").toISOString(),
+        frequency: last.frequency, start_date: localNoonISO(today),
         late_fee_percent: last.late_fee_percent, daily_interest_percent: last.daily_interest_percent,
         total_amount: last.total_amount, total_interest: last.total_interest, status: "active",
         loan_mode: last.loan_mode, grace_periods: last.grace_periods,

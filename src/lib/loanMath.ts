@@ -1,6 +1,7 @@
 // Núcleo unificado de cálculo de empréstimos.
 // Suporta 6 modos: installments, percentage, interest_only, price, bullet, grace.
-import { parseLocalDate, addMonthsClamped, addDays, addBusinessDays } from "./dateUtils";
+import { parseLocalDate, addMonthsClamped, addDays, addBusinessDays, toDateInputValue } from "./dateUtils";
+import {financialDay} from '../../supabase/functions/_shared/financial_calendar';
 
 export type LoanMode =
   | "percentage"
@@ -269,8 +270,10 @@ export function generateInstallmentSchedule(params: {
   const dailyMode: DailyMode = params.dailyMode ?? "mon-fri";
   const customDates = params.customDates ?? [];
 
-  const start = parseLocalDate(startDate);
+  const calendarDate=(value:string|undefined)=>value?parseLocalDate(financialDay(value)):null;
+  const start = calendarDate(startDate);
   if (!start) return [];
+  const serialize=(date:Date)=>`${toDateInputValue(date)}T15:00:00.000Z`;
 
   const addPeriod = (base: Date, n: number): Date => {
     if (frequency === "daily") return addBusinessDays(base, n, dailyMode);
@@ -281,7 +284,7 @@ export function generateInstallmentSchedule(params: {
 
   // Caso bullet: 1 data, N períodos no futuro
   if (periodsAhead && periodsAhead > 0 && count === 1) {
-    return [addPeriod(start, periodsAhead).toISOString()];
+    return [serialize(addPeriod(start, periodsAhead))];
   }
 
   const dates: string[] = [];
@@ -289,22 +292,22 @@ export function generateInstallmentSchedule(params: {
   if (frequency === "custom") {
     for (let i = 0; i < count; i++) {
       const d = customDates[i];
-      const parsed = d ? parseLocalDate(d) : null;
-      dates.push((parsed ?? addMonthsClamped(start, i + 1)).toISOString());
+      const parsed = d ? calendarDate(d) : null;
+      dates.push(serialize(parsed ?? addMonthsClamped(start, i + 1)));
     }
     return dates;
   }
 
-  const firstDueDateObj = parseLocalDate(firstDueDate);
+  const firstDueDateObj = calendarDate(firstDueDate);
 
   for (let i = 0; i < count; i++) {
     if (firstDueDateObj && i === 0) {
-      dates.push(firstDueDateObj.toISOString());
+      dates.push(serialize(firstDueDateObj));
       continue;
     }
     const base = firstDueDateObj ?? start;
     const step = firstDueDateObj ? i : i + 1;
-    dates.push(addPeriod(base, step).toISOString());
+    dates.push(serialize(addPeriod(base, step)));
   }
 
   return dates;

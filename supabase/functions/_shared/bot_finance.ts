@@ -2,28 +2,22 @@ const money = (value: unknown) => Math.max(0, Number.isFinite(Number(value)) ? N
 export const cents = (value: number) => Math.round(value * 100) / 100;
 export const BOT_CONTRACT_FIELDS = 'status,daily_interest_percent,daily_penalty_type,daily_penalty_value,max_interest_cap_percent';
 /** Matches pay_installment: stored floor, compound daily charge, penalty and cap. */
-export function botLateFee(row: any, today = new Date().toISOString().slice(0,10)) {
+export function botLateFee(row: any, today = financialDay()!) {
   const stored=money(row.late_fee);
   const c=Array.isArray(row.contracts)?row.contracts[0]:row.contracts;
   if(['paid','cancelled'].includes(row.status)||row.pre_settlement_snapshot||c?.daily_interest_percent===undefined||!row.due_date)return stored;
-  const days=Math.max(0,Math.floor((new Date(`${today}T12:00:00Z`).getTime()-new Date(`${String(row.due_date).slice(0,10)}T12:00:00Z`).getTime())/86400000));
-  const base=money(row.amount),rate=Math.max(0,Number(c.daily_interest_percent)||4),penalty=money(c.daily_penalty_value);
-  if(base===0||days===0)return stored;
-  let fee=cents(base*(Math.pow(1+rate/100,days)-1)+(c.daily_penalty_type==='fixed'?penalty*days:base*penalty/100*days));
-  const cap=money(c.max_interest_cap_percent);
-  if(cap>0)fee=Math.min(fee,cents(base*cap/100));
-  if(!Number.isFinite(fee))throw Error('financial_charge_unavailable');
-  return Math.max(stored,fee);
+  return financialLateFee({...row,...c,frozen:row.pre_settlement_snapshot!=null},ChargeDecimal,today);
 }
 export function botBalance(row: any, today?: string) {
   return cents(Math.max(0, money(row.amount) + botLateFee(row,today) - money(row.paid_amount)));
 }
-export function activeDebt(row: any) {
+export function activeDebtAt(row: any,today?:string) {
   const contract = Array.isArray(row.contracts) ? row.contracts[0] : row.contracts;
   return !['paid', 'cancelled'].includes(row.status)
     && ['active', 'overdue'].includes(String(contract?.status || '').toLowerCase())
-    && botBalance(row) >= 0.01;
+    && botBalance(row,today) >= 0.01;
 }
+export function activeDebt(row:any){return activeDebtAt(row);}
 
 /** Quote matches renew_installment_interest, which uses stored fees and period interest. */
 export function botRenewalQuote(inst: any, contract: any): number | null {
@@ -44,3 +38,7 @@ export function botRenewalQuote(inst: any, contract: any): number | null {
   const quote=roundQuote(Math.max(0,interest)+money(inst.stored_late_fee ?? inst.late_fee));
   return Number.isFinite(quote) && quote>0 ? quote : null;
 }
+import Decimal from 'https://esm.sh/decimal.js-light@2.5.1';
+import {financialDay} from './financial_calendar.ts';
+import {financialLateFee} from './financial_quote.ts';
+const ChargeDecimal=Decimal.clone({precision:40});

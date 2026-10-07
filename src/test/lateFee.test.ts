@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import {financialDay} from '../../supabase/functions/_shared/financial_calendar';
 import {
   computeLateFee,
   computeLateFeeBreakdown,
@@ -29,16 +30,14 @@ describe("daysLateOf", () => {
   });
 
   it("preserva o dia de vencimento em datas YYYY-MM-DD no fuso brasileiro", () => {
-    const hoje = new Date();
-    const dataLocal = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}-${String(hoje.getDate()).padStart(2, "0")}`;
+    const hoje = new Date('2026-10-08T02:30:00Z');
+    const dataLocal = financialDay(hoje)!;
     expect(daysLateOf({ amount: 100, due_date: dataLocal }, hoje)).toBe(0);
   });
 
   it("conta dias inteiros, ignorando a hora do vencimento", () => {
-    const ontemDeManha = new Date();
-    ontemDeManha.setDate(ontemDeManha.getDate() - 1);
-    ontemDeManha.setHours(1, 0, 0, 0);
-    expect(daysLateOf({ amount: 100, due_date: ontemDeManha.toISOString() })).toBe(1);
+    const ontemDeManha = new Date('2026-10-06T04:00:00Z');
+    expect(daysLateOf({ amount: 100, due_date: ontemDeManha.toISOString() },new Date('2026-10-07T15:00:00Z'))).toBe(1);
   });
 
   it("devolve 0 para data ausente ou inválida", () => {
@@ -250,9 +249,9 @@ describe("teto de juros do contrato", () => {
 
 describe("independência da hora do dia", () => {
   it("o valor não muda se o cálculo roda de manhã ou de noite", () => {
-    const p = { amount: 100, due_date: venceEm(-3), status: "pending" };
-    const manha = new Date(); manha.setHours(6, 0, 0, 0);
-    const noite = new Date(); noite.setHours(23, 30, 0, 0);
+    const p = { amount: 100, due_date: '2026-10-04T15:00:00Z', status: "pending" };
+    const manha = new Date('2026-10-07T09:00:00Z');
+    const noite = new Date('2026-10-08T02:30:00Z');
     expect(computeLateFee(p, manha)).toBeCloseTo(computeLateFee(p, noite), 2);
   });
 });

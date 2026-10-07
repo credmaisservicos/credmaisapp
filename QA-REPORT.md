@@ -1,5 +1,9 @@
 # QA Report — CredMais
 
+## 2026-10-07 — Calendário e encargos consistentes
+
+Baixa do credor, cobrador e rotina automática passam a compartilhar cotação SQL; portal e bot usam cálculo decimal comum e calendário brasileiro. Lotes bloqueiam parcela e contrato antes de calcular, preservam encargos registrados/snapshots e não criam recebimentos nem lucro. Avisos ao cliente são atômicos com a atualização; falhas não são anunciadas como sucesso. A fila só cancela cobranças do mesmo dono quando todos os saldos, inclusive apenas encargos, acabarem; atendimento genérico é preservado. Testes com `timestamptz`, datas de horário de verão, outro fuso no servidor e duas sessões reais de PostgreSQL isolado confirmam valores e concorrência. Publicação exige backup e comparação financeira; aparelhos afetados, DNS com `www`, conciliação legada e recibos permanecem pendentes. [Comportamento, evidências e limites](docs/calendario-encargos-2026-10-07.md).
+
 ## 2026-10-07 — Recuperação de rede no Safari e origens nativas
 
 Conferência posterior encontrou HTML no lugar do chunk de ícone no Chromium e WebKit, impedindo a inicialização pública apesar da API disponível. A URL do chunk é renovada e a entrega valida MIME dos assets, recusando fallback HTML e falhas HTTP sem cache. Arquivos válidos permanecem imutáveis; as rotas estáticas da aplicação continuam usando o shell. Seis novos testes cobrem a entrega, incluindo quatro falhas reproduzidas antes da correção.

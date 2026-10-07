@@ -7,6 +7,7 @@ const tests = [
   "supabase/functions/_integration/bot_webhook_test.ts",
   "supabase/functions/_integration/collection_test.ts",
   "supabase/functions/_integration/retired_negotiation_test.ts",
+  "supabase/functions/_integration/late_fees_test.ts",
 ];
 
 // Fetch the complete graph without executing any handler. Dynamic imports of

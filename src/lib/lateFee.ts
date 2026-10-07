@@ -2,7 +2,10 @@
 // aplicado sobre o valor acumulado (parcela + juros já acumulados).
 // Ex.: parcela 100 → 1 dia = 104 → 2 dias = 108,16 → 3 dias = 112,49...
 // A multa diária configurada (fixa ou percentual) e o teto acompanham o contrato.
-import { parseLocalDate } from "@/lib/dateUtils";
+import Decimal from 'decimal.js-light';
+import {financialDaysBetween} from '../../supabase/functions/_shared/financial_calendar';
+import {financialLateFee} from '../../supabase/functions/_shared/financial_quote';
+const ChargeDecimal=Decimal.clone({precision:40});
 
 export const DEFAULT_DAILY_LATE_RATE = 4; // % ao dia
 
@@ -61,17 +64,12 @@ export function interestCapOf(inst: LateFeeInput): number | null {
   if (!Number.isFinite(pct) || pct <= 0) return null;
   const base = Math.max(0, finiteNumber(inst?.amount));
   if (!base) return null;
-  return Math.round(base * (pct / 100) * 100) / 100;
+  return new ChargeDecimal(base).times(pct).div(100).toDecimalPlaces(2,4).toNumber();
 }
 
 /** Dias inteiros de atraso (0 se ainda não venceu). */
 export function daysLateOf(inst: LateFeeInput, now: Date = new Date()): number {
-  if (!inst?.due_date) return 0;
-  const due = parseLocalDate(inst.due_date);
-  if (!due) return 0;
-  const d0 = new Date(due.getFullYear(), due.getMonth(), due.getDate()).getTime();
-  const n0 = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  return Math.max(0, Math.floor((n0 - d0) / 86400000));
+  return Math.max(0,financialDaysBetween(inst?.due_date,now));
 }
 
 /** Taxa diária efetiva do contrato (fallback 4% a.d.). */
@@ -83,39 +81,22 @@ export function dailyRateOf(inst: LateFeeInput): number {
 /** Juros de atraso acumulados (composto diário). */
 export function computeLateFee(inst: LateFeeInput, now: Date = new Date()): number {
   if (!inst) return 0;
-  const stored = Math.max(0, finiteNumber(inst.late_fee));
-
-  // Já paga/cancelada: mostra o valor que foi efetivamente cobrado.
-  if (inst.status === "paid" || inst.status === "cancelled") return stored;
-  if (inst.has_active_settlement === true || inst.pre_settlement_snapshot != null) return stored;
-
-  const base = Math.max(0, finiteNumber(inst.amount));
-  if (!base) return stored;
-
-  const days = daysLateOf(inst, now);
-  if (days <= 0) return stored;
-
-  const rate = dailyRateOf(inst) / 100;
-  const interest = base * (Math.pow(1 + rate, days) - 1);
-  const penaltyValue = Math.max(0, finiteNumber(doContrato(inst, "daily_penalty_value")));
-  const penalty = doContrato(inst, "daily_penalty_type") === "fixed"
-    ? penaltyValue * days
-    : base * (penaltyValue / 100) * days;
-  const total = Math.round((interest + penalty) * 100) / 100;
-
-  // Respeita o teto do contrato, quando houver.
-  const teto = interestCapOf(inst);
-  // O RPC de baixa preserva o encargo já registrado, inclusive após alterar a regra.
-  return Math.max(stored, teto !== null ? Math.min(total, teto) : total);
+  return financialLateFee({...inst,
+    daily_interest_percent:doContrato(inst,'daily_interest_percent'),
+    daily_penalty_type:doContrato(inst,'daily_penalty_type'),
+    daily_penalty_value:doContrato(inst,'daily_penalty_value'),
+    max_interest_cap_percent:doContrato(inst,'max_interest_cap_percent'),
+    frozen:inst.has_active_settlement===true||inst.pre_settlement_snapshot!=null,
+  },ChargeDecimal,now);
 }
 
 export function totalDue(inst: LateFeeInput, now?: Date): number {
-  return Math.max(0, finiteNumber(inst?.amount)) + computeLateFee(inst, now);
+  return new ChargeDecimal(Math.max(0, finiteNumber(inst?.amount))).plus(computeLateFee(inst, now)).toDecimalPlaces(2,4).toNumber();
 }
 
 /** Saldo realmente exigível, descontando pagamentos parciais já registrados. */
 export function outstandingDue(inst: LateFeeInput, now?: Date): number {
-  return Math.max(0, totalDue(inst, now) - Math.max(0, finiteNumber(inst?.paid_amount)));
+  return Math.max(0,new ChargeDecimal(totalDue(inst, now)).minus(Math.max(0, finiteNumber(inst?.paid_amount))).toDecimalPlaces(2,4).toNumber());
 }
 
 export interface LateFeeBreakdown {
@@ -138,18 +119,18 @@ export function computeLateFeeBreakdown(inst: LateFeeInput, now: Date = new Date
   const penaltyValue = Math.max(0, Number(doContrato(inst, "daily_penalty_value")) || 0);
   const penaltyType = doContrato(inst, "daily_penalty_type") === "fixed" ? "fixed" : "percentage";
   const rawPenalty = penaltyType === "fixed"
-    ? penaltyValue * daysLate
-    : base * (penaltyValue / 100) * daysLate;
-  const multa = Math.min(Math.round(rawPenalty * 100) / 100, total);
+    ? new ChargeDecimal(penaltyValue).times(daysLate)
+    : new ChargeDecimal(base).times(penaltyValue).div(100).times(daysLate);
+  const multa = Math.min(rawPenalty.toDecimalPlaces(2,4).toNumber(), total);
   return {
     daysLate,
     base,
     multaPct: penaltyType === "percentage" ? penaltyValue : 0,
     jurosPct,
     multa,
-    juros: Math.max(0, Math.round((total - multa) * 100) / 100),
+    juros: Math.max(0,new ChargeDecimal(total).minus(multa).toDecimalPlaces(2,4).toNumber()),
     total,
-    withFees: base + total,
+    withFees: new ChargeDecimal(base).plus(total).toDecimalPlaces(2,4).toNumber(),
   };
 }
 

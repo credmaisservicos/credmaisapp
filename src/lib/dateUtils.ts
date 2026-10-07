@@ -1,9 +1,10 @@
 // Utilities to safely handle dates across timezones.
 // Backend stores either "YYYY-MM-DD" (date column) or full ISO timestamps.
-// All display happens in America/Sao_Paulo. All construction anchors at LOCAL noon
-// so DST and UTC shifts cannot move the day.
+// Financial display and storage use America/Sao_Paulo. Calendar arithmetic uses
+// local civil dates, then explicitly serializes the intended day for Brazil.
 
-export const BR_TZ = "America/Sao_Paulo";
+import {FINANCIAL_TIME_ZONE,financialDay,financialDaysBetween} from '../../supabase/functions/_shared/financial_calendar';
+export const BR_TZ = FINANCIAL_TIME_ZONE;
 
 /**
  * Parse a date string to a Date anchored at noon LOCAL time of the intended day.
@@ -59,7 +60,8 @@ export function parseLocalDate(input: string | Date | null | undefined): Date | 
 
 /** Format date in pt-BR (DD/MM/YYYY) in BR timezone. */
 export function formatBR(input: string | Date | null | undefined, opts?: Intl.DateTimeFormatOptions): string {
-  const d = parseLocalDate(input);
+  const day=typeof input==='string'&&/^(?:\d{4}-\d{2}-\d{2}|\d{1,2}[/-]\d{1,2}[/-]\d{2,4})$/.test(input.trim())?financialDay(input):null;
+  const d = day?new Date(day+'T15:00:00Z'):parseLocalDate(input);
   if (!d) return "";
   return d.toLocaleDateString("pt-BR", { timeZone: BR_TZ, ...opts });
 }
@@ -125,11 +127,7 @@ export function daysBetween(a: string | Date, b: string | Date): number {
 
 /** True if `due` is strictly before today (BR local). */
 export function isOverdue(due: string | Date | null | undefined, reference: Date = new Date()): boolean {
-  const d = parseLocalDate(due);
-  if (!d) return false;
-  const today = new Date(reference.getFullYear(), reference.getMonth(), reference.getDate());
-  const dd = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  return dd.getTime() < today.getTime();
+  return financialDaysBetween(due,reference)>0;
 }
 
 /** "YYYY-MM-DD" suitable for <input type="date"> bound to LOCAL date. */
@@ -142,13 +140,16 @@ export function toDateInputValue(input: string | Date | null | undefined): strin
   return `${y}-${m}-${day}`;
 }
 
-/** Today as "YYYY-MM-DD" in local time. */
+/** Today in the Brazilian financial calendar. */
 export function todayLocalISO(): string {
-  return toDateInputValue(new Date());
+  return financialDay()!;
 }
 
-/** Convert "YYYY-MM-DD" to a Date at local noon for storage via .toISOString(). */
+/** Store a selected civil day at a fixed daytime instant in Brazil. */
 export function localNoonISO(dateStr: string | Date | null | undefined): string {
+  if(typeof dateStr==='string'&&/^(?:\d{4}-\d{2}-\d{2}|\d{1,2}[/-]\d{1,2}[/-]\d{2,4})$/.test(dateStr.trim())){
+    const day=financialDay(dateStr);if(day)return day+'T15:00:00.000Z';
+  }
   const d = parseLocalDate(dateStr);
   return (d ?? new Date()).toISOString();
 }

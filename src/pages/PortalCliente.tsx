@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useState,useRef } from "react";
 import { formatBR, isOverdue as isDateOverdue, parseLocalDate } from "@/lib/dateUtils";
+import {financialDaysBetween} from '../../supabase/functions/_shared/financial_calendar';
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowRight, CalendarDays, Clock, CreditCard, FileText, Lock, Shield, User, Phone, Mail, TrendingUp, Wallet, AlertTriangle, CheckCircle2, Sparkles, ChevronRight, LogOut, BadgeCheck, HelpCircle, X, MessageCircle, RefreshCw, Download, Sun, Moon } from "lucide-react";
@@ -444,9 +445,7 @@ const PortalCliente = () => {
     for (const c of portalData?.contracts || []) {
       for (const i of c.installments || []) {
         if (!isPortalInstallmentOpen(withPortalContract(i, c))) continue;
-        const due = parseLocalDate(i.due_date);
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const daysDiff = due ? Math.round((new Date(due.getFullYear(), due.getMonth(), due.getDate()).getTime() - today.getTime()) / 86400000) : 0;
+        const daysDiff = -financialDaysBetween(i.due_date,now);
         pending.push({ contract: c, installment: i, isOverdue: isDateOverdue(i.due_date, now), daysDiff });
       }
     }
