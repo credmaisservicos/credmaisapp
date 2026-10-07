@@ -28,6 +28,15 @@ const Metas = () => {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [incrementId, setIncrementId] = useState<string | null>(null);
   const [incrementVal, setIncrementVal] = useState("");
+  const frequencyValues: Record<string, string> = {
+    Diária: "daily",
+    Semanal: "weekly",
+    Mensal: "monthly",
+    Anual: "yearly",
+  };
+  const frequencyLabels: Record<string, string> = Object.fromEntries(
+    Object.entries(frequencyValues).map(([label, value]) => [value, label]),
+  );
 
   const fetchGoals = async () => {
     if (!user) return;
@@ -67,7 +76,8 @@ const Metas = () => {
     }
     setSaving(true);
     const { error } = await supabase.from("goals").insert({
-      user_id: user.id, description: desc.trim(), target_amount: parsedTarget, frequency,
+      user_id: user.id, description: desc.trim(), target_amount: parsedTarget,
+      frequency: frequencyValues[frequency] || frequency,
     });
     setSaving(false);
     if (error) toast({ ...friendlyError(error), variant: "destructive" });
@@ -249,7 +259,7 @@ const Metas = () => {
                   <div>
                     <h3 className="font-semibold text-foreground">{g.description}</h3>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-xs text-muted-foreground">{g.frequency}</span>
+                      <span className="text-xs text-muted-foreground">{frequencyLabels[g.frequency] || g.frequency}</span>
                       {isComplete && <span className="text-[9px] font-bold text-success bg-success/10 px-1.5 py-0.5 rounded">✓ ATINGIDA</span>}
                     </div>
                   </div>

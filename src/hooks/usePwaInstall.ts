@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { isNativeApp } from "@/lib/native";
+import { detectInstallPlatform } from "@/lib/installPlatform";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -12,6 +13,7 @@ let sharedPrompt: BeforeInstallPromptEvent | null = null;
 let sharedInstalled = false;
 let listenersReady = false;
 const subscribers = new Set<() => void>();
+const appDisplayModes = ["standalone", "window-controls-overlay", "minimal-ui"];
 
 const publish = () => subscribers.forEach((subscriber) => subscriber());
 
@@ -22,16 +24,9 @@ const isStandalone = (): boolean => {
   // porque a WebView nunca dispara `beforeinstallprompt`.
   if (isNativeApp()) return true;
   return (
-    window.matchMedia?.("(display-mode: standalone)").matches ||
+    appDisplayModes.some((mode) => window.matchMedia?.(`(display-mode: ${mode})`).matches) ||
     (window.navigator as Navigator & { standalone?: boolean }).standalone === true
   );
-};
-
-const detectIOS = (): boolean => {
-  if (typeof navigator === "undefined") return false;
-  const iOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent);
-  const iPadDesktopUA = /Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1;
-  return iOSDevice || iPadDesktopUA;
 };
 
 /**
@@ -55,19 +50,20 @@ const ensureGlobalListeners = () => {
     publish();
   });
 
-  window.matchMedia?.("(display-mode: standalone)")?.addEventListener?.("change", (event) => {
+  appDisplayModes.forEach((mode) => window.matchMedia?.(`(display-mode: ${mode})`)?.addEventListener?.("change", (event) => {
     if (!event.matches) return;
     sharedInstalled = true;
     sharedPrompt = null;
     publish();
-  });
+  }));
 };
 
 ensureGlobalListeners();
 
 export function usePwaInstall() {
   const [, refresh] = useState(0);
-  const [isIOS] = useState(detectIOS);
+  const [platform] = useState(() => typeof navigator === "undefined" ? "desktop" : detectInstallPlatform(navigator.userAgent, navigator.maxTouchPoints));
+  const isIOS = platform === "ios";
 
   useEffect(() => {
     const subscriber = () => refresh((version) => version + 1);
@@ -101,6 +97,8 @@ export function usePwaInstall() {
     canPrompt: !!sharedPrompt && !installed,
     method,
     isIOS,
+    isAndroid: platform === "android",
+    platform,
     install,
   };
 }

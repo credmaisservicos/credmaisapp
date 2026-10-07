@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { hasPortalSession } from "@/lib/portalSession";
 import { z } from "zod";
 import defaultLogo from "@/assets/credmais-mark.svg";
@@ -609,6 +609,7 @@ const Login = () => {
       <p className="relative z-10 text-white/20 text-[10px] mt-8 tracking-wider text-center px-4">
         {footerText}
       </p>
+      <Link to="/baixar" className="relative z-10 mt-4 text-xs font-semibold text-white/65 hover:text-white">Instalar aplicativo</Link>
     </div>
   );
 };

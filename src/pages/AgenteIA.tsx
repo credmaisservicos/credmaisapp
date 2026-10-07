@@ -2176,7 +2176,7 @@ const AgenteIA = () => {
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleSend()}
                   placeholder='Pergunte algo... (atalho: "/")'
-                  className="flex-1 px-4 py-2.5 rounded-lg bg-muted/30 border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                  className="flex-1 px-4 py-2.5 rounded-lg bg-primary/10 border border-primary/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/25"
                 />
                 <button onClick={() => handleSend()} disabled={!input.trim() || loading} className="p-2.5 rounded-lg bg-primary text-primary-foreground disabled:opacity-50 hover:opacity-90 transition-opacity">
                   {loading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}

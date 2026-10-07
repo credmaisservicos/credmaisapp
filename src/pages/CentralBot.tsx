@@ -19,6 +19,11 @@ const AgenteIA = lazy(() => import("./AgenteIA"));
 
 const VALID_TABS = ["overview", "bot", "agente"] as const;
 type TabKey = (typeof VALID_TABS)[number];
+const LEGACY_TABS: Record<string, TabKey> = {
+  automacoes: "bot",
+  whatsapp: "bot",
+  performance: "overview",
+};
 
 const Fallback = () => (
   <div className="flex items-center justify-center py-20 text-sm text-muted-foreground">
@@ -226,19 +231,28 @@ const Overview = () => {
 
 const CentralBot = () => {
   const [params, setParams] = useSearchParams();
-  const raw = params.get("tab") as TabKey | null;
-  const initial: TabKey = raw && (VALID_TABS as readonly string[]).includes(raw) ? (raw as TabKey) : "overview";
+  const raw = params.get("tab");
+  const initial: TabKey = raw && (VALID_TABS as readonly string[]).includes(raw)
+    ? (raw as TabKey)
+    : LEGACY_TABS[raw || ""] || "overview";
   const [tab, setTab] = useState<TabKey>(initial);
 
   useEffect(() => {
     const current = params.get("tab");
+    const requested = current && (VALID_TABS as readonly string[]).includes(current)
+      ? (current as TabKey)
+      : LEGACY_TABS[current || ""] || "overview";
+    if (current && requested !== tab) {
+      setTab(requested);
+      return;
+    }
     if (current !== tab) {
       const next = new URLSearchParams(params);
       next.set("tab", tab);
       setParams(next, { replace: true });
     }
 
-  }, [tab]);
+  }, [params, setParams, tab]);
 
   return (
     <div className="space-y-5 animate-fade-in">

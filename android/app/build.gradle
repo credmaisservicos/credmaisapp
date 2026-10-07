@@ -1,5 +1,18 @@
 apply plugin: 'com.android.application'
 
+def releaseSigning = [
+    storeFile: System.getenv('CREDMAIS_ANDROID_KEYSTORE'),
+    storePassword: System.getenv('CREDMAIS_ANDROID_STORE_PASSWORD'),
+    keyAlias: System.getenv('CREDMAIS_ANDROID_KEY_ALIAS'),
+    keyPassword: System.getenv('CREDMAIS_ANDROID_KEY_PASSWORD')
+]
+def hasReleaseSigning = releaseSigning.values().every { it }
+def releaseVersionCode = System.getenv('CREDMAIS_ANDROID_VERSION_CODE')
+if (gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') }) {
+    if (!hasReleaseSigning) throw new GradleException('Assinatura de release ausente. Configure as variáveis CREDMAIS_ANDROID_*; não distribua APK de debug aos clientes.')
+    if (!releaseVersionCode || !(releaseVersionCode ==~ /[1-9][0-9]*/)) throw new GradleException('Defina CREDMAIS_ANDROID_VERSION_CODE maior que o da versão já distribuída.')
+}
+
 android {
     namespace = "br.com.credmais.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +20,8 @@ android {
         applicationId "br.com.credmais.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode releaseVersionCode ? releaseVersionCode.toInteger() : 1
+        versionName System.getenv('CREDMAIS_ANDROID_VERSION_NAME') ?: "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,8 +29,19 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile file(releaseSigning.storeFile)
+                storePassword releaseSigning.storePassword
+                keyAlias releaseSigning.keyAlias
+                keyPassword releaseSigning.keyPassword
+            }
+        }
+    }
     buildTypes {
         release {
+            if (hasReleaseSigning) signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

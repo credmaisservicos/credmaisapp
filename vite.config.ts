@@ -1,10 +1,10 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
-import { componentTagger } from "lovable-tagger";
+import { writeWebReleaseCatalog } from "./scripts/web-release-catalog.mjs";
 
 // https://vitejs.dev/config/
-export default defineConfig(({ mode }) => ({
+export default defineConfig({
   server: {
     host: "::",
     port: 8080,
@@ -12,7 +12,12 @@ export default defineConfig(({ mode }) => ({
       overlay: false,
     },
   },
-  plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
+  plugins: [react(), {
+    name: "credmais-web-release-catalog",
+    async writeBundle(options) {
+      if (options.dir) await writeWebReleaseCatalog(options.dir);
+    },
+  }],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -32,9 +37,9 @@ export default defineConfig(({ mode }) => ({
         // Altera os nomes de todos os chunks nesta publicação. Isso evita que
         // o CDN reutilize respostas HTML que ficaram associadas a assets de um
         // deploy incompleto anterior.
-        banner: "/* credmais-release: 2026-09-01-cache-recovery */",
-        entryFileNames: "assets/[name]-release20260901-[hash].js",
-        chunkFileNames: "assets/[name]-release20260901-[hash].js",
+        banner: "/* credmais-release: 2026-10-07-desktop-install */",
+        entryFileNames: "assets/[name]-release20261007-[hash].js",
+        chunkFileNames: "assets/[name]-release20261007-[hash].js",
         // O bundle de entrada juntava React, framer-motion, o cliente do
         // Supabase e o Radix inteiro no MESMO arquivo do código do app. Duas
         // consequências ruins para quem abre no celular: baixa tudo de uma vez
@@ -60,4 +65,4 @@ export default defineConfig(({ mode }) => ({
       },
     },
   },
-}));
+});

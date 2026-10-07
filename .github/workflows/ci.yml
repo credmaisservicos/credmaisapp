@@ -1,12 +1,10 @@
 name: CI
 
-# Roda em todo PR e em todo push para main. O objetivo é simples: o Lovable
-# escreve direto no repositório sem revisão humana, então este workflow é o
-# último ponto onde uma quebra é pega antes de virar produção na Vercel.
+# Valida alterações antes da publicação, incluindo código financeiro e rotas.
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, feat/mobile-nativo-capacitor]
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -23,11 +21,14 @@ jobs:
 
       - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Instalar dependências
         run: npm ci
+
+      - name: Auditoria das dependências de produção
+        run: npm run audit:production
 
       - name: Typecheck
         run: npx tsc --noEmit -p tsconfig.app.json
@@ -52,26 +53,39 @@ jobs:
       - name: Testes das funções e do bot
         run: deno test supabase/functions/_shared/*_test.ts --allow-env --allow-net
 
+      - name: Recibos, WhatsApp e assinaturas com provedores simulados
+        run: npm run test:integrations
+
       - name: Testes
         run: npx vitest run
+
+      - name: Catálogo da publicação e proteção do APK
+        run: |
+          npm run test:release
+          python3 deploy/mobile/test_mobile_release.py
 
       - name: Build de produção
         run: npx vite build
 
   contratos:
-    name: Garantias em produção (E2E)
+    name: Garantias em homologação (E2E)
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    if: ${{ vars.E2E_SECURITY_BASE_URL != '' && vars.E2E_SECURITY_SUPABASE_URL != '' }}
+    env:
+      E2E_BASE_URL: ${{ vars.E2E_SECURITY_BASE_URL }}
+      E2E_SUPABASE_URL: ${{ vars.E2E_SECURITY_SUPABASE_URL }}
+      E2E_ANON_KEY: ${{ secrets.E2E_SECURITY_ANON_KEY }}
+      E2E_ALLOW_SECURITY_PROBES: "1"
 
-    # Estes testes batem no ambiente publicado e verificam o que precisa valer
-    # sem sessão: rota de admin fechada, cron exigindo segredo, RLS não vazando
-    # dado de cliente. São as garantias que já foram quebradas antes.
+    # As sondagens incluem escrita com credencial inválida. Execute somente em
+    # homologação: se uma proteção regredir, nenhuma conta real será afetada.
     steps:
       - uses: actions/checkout@v5
 
       - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - run: npm ci
@@ -79,7 +93,7 @@ jobs:
       - run: npx playwright test e2e/dinheiro.spec.ts e2e/responsive-accessibility.spec.ts
 
   login:
-    name: Recuperação de login (E2E local)
+    name: Login, rotas e interface (E2E local isolado)
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -88,24 +102,13 @@ jobs:
 
       - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - name: Build da aplicação
-        run: npm run build
-      - name: Iniciar preview local
-        run: |
-          nohup npx vite preview --host 127.0.0.1 --port 4173 > /tmp/credmais-preview.log 2>&1 &
-          for tentativa in $(seq 1 30); do
-            if curl --silent --fail http://127.0.0.1:4173/login > /dev/null; then exit 0; fi
-            sleep 1
-          done
-          cat /tmp/credmais-preview.log
-          exit 1
-      - name: Testar recuperação do login
-        run: E2E_BASE_URL=http://127.0.0.1:4173 npx playwright test e2e/login-recovery.spec.ts
+      - name: Testar login e interface com dados simulados
+        run: npm run test:e2e:local
 
   segredos:
     name: Nenhum segredo no diff

@@ -1,4 +1,7 @@
 import { createRoot } from "react-dom/client";
+// Captura o instalador mesmo quando a pessoa visita o site antes de /baixar.
+import "./hooks/usePwaInstall";
+import { canReloadForAppUpdate } from "./lib/appUpdateReload";
 import "./index.css";
 import "./credinho.css";
 import "./glass-overrides.css";
@@ -91,15 +94,30 @@ if (isInIframe || isPreviewHost || isNativeApp()) {
     .catch(() => {});
 } else if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    const hadController = Boolean(navigator.serviceWorker.controller);
+    let hadController = Boolean(navigator.serviceWorker.controller);
     let reloadingForUpdate = false;
+    const changedForms = new WeakSet<HTMLFormElement>();
+    document.addEventListener("input", event => {
+      const form = event.target instanceof Element ? event.target.closest("form") : null;
+      if (form) changedForms.add(form);
+    });
+    navigator.serviceWorker.addEventListener("message", event => {
+      if (event.data?.type === "APP_UPDATE_READY") {
+        event.ports[0]?.postMessage({ ready: canReloadForAppUpdate(document, changedForms) });
+      }
+    });
 
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       // A primeira instalação não precisa interromper a sessão. Em uma
       // atualização, recarrega uma vez para todos os chunks virem da mesma versão.
-      if (!hadController || reloadingForUpdate) return;
+      if (!hadController) { hadController = true; return; }
+      if (reloadingForUpdate) return;
       reloadingForUpdate = true;
-      window.location.reload();
+      const reloadWhenReady = () => {
+        if (canReloadForAppUpdate(document, changedForms)) window.location.reload();
+        else window.setTimeout(reloadWhenReady, 5000);
+      };
+      reloadWhenReady();
     });
 
     navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }).then((registration) => {
@@ -107,13 +125,24 @@ if (isInIframe || isPreviewHost || isNativeApp()) {
         if (!navigator.onLine || document.visibilityState !== "visible") return;
         // A browser pode rejeitar update durante troca/instalação do worker.
         // Isso é transitório e não deve virar uma rejeição global sem tratamento.
-        void registration.update().catch(() => {});
+        void registration.update().then(() => {
+          registration.waiting?.postMessage({ type: "CHECK_UPDATE" });
+        }).catch(() => {});
       };
+      registration.addEventListener("updatefound", () => {
+        const installing = registration.installing;
+        installing?.addEventListener("statechange", () => {
+          if (installing.state === "installed") registration.waiting?.postMessage({ type: "CHECK_UPDATE" });
+        });
+      });
       checkForUpdate();
 
       // Abas que ficam abertas o dia inteiro também recebem novas publicações.
       document.addEventListener("visibilitychange", checkForUpdate);
       window.setInterval(checkForUpdate, 5 * 60_000);
+      document.addEventListener("click", () => {
+        window.setTimeout(() => registration.waiting?.postMessage({ type: "CHECK_UPDATE" }), 0);
+      });
     }).catch(() => {});
   });
 }

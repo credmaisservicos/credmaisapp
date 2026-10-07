@@ -914,7 +914,7 @@ export default function WhatsAppInbox() {
                     if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey) { e.preventDefault(); send(); }
                   }}
                   placeholder={selected.blocked ? "Contato bloqueado" : "Digite (Enter envia, Shift+Enter nova linha, Ctrl+Enter envia)..."}
-                  rows={2} className="resize-none" disabled={selected.blocked} />
+                  rows={2} className="resize-none bg-primary/10 border-primary/30 focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/30" disabled={selected.blocked} />
                 <Button onClick={send} disabled={sending || !draft.trim() || selected.blocked} className="self-end">
                   {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 </Button>

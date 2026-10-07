@@ -3,7 +3,7 @@
 // - Precache de todos os chunks gerados pelo Vite (inclusive rotas lazy)
 // - CacheFirst para assets com hash, que são imutáveis
 // - Nunca cacheia Supabase, APIs ou rotas internas (~oauth)
-const VERSION = "credmais-v22-web-push";
+const VERSION = "credmais-v24-release-__BUILD_ID__";
 const STATIC_CACHE = `${VERSION}-static`;
 const RUNTIME_CACHE = `${VERSION}-runtime`;
 const HTML_CACHE = `${VERSION}-html`;
@@ -52,20 +52,34 @@ async function precacheApplication() {
 }
 
 self.addEventListener("install", (e) => {
-  self.skipWaiting();
   e.waitUntil(precacheApplication());
 });
 
 self.addEventListener("activate", (e) => {
   e.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => !k.startsWith(VERSION)).map((k) => caches.delete(k)))
-    ).then(() => self.clients.claim())
+    caches.keys().then((keys) => {
+      // Mantém a publicação anterior enquanto uma aba termina um formulário.
+      // Os nomes com hash permitem reutilizar seus chunks sem misturar versões.
+      const previousVersions = [...new Set(keys.filter((key) => key.startsWith("credmais-") && !key.startsWith(VERSION)).map((key) => key.replace(/-(static|runtime|html)$/, "")))];
+      const previous = previousVersions[previousVersions.length - 1];
+      return Promise.all(keys.filter((key) => !key.startsWith(VERSION) && !(previous && key.startsWith(previous + "-"))).map((key) => caches.delete(key)));
+    }).then(() => self.clients.claim())
   );
 });
 
 self.addEventListener("message", (e) => {
-  if (e.data?.type === "SKIP_WAITING") self.skipWaiting();
+  if (e.data?.type !== "CHECK_UPDATE" && e.data?.type !== "SKIP_WAITING") return;
+  e.waitUntil((async () => {
+    const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    const readiness = await Promise.all(clients.map((client) => new Promise((resolve) => {
+      const channel = new MessageChannel();
+      const finish = (ready) => { clearTimeout(timeout); channel.port1.close(); resolve(ready); };
+      const timeout = setTimeout(() => finish(false), 2000);
+      channel.port1.onmessage = (event) => finish(event.data?.ready === true);
+      client.postMessage({ type: "APP_UPDATE_READY" }, [channel.port2]);
+    })));
+    if (readiness.every(Boolean)) await self.skipWaiting();
+  })());
 });
 
 const isAsset = (url) => /\.(?:js|mjs|css|woff2?|ttf|otf|png|jpg|jpeg|webp|svg|gif|ico)$/.test(url.pathname);
@@ -78,6 +92,10 @@ self.addEventListener("fetch", (event) => {
 
   // Never touch cross-origin (Supabase, CDNs, external APIs)
   if (url.origin !== location.origin) return;
+
+  // Downloads nativos precisam receber o arquivo original, sem cache HTML ou
+  // fallback offline do PWA quando o link é aberto como uma navegação.
+  if (/\.(?:apk|ipa)$/i.test(url.pathname) || url.pathname.startsWith("/downloads/")) return;
 
   // Denylist: oauth and api endpoints always go to network
   if (url.pathname.startsWith("/~oauth") || url.pathname.startsWith("/api/")) return;
@@ -103,7 +121,7 @@ self.addEventListener("fetch", (event) => {
   }
 
   // Assets do build têm hash no nome e são imutáveis. O VERSION novo elimina
-  // caches antigos a cada publicação.
+  // caches de publicações anteriores, preservando a mais recente em uso.
   if (isAsset(url)) {
     event.respondWith(
       (async () => {

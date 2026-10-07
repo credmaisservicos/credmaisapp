@@ -1,6 +1,22 @@
-# QA Checklist — SYSTEM JUROS
+# QA Checklist — CredMais
 
-Checklist manual de validação dos fluxos críticos. Marque cada item ao testar em ambiente real.
+Checklist manual de validação dos fluxos críticos. Use staging com contas e dados de teste.
+As verificações automáticas são `npm run check` e `npm run test:e2e:local`.
+
+## Evidências automáticas da entrega — 2026-10-07
+
+| Fluxo | Evidência |
+|---|---|
+| Pagamento parcial e última parcela fora da ordem | Testes das funções SQL em PostgreSQL isolado via PGlite; contrato continua ativo enquanto houver pendência |
+| Recibo e isolamento entre donos | Handler real de `auto-receipt` executado com HTTP simulado; visitante e parcela de outro dono recusados; recibo usa o valor parcial recebido |
+| WhatsApp | Handler real de `whatsapp-send`; envio, falha do provedor, agendamento e proteção de conversa de outro dono verificados |
+| Assinatura | Handler real de `mercadopago-webhook`; HMAC inválido, valor insuficiente, ativação, validade, evento duplicado e plano vitalício verificados |
+| Instalação | Android/iPhone e computadores em testes de navegador; critérios de instalação Chrome no site HTTPS verificados |
+
+Execute `npm run test:integrations` para os 14 testes dos handlers. Eles usam
+apenas credenciais e dados fictícios, interceptam as chamadas HTTP e rodam sem
+permissão de rede. Essas evidências não substituem o checklist manual com
+aparelhos físicos, banco de staging e contas sandbox dos provedores.
 
 ## 1. Autenticação
 - [ ] Cadastro novo (e-mail + senha) cria perfil e `trial_ends_at` = +3 dias
@@ -36,6 +52,9 @@ Checklist manual de validação dos fluxos críticos. Marque cada item ao testar
 - [ ] Recibo gerado e salvo em `receipt_url`
 - [ ] Multa diária aplicada via cron em parcelas vencidas
 - [ ] Pagamento parcial registra `paid_amount` < `amount`
+- [ ] Pagamento que cobre a base mas deixa encargos mantém a parcela em aberto
+- [ ] Pagar a última parcela mantém o contrato ativo se outra parcela ainda estiver em aberto ou parcialmente paga
+- [ ] Quitar a última pendência conclui o contrato, mesmo pagando fora da ordem
 
 ## 6. WhatsApp (Evolution API)
 - [ ] Conectar instância via QR code

@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "credmaisapp",
-  "account_id": "02a741b5fbcd8b5b164c842a32d2eb1e",
+  "account_id": "7b478d5aa63ddb95030f4071cd60900f",
   "main": "worker.ts",
   "compatibility_date": "2026-08-17",
   "assets": {

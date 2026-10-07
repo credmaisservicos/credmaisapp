@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 const publicPages = [
   { path: "/", name: "início" },
   { path: "/login", name: "login" },
+  { path: "/baixar", name: "downloads" },
   { path: "/planos", name: "planos" },
   { path: "/inteligencia", name: "inteligência" },
   { path: "/sobre-credmais", name: "sobre o CredMais" },

@@ -1,0 +1,18 @@
+http:
+  routers:
+    http-credmais-downloads:
+      rule: "Host(`credmaisapp-downloads.fcoipz.easypanel.host`)"
+      service: credmais-downloads
+      entryPoints: [http]
+      middlewares: [redirect-to-https]
+    https-credmais-downloads:
+      rule: "Host(`credmaisapp-downloads.fcoipz.easypanel.host`)"
+      service: credmais-downloads
+      entryPoints: [https]
+      tls:
+        certResolver: letsencrypt
+  services:
+    credmais-downloads:
+      loadBalancer:
+        servers:
+          - url: "http://172.16.0.1:3010"

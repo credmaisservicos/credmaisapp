@@ -15,7 +15,7 @@
  */
 import { readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { spawnSync } from "node:child_process";
+import { createDenoRunner } from "./deno.mjs";
 
 const raiz = "supabase/functions";
 const alvos = readdirSync(raiz, { withFileTypes: true })
@@ -23,28 +23,20 @@ const alvos = readdirSync(raiz, { withFileTypes: true })
   .map((e) => join(raiz, e.name, "index.ts"))
   .filter((p) => existsSync(p));
 
-// `deno` nem sempre está no PATH (no Windows deste projeto ele vem pelo npx).
-// Sem esta detecção o script "falhava" em todos os arquivos por não achar o
-// comando — o que parece erro de tipo em 41 funções e ninguém olha.
-const denoCommand = process.platform === "win32" ? "deno.exe" : "deno";
-const npxCommand = process.platform === "win32" ? "npx.cmd" : "npx";
-const temDeno = spawnSync(denoCommand, ["--version"], { encoding: "utf8" }).status === 0;
-const executar = (arquivo) =>
-  temDeno
-    ? spawnSync(denoCommand, ["check", arquivo], { encoding: "utf8" })
-    : spawnSync(npxCommand, ["deno", "check", arquivo], { encoding: "utf8" });
+const runDeno = createDenoRunner();
+const executar = (arquivo) => runDeno(["check", arquivo]);
 
 const ehErroDeTipo = (saida) => /\bTS\d{4}\b/.test(saida);
 
 const falhas = [];
 for (const arquivo of alvos) {
   let r = executar(arquivo);
-  let saida = `${r.stderr || ""}${r.stdout || ""}`;
+  let saida = `${r.error?.message || ""}${r.stderr || ""}${r.stdout || ""}`;
 
   // Falhou sem apontar erro de tipo? Provavelmente foi download. Tenta de novo.
   if (r.status !== 0 && !ehErroDeTipo(saida)) {
     r = executar(arquivo);
-    saida = `${r.stderr || ""}${r.stdout || ""}`;
+    saida = `${r.error?.message || ""}${r.stderr || ""}${r.stdout || ""}`;
   }
 
   if (r.status !== 0) {

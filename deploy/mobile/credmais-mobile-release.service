@@ -1,0 +1,15 @@
+[Unit]
+Description=Atualiza o APK CredMais a partir do site publicado
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/credmais-mobile/mobile-release.py
+WorkingDirectory=/opt/credmais-mobile
+TimeoutStartSec=30min
+Nice=15
+IOSchedulingClass=idle
+UMask=0077
+StandardOutput=journal
+StandardError=journal

@@ -29,6 +29,7 @@ const SiteInteligencia = lazy(() => import("./pages/site/Inteligencia"));
 const SiteSobre = lazy(() => import("./pages/site/SobreCredmais"));
 const SiteMissao = lazy(() => import("./pages/site/Missao"));
 const SitePlanos = lazy(() => import("./pages/site/PlanosSite"));
+const DownloadApp = lazy(() => import("./pages/DownloadApp"));
 
 import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
@@ -143,6 +144,7 @@ const App = () => (
                 <Routes>
                   <Route path="/" element={<Index />} />
                   <Route path="/login" element={<Login />} />
+                  <Route path="/baixar" element={<DownloadApp />} />
                   <Route path="/planos" element={<SitePlanos />} />
                   <Route path="/assinatura" element={<Planos />} />
                   <Route path="/inteligencia" element={<SiteInteligencia />} />
@@ -205,9 +207,9 @@ const App = () => (
                     <Route path="/central" element={<Navigate to="/comunicacao" replace />} />
                     <Route path="/comunicacao/inbox" element={<PlanGuard><ErrorBoundary><WhatsAppInbox /></ErrorBoundary></PlanGuard>} />
                     <Route path="/agente-ia" element={<Navigate to="/comunicacao?tab=agente" replace />} />
-                    <Route path="/bot-performance" element={<Navigate to="/comunicacao?tab=performance" replace />} />
-                    <Route path="/automacoes" element={<Navigate to="/comunicacao?tab=automacoes" replace />} />
-                    <Route path="/configuracoes/whatsapp" element={<Navigate to="/comunicacao?tab=whatsapp" replace />} />
+                    <Route path="/bot-performance" element={<Navigate to="/comunicacao?tab=overview" replace />} />
+                    <Route path="/automacoes" element={<Navigate to="/comunicacao?tab=bot" replace />} />
+                    <Route path="/configuracoes/whatsapp" element={<Navigate to="/comunicacao?tab=bot" replace />} />
                     <Route path="/auditoria" element={<AdminRoute><ErrorBoundary><Auditoria /></ErrorBoundary></AdminRoute>} />
                     <Route path="/suporte" element={<ErrorBoundary><Suporte /></ErrorBoundary>} />
                     <Route path="/notificacoes" element={<ErrorBoundary><Notificacoes /></ErrorBoundary>} />

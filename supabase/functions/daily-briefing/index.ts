@@ -24,7 +24,6 @@ Deno.serve(async (req) => {
     const { data: { user } } = await userClient.auth.getUser();
     if (!user) return new Response(JSON.stringify({ error: "Não autenticado" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
-    if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY missing");
     const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const entitlement = await enforceEntitlement(user.id, "daily-briefing", { capacity: 12 });
     if (!entitlement.ok) return entitlementResponse(entitlement, corsHeaders);
@@ -87,15 +86,17 @@ Nome do usuário: ${profile?.name?.split(" ")[0] || "Operador"}`;
     };
 
     let briefing = fallbackBriefing;
-    try {
-      briefing = await callAnthropicJSON({
-        system: "Você é um assistente executivo de cobranças. Gere um briefing curto, motivador e prático em português brasileiro. Seja direto. Use 'você'. NÃO use markdown nem emojis em excesso (no máximo 1). Responda APENAS com JSON válido no formato: {\"greeting\": string, \"summary\": string, \"priorities\": string[2-3], \"tone\": \"positivo\"|\"neutro\"|\"alerta\"}",
-        messages: [{ role: "user", content: userPrompt + "\n\nRetorne somente o JSON." }],
-        maxTokens: 600,
-        temperature: 0.7,
-      });
-    } catch (err) {
-      console.error("Anthropic error, using fallback:", err);
+    if (ANTHROPIC_API_KEY) {
+      try {
+        briefing = await callAnthropicJSON({
+          system: "Você é um assistente executivo de cobranças. Gere um briefing curto, motivador e prático em português brasileiro. Seja direto. Use 'você'. NÃO use markdown nem emojis em excesso (no máximo 1). Responda APENAS com JSON válido no formato: {\"greeting\": string, \"summary\": string, \"priorities\": string[2-3], \"tone\": \"positivo\"|\"neutro\"|\"alerta\"}",
+          messages: [{ role: "user", content: userPrompt + "\n\nRetorne somente o JSON." }],
+          maxTokens: 600,
+          temperature: 0.7,
+        });
+      } catch (err) {
+        console.error("Anthropic error, using fallback:", err);
+      }
     }
 
     return new Response(JSON.stringify({

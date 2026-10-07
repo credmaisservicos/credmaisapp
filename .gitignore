@@ -13,7 +13,14 @@ node_modules
 dist
 dist-ssr
 dist-mobile
+dist-e2e
+coverage
+*.jks
+*.keystore
+*.p12
+*.mobileprovision
 *.local
+/terminal-*.png
 
 # Env (não commitar segredos). Já há um .env versionado com a anon key pública;
 # para parar de rastreá-lo: git rm --cached .env

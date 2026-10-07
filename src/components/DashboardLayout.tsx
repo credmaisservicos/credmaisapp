@@ -7,6 +7,7 @@ import MobileBottomNav from "@/components/MobileBottomNav";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import GlobalAnnouncement from "@/components/GlobalAnnouncement";
 import InstallAppBanner from "@/components/InstallAppBanner";
+import NativeAppUpdateBanner from "@/components/NativeAppUpdateBanner";
 import { Navigate, Outlet, useLocation, useNavigationType } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
@@ -125,6 +126,7 @@ const DashboardLayout = () => {
         <TopBar onSearchClick={() => setSearchOpen(true)} onQuickPayment={openQuickPayment} />
 
         <GlobalAnnouncement />
+        <NativeAppUpdateBanner />
         <InstallAppBanner />
         <Breadcrumbs />
         <main

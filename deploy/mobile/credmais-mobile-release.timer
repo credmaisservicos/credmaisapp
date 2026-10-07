@@ -1,0 +1,11 @@
+[Unit]
+Description=Verifica publicacoes do CredMais a cada minuto
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=60s
+AccuracySec=5s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

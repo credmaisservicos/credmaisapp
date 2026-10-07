@@ -11,7 +11,7 @@ export default tseslint.config(
     // `android/`/`ios/` são os projetos nativos do Capacitor (Java/Kotlin/Swift
     // + bridges JS geradas pelo `cap sync`, inclusive dentro de android/app/build
     // depois de um build local) — nunca foi código-fonte deste app.
-    ignores: ["dist", "dist-mobile", "android/**", "ios/**", "test-results/**", "playwright-report/**", "src/integrations/supabase/types.ts", "supabase/functions/**", "latest*.js", "z-index-*.js", "live-*.js", "*-release*.js"],
+    ignores: ["dist", "dist-mobile", "dist-e2e", "coverage", "**/*.local/**", "android/**", "ios/**", "test-results/**", "playwright-report/**", "src/integrations/supabase/types.ts", "supabase/functions/**", "latest*.js", "z-index-*.js", "live-*.js", "*-release*.js"],
   },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],

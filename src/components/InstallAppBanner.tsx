@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 const DISMISS_KEY = "pwa-install-dismissed";
 
 const InstallAppBanner = () => {
-  const { installed, canPrompt, isIOS, install } = usePwaInstall();
+  const { installed, canPrompt, isIOS, platform, install } = usePwaInstall();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [dismissed, setDismissed] = useState(() => {
@@ -47,7 +47,7 @@ const InstallAppBanner = () => {
       return;
     }
     // iPhone: não dá para instalar por código — leva ao passo a passo
-    navigate("/configuracoes");
+    navigate("/baixar");
   };
 
   return (
@@ -55,10 +55,10 @@ const InstallAppBanner = () => {
       <div className="flex items-center gap-3 rounded-xl border border-primary/25 bg-primary/[0.07] px-3.5 py-2.5">
         <img src="/apple-touch-icon.png" alt="" className="w-8 h-8 rounded-lg object-cover shrink-0" />
         <p className="flex-1 text-xs text-foreground/90 leading-snug">
-          <strong className="font-semibold">Instale o app no celular.</strong>{" "}
+          <strong className="font-semibold">{platform === "desktop" ? "Instale o app no computador ou notebook." : "Instale o app no celular."}</strong>{" "}
           <span className="text-muted-foreground">
             {canPrompt
-              ? "Abre em tela cheia e funciona mesmo com internet ruim."
+              ? "Abra pelo ícone do app e continue usando sua conta."
               : "No iPhone é pelo Safari, em Compartilhar → Adicionar à Tela de Início."}
           </span>
         </p>

@@ -423,7 +423,6 @@ const WhatsAppConfig = () => {
       </Card>
 
       <BusinessHoursCard settings={settings} onUpdate={updateSettings} />
-      {/* <WhatsAppInstancesCard /> — oculto a pedido do usuário */}
     </div>
   );
 };

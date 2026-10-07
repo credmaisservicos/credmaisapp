@@ -1196,7 +1196,7 @@ const Chat = () => {
                       onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } if (e.key === "Escape") { setEditingMsg(null); setInput(""); } }}
                       placeholder={editingMsg ? "Editar mensagem..." : `Mensagem em ${currentChannel ? `#${currentChannel.name}` : dmOther?.name || ""}...`}
                       rows={1}
-                      className="flex-1 resize-none bg-muted/30 border border-border/40 rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary/40 max-h-32"
+                      className="flex-1 resize-none bg-primary/10 border border-primary/30 rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/25 max-h-32"
                     />
                     {input.trim() ? (
                       <button type="button" onClick={send} disabled={sending || !input.trim()} aria-label={editingMsg ? "Salvar mensagem" : "Enviar mensagem"} className="p-2.5 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition shrink-0 disabled:opacity-50" title={editingMsg ? "Salvar" : "Enviar"}>

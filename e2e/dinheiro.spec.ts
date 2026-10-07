@@ -3,7 +3,7 @@ import { test, expect } from "@playwright/test";
 /**
  * Caminho do dinheiro — o que não pode acontecer.
  *
- * Estes testes não fazem login: rodam contra o app publicado e cobrem as
+ * Estes testes não fazem login: rodam em homologação e cobrem as
  * garantias que valem SEM sessão. É de propósito. Os furos que apareceram neste
  * sistema foram todos de porta aberta: função de admin sem checagem, webhook sem
  * segredo, portal com token eterno. Um teste que só roda logado não pega nada
@@ -14,14 +14,12 @@ import { test, expect } from "@playwright/test";
  * cliente. Ver `docs/verificar-razao.sql` para a conferência do razão.
  */
 
-const SUPABASE =
-  process.env.E2E_SUPABASE_URL ??
-  process.env.VITE_SUPABASE_URL ??
-  "https://credmaisapp-supabase.fcoipz.easypanel.host";
-const ANON =
-  process.env.E2E_ANON_KEY ??
-  process.env.VITE_SUPABASE_PUBLISHABLE_KEY ??
-  "";
+test.skip(process.env.E2E_ALLOW_SECURITY_PROBES !== "1", "Sondagens de escrita exigem ambiente de homologação explícito.");
+const SUPABASE = process.env.E2E_SUPABASE_URL ?? "";
+const ANON = process.env.E2E_ANON_KEY ?? "";
+test.beforeAll(() => {
+  if (!SUPABASE || !ANON || !process.env.E2E_BASE_URL) throw new Error("Configure E2E_SUPABASE_URL, E2E_ANON_KEY e E2E_BASE_URL de homologação.");
+});
 
 test.describe("rotas de administração não podem estar abertas", () => {
   // A admin-create-lifetime já rodou exposta na internet: criava conta vitalícia

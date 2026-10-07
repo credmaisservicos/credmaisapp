@@ -8,6 +8,7 @@ const NAV = [
   { to: "/sobre-credmais", label: "O app" },
   { to: "/missao", label: "Missão" },
   { to: "/planos", label: "Planos" },
+  { to: "/baixar", label: "Instalar app" },
 ];
 
 /** Fine film-grain overlay — keeps the deep navy from looking flat/synthetic. */
@@ -49,7 +50,7 @@ export function SiteHeader() {
           />
         </Link>
 
-        <nav className="hidden items-center md:flex">
+        <nav className="hidden items-center lg:flex">
           {NAV.map((n) => (
             <Link
               key={n.to}
@@ -82,14 +83,14 @@ export function SiteHeader() {
           aria-label="Menu"
           aria-expanded={open}
           aria-controls="site-mobile-menu"
-          className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 text-white md:hidden"
+          className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 text-white lg:hidden"
         >
           {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
       </div>
 
       {open && (
-        <div id="site-mobile-menu" className="border-t border-[#f5bd59]/15 bg-[#0c0b09]/98 px-5 py-4 backdrop-blur-2xl md:hidden">
+        <div id="site-mobile-menu" className="border-t border-[#f5bd59]/15 bg-[#0c0b09]/98 px-5 py-4 backdrop-blur-2xl lg:hidden">
           <div className="flex flex-col">
             {[...NAV, { to: "/login", label: "Entrar" }].map((n) => (
               <Link

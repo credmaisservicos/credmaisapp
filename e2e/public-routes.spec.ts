@@ -1,6 +1,17 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("Public routes", () => {
+  test("downloads oferecem instalação disponível sem links nativos fictícios", async ({ page }) => {
+    test.skip(!process.env.E2E_BASE_URL?.startsWith("http://127.0.0.1"), "Configuração isolada de entrega");
+    await page.goto("/login");
+    await page.getByRole("link", { name: "Instalar aplicativo", exact: true }).click();
+    await page.waitForURL(/\/baixar$/);
+    await expect(page.getByRole("heading", { name: "Instalar aplicativo", exact: true })).toBeVisible();
+    await expect(page.locator('a[href$=".apk"], a[href*="testflight.apple.com"], a[href*="apps.apple.com"]')).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Instalar no computador", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Instalar no computador", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "Instalar no computador" })).toBeVisible();
+  });
   test("landing page loads", async ({ page }) => {
     await page.goto("/");
     await expect(page).toHaveTitle(/.+/);
