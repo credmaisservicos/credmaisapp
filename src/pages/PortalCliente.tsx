@@ -1,4 +1,5 @@
 import {UploadImage} from '@/components/UploadMedia';
+import {clientPortalLogoutPath} from '@/lib/publicAppLinks';
 import { useEffect, useLayoutEffect, useMemo, useState,useRef } from "react";
 import { formatBR, isOverdue as isDateOverdue, parseLocalDate } from "@/lib/dateUtils";
 import {financialDaysBetween} from '../../supabase/functions/_shared/financial_calendar';
@@ -381,6 +382,7 @@ const PortalCliente = () => {
   };
 
   const handleLogout = async () => {
+    const logoutPath=clientPortalLogoutPath(window.location.search);
     ++loginGeneration.current;clearPortalSession();
     // Limpa estado local do React primeiro para UI responsiva
     setPortalData(null);
@@ -391,7 +393,7 @@ const PortalCliente = () => {
     // Limpeza completa: supabase signOut + storage + cookies + caches
     await performFullPortalLogout();
     // Hard reload garante que nenhum estado in-memory (queries, contexts) sobreviva
-    window.location.replace("/portal-cliente?logout=1");
+    window.location.replace(logoutPath);
   };
 
   // Flag pós-logout: mostra tela de confirmação em vez do formulário de login

@@ -2,6 +2,31 @@ import {expect,test} from '@playwright/test';
 test.use({serviceWorkers:'block',timezoneId:'America/Sao_Paulo'});
 
 const client={id:'client-test',name:'Maria Teste'};
+for(const [owner,label]of [['11111111-1111-4111-8111-111111111111','Empresa A'],['22222222-2222-4222-8222-222222222222','Empresa B']]){
+ test(`portal preserva a empresa após sair e entrar novamente: ${label}`,async({page})=>{
+  let scopedLogins=0,genericLogins=0;
+  await page.routeWebSocket('**',socket=>socket.close());
+  await page.route('https://credmais-e2e.supabase.co/**',async route=>{
+   const path=new URL(route.request().url()).pathname;
+   if(path.endsWith('/portal_client_login_for_owner')){
+    scopedLogins++;expect(route.request().postDataJSON()._owner_id).toBe(owner);
+    expect(route.request().postDataJSON()._cpf).toBe('11144477735');
+   }else if(path.endsWith('/portal_client_login'))genericLogins++;
+   await route.fulfill({status:200,json:/\/portal_(client_login_for_owner|login_by_token)$/.test(path)?{...portal,owner:{name:label},branding:{company_name:label}}:[]});
+  });
+  await page.goto('/portal-cliente?o='+owner);
+  await page.getByLabel('Seu CPF',{exact:true}).fill('11144477735');
+  await page.getByRole('button',{name:'Acessar o portal'}).click();
+  await expect(page.getByRole('tab',{name:/Em aberto/})).toBeVisible();
+  await page.getByRole('button',{name:'Sair com segurança'}).click();
+  await expect(page).toHaveURL(new RegExp('portal-cliente\\?o='+owner+'&logout=1$'));
+  await page.getByRole('button',{name:'Entrar novamente'}).click();
+  await page.getByLabel('Seu CPF',{exact:true}).fill('11144477735');
+  await page.getByRole('button',{name:'Acessar o portal'}).click();
+  await expect(page.getByRole('tab',{name:/Em aberto/})).toBeVisible();
+  expect(scopedLogins).toBe(2);expect(genericLogins).toBe(0);
+ });
+}
 const portal={client,session_token:'550e8400-e29b-41d4-a716-446655440000',owner:{name:'Empresa teste'},branding:{company_name:'Empresa teste',portal_contact_email:'atendimento@example.invalid'},contracts:[{
   id:'contract-test',capital:200,total_amount:220,total_interest:20,interest_rate:10,num_installments:2,installment_amount:110,status:'active',frequency:'monthly',start_date:'2026-01-01',daily_interest_percent:0,
   installments:[{id:'open-test',installment_number:2,amount:110,paid_amount:10,status:'pending',due_date:'2099-01-01'},

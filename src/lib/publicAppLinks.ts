@@ -9,3 +9,8 @@ export function publicAppOrigin(origin=typeof window==='undefined'?'':window.loc
 export function clientPortalUrl(ownerId:string|null|undefined,origin?:string):string {
  return ownerId ? publicAppOrigin(origin)+'/portal-cliente?o='+encodeURIComponent(ownerId) : '';
 }
+export function clientPortalLogoutPath(search:string):string {
+ const owner=new URLSearchParams(search).get('o');
+ const valid=owner && /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(owner);
+ return '/portal-cliente?'+(valid?'o='+encodeURIComponent(owner)+'&':'')+'logout=1';
+}
