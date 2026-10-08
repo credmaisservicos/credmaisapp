@@ -25,6 +25,7 @@ import { formatFrequency } from "@/components/cliente-detalhe/constants";
 import {tabSessionStorage} from '@/lib/tabSessionStorage';
 import {withAbortTimeout} from '@/lib/withTimeout';
 import { daysLateOf } from '@/lib/lateFee';
+import { matchesCollectorClientSearch } from '@/lib/collectorSearch';
 
 const TOKEN_KEY = "cobrador-token";
 
@@ -249,14 +250,7 @@ const CobradorExterno = () => {
 
   // Filter assignments by search
   const filteredAssignments = useMemo(() => {
-    if (!search.trim()) return assignments;
-    const q = search.toLowerCase().trim();
-    return assignments.filter((a: any) => {
-      const name = (a.clients?.name || "").toLowerCase();
-      const phone = (a.clients?.phone || a.clients?.whatsapp || "").replace(/\D/g, "");
-      const cpf = (a.clients?.cpf_cnpj || "").replace(/\D/g, "");
-      return name.includes(q) || phone.includes(q.replace(/\D/g, "")) || cpf.includes(q.replace(/\D/g, ""));
-    });
+    return assignments.filter((a: any) => matchesCollectorClientSearch(a.clients, search));
   }, [assignments, search]);
 
   if (!collectorData) {
