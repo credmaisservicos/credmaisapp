@@ -10,6 +10,16 @@ const report={allocation_review_count:2,unallocated_received_total:100,overalloc
 async function setup(page:Page,firstFailure=false){
  const origin=new URL(process.env.VITE_SUPABASE_URL||'https://supabase-not-configured.invalid').origin;
  const writes:string[]=[];let reviews=0;
+ // Background recovery is legitimate. Keep this synthetic failure active
+ // until an actual user click so a successful poll cannot remove the retry
+ // button while Playwright is interacting with it.
+ if(firstFailure)await page.addInitScript(()=>{
+  const state=window as Window & {manualReviewRequested?:boolean};
+  state.manualReviewRequested=false;
+  document.addEventListener('click',event=>{
+   if(event.target instanceof Element && event.target.closest('button')?.textContent?.trim()==='Conferir novamente')state.manualReviewRequested=true;
+  },true);
+ });
  await page.routeWebSocket('**',socket=>socket.close());
  const handle=async(route:import('@playwright/test').Route)=>{
   const request=route.request(),path=new URL(request.url()).pathname.replace(/^\/api\/supabase/,'');let data:unknown=[];
@@ -23,7 +33,9 @@ async function setup(page:Page,firstFailure=false){
   else if(path==='/rest/v1/platform_settings')data={maintenance_mode:false,allow_new_registrations:true};
   else if(path==='/rest/v1/rpc/payment_allocation_review'){
    reviews++;expect(request.postDataJSON()||{}).toEqual({});
-   if(firstFailure&&reviews===1){await route.fulfill({status:503,json:{message:'Unavailable'}});return;}
+   if(firstFailure&&!await page.evaluate(()=>(window as Window & {manualReviewRequested?:boolean}).manualReviewRequested)){
+    await route.fulfill({status:503,json:{message:'Unavailable'}});return;
+   }
    data=report;
   }else if(['POST','PATCH','DELETE'].includes(request.method())&&/pay_installment|transactions|profits|contract_installments/.test(path))writes.push(path);
   await route.fulfill({status:200,json:data,headers:{'content-range':'*/0'}});
@@ -49,5 +61,5 @@ test('falha de conferência não mascara a pendência e permite repetir a leitur
  await expect(page.getByText('Não foi possível conferir a classificação dos recebimentos.')).toBeVisible();
  await page.getByRole('button',{name:'Conferir novamente'}).click();
  await expect(page.getByText('2 parcela(s) com recebimentos para revisar')).toBeVisible();
- expect(state.reviews).toBe(2);expect(state.writes).toEqual([]);
+ expect(state.reviews).toBeGreaterThanOrEqual(2);expect(state.writes).toEqual([]);
 });
