@@ -52,7 +52,7 @@ export default defineConfig({
     },
     {
       name: "webkit-login",
-      testMatch: /(?:login-recovery|manual-cash|financial-totals|boot-resilience)\.spec\.ts/,
+      testMatch: /(?:login-recovery|manual-cash|financial-totals|boot-resilience|payment-classification)\.spec\.ts/,
       use: { ...devices["iPhone 13"] },
     },
   ],

@@ -2738,6 +2738,18 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: Json
       }
+      payment_classification_detail: {
+        Args: { _installment_id: string }
+        Returns: Json
+      }
+      reclassify_payment_receipt: {
+        Args: { _request_id: string; _expected_owner: string; _transaction_id: string; _expected_version: string; _principal: number; _interest: number; _fees: number; _reason: string; _evidence: string; _confirmed: boolean }
+        Returns: Json
+      }
+      cancel_payment_classification: {
+        Args: { _request_id: string; _expected_owner: string }
+        Returns: Json
+      }
       admin_set_user_admin: {
         Args: { _make_admin: boolean; _target_user_id: string }
         Returns: undefined

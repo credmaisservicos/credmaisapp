@@ -56,6 +56,7 @@ try {
   await run(playwright, ["test", "--output=test-results/responsive", "--workers=2", "--max-failures=1", "e2e/authenticated-shell-responsive.spec.ts", "e2e/admin-shell-responsive.spec.ts",
     "--grep-invert", "(ultracompacto|celular compacto|mobile estreito|tablet|desktop amplo):"]);
   await run(playwright, ["test", "--output=test-results/upload-isolation", "--workers=1", "--retries=0", "e2e/upload-isolation.spec.ts"]);
+  await run(playwright, ["test", "--output=test-results/payment-classification", "--workers=2", "--retries=0", "e2e/payment-classification.spec.ts"]);
 } finally {
   server.kill();
 }

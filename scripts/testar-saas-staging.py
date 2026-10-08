@@ -256,6 +256,65 @@ def main():
             check(label + ': owner reverses collector receipt', status == 200)
             status, _ = http(rest, '/rpc/pay_installment', own['jwt'], 'POST', {'_installment_id': own['installments'][0], '_paid_total': 20, '_mark_paid': False, '_source_key': 'synthetic-older-partial-' + label})
             check(label + ': owner partial on older installment accepted', status == 200)
+            # Human classification uses the actual payment ledger and real
+            # PostgREST authentication. All documents/accounts are synthetic.
+            inst=own['installments'][0]
+            detail_args={'_installment_id':inst}
+            status, detail=http(rest,'/rpc/payment_classification_detail',own['jwt'],'POST',detail_args)
+            check(label + ': authenticated receipt classification detail',status==200 and detail['can_reconcile'] and len(detail['transactions'])==1)
+            tx=detail['transactions'][0]
+            snapshot="SELECT md5(jsonb_build_object('installment',(SELECT to_jsonb(i)-'paid_principal'-'paid_interest'-'paid_fees' FROM contract_installments i WHERE id='"+inst+"'),'transactions',(SELECT jsonb_agg(to_jsonb(t)-'principal_amount'-'interest_amount'-'fee_amount'-'unallocated_amount' ORDER BY id) FROM transactions t WHERE installment_id='"+inst+"'),'contract',(SELECT to_jsonb(c) FROM contracts c WHERE id='"+own['contract']+"'),'outbox',(SELECT jsonb_agg(to_jsonb(w) ORDER BY id) FROM whatsapp_scheduled_messages w))::text);"
+            original=sql(snapshot)
+            classify={'_request_id':str(uuid.uuid4()),'_expected_owner':own['id'],'_transaction_id':tx['id'],'_expected_version':detail['version'],
+                      '_principal':15,'_interest':4,'_fees':1,'_reason':'Conferência humana fictícia STAGING-001','_evidence':'Extrato fictício STAGING-001','_confirmed':True}
+            status, _=http(rest,'/rpc/payment_classification_detail',other['jwt'],'POST',detail_args)
+            check(label + ': foreign classification detail denied',status>=400)
+            status, _=http(rest,'/rpc/reclassify_payment_receipt',anon,'POST',classify)
+            check(label + ': anonymous classification denied',status>=400)
+            status, _=http(rest,'/rpc/reclassify_payment_receipt',other['jwt'],'POST',classify)
+            check(label + ': foreign classification denied',status>=400)
+            status, first=http(rest,'/rpc/reclassify_payment_receipt',own['jwt'],'POST',classify)
+            check(label + ': owner receipt classified with evidence',status==200 and first['replayed'] is False)
+            check(label + ': classification preserves cash dates contract state and outbox',sql(snapshot)==original)
+            check(label + ': classified profit derives from real receipt',sql(f"SELECT amount FROM profits WHERE installment_id='{inst}' AND user_id='{own['id']}'")=='5')
+            status, again=http(rest,'/rpc/reclassify_payment_receipt',own['jwt'],'POST',classify)
+            check(label + ': lost classification response replays safely',status==200 and again['replayed'] is True)
+            status, _=http(rest,'/rpc/reclassify_payment_receipt',own['jwt'],'POST',{**classify,'_request_id':str(uuid.uuid4())})
+            check(label + ': stale classification version rejected',status>=400)
+            status, history=http(rest,'/payment_classification_history?request_id=eq.'+classify['_request_id'],own['jwt'])
+            check(label + ': durable authored evidence and snapshots',status==200 and len(history)==1 and history[0]['user_id']==own['id'] and history[0]['evidence']==classify['_evidence'] and history[0]['before_state']!=history[0]['after_state'])
+            status, history=http(rest,'/payment_classification_history?request_id=eq.'+classify['_request_id'],other['jwt'])
+            check(label + ': foreign company cannot read classification journal',status==200 and history==[])
+            status, _=http(rest,'/payment_classification_history?request_id=eq.'+classify['_request_id'],own['jwt'],'PATCH',{'reason':'Alteração indevida do histórico'})
+            check(label + ': owner cannot overwrite classification journal',status>=400)
+            cancel_args={'_request_id':classify['_request_id'],'_expected_owner':own['id']}
+            status, settled=http(rest,'/rpc/cancel_payment_classification',own['jwt'],'POST',cancel_args)
+            check(label + ': ending lost response confirms already applied classification',status==200 and settled['cancelled'] is False)
+            cancelled={**classify,'_request_id':str(uuid.uuid4())}
+            status, result=http(rest,'/rpc/cancel_payment_classification',own['jwt'],'POST',{'_request_id':cancelled['_request_id'],'_expected_owner':own['id']})
+            check(label + ': pending classification cancellation confirmed',status==200 and result['cancelled'] is True)
+            status, _=http(rest,'/rpc/reclassify_payment_receipt',own['jwt'],'POST',cancelled)
+            check(label + ': cancelled classification late arrival blocked',status>=400)
+            # Two real HTTP/DB sessions, never a mocked concurrency result.
+            _, current=http(rest,'/rpc/payment_classification_detail',own['jwt'],'POST',detail_args)
+            concurrent_args={**classify,'_expected_version':current['version'],'_principal':14,'_interest':5}
+            barrier=threading.Barrier(2)
+            def concurrent_classification(index):
+                barrier.wait(timeout=5)
+                return http(rest,'/rpc/reclassify_payment_receipt',own['jwt'],'POST',{**concurrent_args,'_request_id':str(uuid.uuid4())})
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+                results=list(pool.map(concurrent_classification,range(2)))
+            check(label + ': concurrent different classification intents apply once',sorted(r[0] for r in results)==[200,400])
+            _, current=http(rest,'/rpc/payment_classification_detail',own['jwt'],'POST',detail_args)
+            concurrent_args={**classify,'_request_id':str(uuid.uuid4()),'_expected_version':current['version'],'_principal':13,'_interest':6}
+            barrier=threading.Barrier(2)
+            def concurrent_replay(index):
+                barrier.wait(timeout=5)
+                return http(rest,'/rpc/reclassify_payment_receipt',own['jwt'],'POST',concurrent_args)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+                results=list(pool.map(concurrent_replay,range(2)))
+            check(label + ': concurrent identical classification has one replay',all(r[0]==200 for r in results) and sorted(r[1]['replayed'] for r in results)==[False,True])
+            check(label + ': classification concurrency preserves cash and produces three audits',sql(snapshot)==original and sql(f"SELECT count(*) FROM payment_classification_history WHERE installment_id='{inst}' AND user_id='{own['id']}'")=='3')
             path = own['id'] + '/fixture.txt'
             status, _ = http(storage, '/object/uploads/' + path, own['jwt'], 'POST', raw=b'synthetic private file', headers={'Content-Type': 'text/plain'})
             check(label + ': own authenticated upload', status == 200)

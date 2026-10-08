@@ -48,6 +48,20 @@ it('não expõe uma resposta atrasada da conta anterior',async()=>{
 it('não consulta recebimentos sem uma conta autenticada',()=>{
  api.owner='';open();expect(api.rpc).not.toHaveBeenCalled();
 });
+it('fecha a conferência e descarta resposta atrasada ao trocar de empresa',async()=>{
+ const installment='33333333-3333-4333-8333-333333333333';
+ let finish!:(value:unknown)=>void;
+ api.owner='11111111-1111-4111-8111-111111111111';
+ api.rpc.mockImplementation((name:string)=>name==='payment_classification_detail'?new Promise(resolve=>{finish=resolve;}):Promise.resolve({data:api.owner.startsWith('111')?{...pending,installments:[{...pending.installments[0],id:installment}]}:clear,error:null}));
+ const view=open();fireEvent.click(await screen.findByRole('button',{name:'Conferir recebimentos'}));
+ expect(await screen.findByRole('dialog')).toBeVisible();
+ await waitFor(()=>expect(finish).toBeTypeOf('function'));
+ api.owner='22222222-2222-4222-8222-222222222222';view.rerender(<PaymentAllocationNotice/>);
+ await act(async()=>finish({data:{version:'c'.repeat(32),can_reconcile:true,installment:{id:installment,paid_amount:100},transactions:[],history:[]},error:null}));
+ expect(screen.queryByRole('dialog')).toBeNull();
+ expect(screen.queryByText(/recebimentos para revisar/)).toBeNull();
+ expect(api.rpc.mock.calls.some(call=>call[0]==='reclassify_payment_receipt')).toBe(false);
+});
 it('o aviso de pagamento usa somente a indicação confirmada pelo servidor',()=>{
  expect(paymentReviewDescription({allocation_pending_review:true})).toContain('recebimento foi registrado');
  for(const value of [null,{},'pending',{allocation_pending_review:'true'},{allocation_pending_review:false}])expect(paymentReviewDescription(value)).toBeUndefined();
