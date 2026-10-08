@@ -10,6 +10,10 @@ Os catálogos dos domínios principal e www são idênticos ao build local aprov
 
 Os testes reproduziram cinco falhas antes das correções. Após os ajustes, passaram os 12 testes direcionados em três arquivos, incluindo os formulários React reais de venda à vista, venda parcelada e locação e a busca por nome, telefone, CPF e WhatsApp. Typecheck, lint e build de produção passaram.
 
+A CI completa [37819710406](https://github.com/credmaisservicos/credmaisapp/actions/runs/37819710406) também terminou aprovada: verificações técnicas, testes/build, interface e homologação real isolada de duas empresas. Sondagens opcionais foram puladas e não contam como aprovadas.
+
+A rodada dirigida do agente ocorreu de 17:52:27Z a 18:02:24Z, em dez minutos: **16 cenários finais, dez aprovados, três falhas de produto correspondentes a dois defeitos novos, dois bloqueados e um não executado**. Tentativas de automação e seus diagnósticos foram preservados separadamente; não somá-los aos cenários finais. Isso mantém os dois defeitos-alvo corrigidos e explicita as pendências encontradas depois.
+
 ## Alterações
 
 | Defeito | Correção | Evidência de uso real |
