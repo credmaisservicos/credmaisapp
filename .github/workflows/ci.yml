@@ -138,6 +138,9 @@ jobs:
     container:
       image: mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e
       options: --ipc=host
+    env:
+      # GitHub's /github/home has a writable ancestor rejected by SWC's loader.
+      SWC_NATIVE_BINDING_CACHE: /root/.cache/credmais-ci-swc
 
     steps:
       - uses: actions/checkout@v5
@@ -147,6 +150,8 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Preparar cache privado do compilador
+        run: install -d -m 700 /root/.cache /root/.cache/credmais-ci-swc
       - run: npm ci
       - name: Conferir versão e navegadores da imagem
         run: |
