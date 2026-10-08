@@ -1,5 +1,7 @@
 # QA independente do uso real — 08/10/2026
 
+Atualização posterior: **QA-01 e QA-02 corrigidos e publicados** na versão `7ab1b0b`. A [fase dirigida de correção e teste](correcoes-qa-2026-10-08.md) registra as novas jornadas e dois defeitos adicionais de recebimento/caixa comercial. Os resultados históricos abaixo correspondem à versão original auditada e permanecem preservados.
+
 Roteiro reutilizável do agente: [QA de uso real](agentes/qa-real.md). Antes e após a execução, o responsável confirmou que o catálogo publicado permaneceu igual ao build validado e não houve alteração do código do aplicativo durante a rodada.
 
 Foram registrados **66 cenários finais: 40 aprovados, quatro falhas de produto (dois defeitos), nove bloqueados e 13 não executados nesta rodada**. Esta é a primeira rodada independente de jornadas; casos bloqueados e não executados não representam aprovação.
