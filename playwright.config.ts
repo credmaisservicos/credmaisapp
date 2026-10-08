@@ -31,6 +31,8 @@ export default defineConfig({
   workers: process.env.CI ? 2 : undefined,
   reporter: process.env.CI ? "line" : "list",
   timeout: 30_000,
+  // Bound a stuck browser while leaving CI time to upload failed-attempt traces.
+  globalTimeout: process.env.CI ? 8 * 60_000 : undefined,
   expect: { timeout: 10_000 },
 
   use: {
@@ -44,7 +46,9 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      // The separate headless shell crashed with SIGSEGV while creating CI
+      // contexts. Exercise the full Chromium binary in its supported headless mode.
+      use: { ...devices["Desktop Chrome"], channel: "chromium" },
     },
     {
       name: "webkit-login",

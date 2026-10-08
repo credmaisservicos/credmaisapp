@@ -2,6 +2,7 @@ import importlib.util
 import json
 from pathlib import Path
 import tempfile
+import subprocess
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -11,6 +12,45 @@ spec.loader.exec_module(release)
 
 
 class ReleaseTests(unittest.TestCase):
+    def test_existing_compiler_image_is_reused(self):
+        with patch.object(release.subprocess, 'run', return_value=MagicMock(returncode=0)) as run:
+            release.ensure_builder_image()
+        self.assertEqual(run.call_count, 1)
+        self.assertEqual(run.call_args.args[0], ['docker', 'image', 'inspect', release.BUILDER_IMAGE])
+
+    def test_missing_compiler_is_rebuilt_without_private_build_context(self):
+        with tempfile.TemporaryDirectory() as folder:
+            base = Path(folder)
+            (base / 'Dockerfile').write_text('FROM synthetic-test')
+            (base / 'setup-sdk.py').write_text('# synthetic')
+            (base / 'licenses').mkdir()
+            (base / 'licenses' / 'android-sdk-license').write_text('synthetic')
+            (base / 'config.json').write_text('private configuration excluded')
+            (base / 'public').mkdir()
+            (base / 'public' / 'CredMais.apk').write_bytes(b'old APK remains')
+            def run(command, **kwargs):
+                if command[1:3] == ['image', 'inspect']:
+                    return MagicMock(returncode=1)
+                context = Path(command[-1])
+                self.assertEqual({p.name for p in context.iterdir()}, {'Dockerfile', 'setup-sdk.py', 'licenses'})
+                self.assertTrue(kwargs['check'])
+                return MagicMock(returncode=0)
+            with patch.object(release, 'BASE', base), patch.object(release.subprocess, 'run', side_effect=run) as calls:
+                release.ensure_builder_image()
+            self.assertEqual(calls.call_count, 2)
+            self.assertEqual((base / 'public' / 'CredMais.apk').read_bytes(), b'old APK remains')
+
+    def test_compiler_failure_does_not_proceed_to_package_or_publish(self):
+        with tempfile.TemporaryDirectory() as folder:
+            base = Path(folder)
+            for name in ('Dockerfile', 'setup-sdk.py'):
+                (base / name).write_text('synthetic')
+            (base / 'licenses').mkdir()
+            failure = subprocess.CalledProcessError(1, ['docker', 'build'])
+            with patch.object(release, 'BASE', base), patch.object(release.subprocess, 'run', side_effect=[MagicMock(returncode=1), failure]) as run, self.assertRaises(subprocess.CalledProcessError):
+                release.ensure_builder_image()
+            self.assertEqual(run.call_count, 2)
+
     def test_asset_requests_bypass_cached_html_fallback(self):
         def cached_response(request, timeout):
             response = MagicMock()

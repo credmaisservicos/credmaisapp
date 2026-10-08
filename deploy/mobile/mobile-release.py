@@ -8,6 +8,7 @@ from pathlib import Path, PurePosixPath
 import re
 import shutil
 import subprocess
+import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -19,6 +20,24 @@ PROJECT = BASE / 'project'
 SITE = 'https://credmaisapp.com.br'
 DOWNLOAD = 'https://credmaisapp-downloads.fcoipz.easypanel.host'
 SIGNING = Path('/root/.credmais/android-signing')
+BUILDER_IMAGE = 'credmais-mobile-builder:1'
+
+
+def ensure_builder_image():
+    """Recover after host cleanup removes the unused compiler image."""
+    found = subprocess.run(['docker', 'image', 'inspect', BUILDER_IMAGE], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if found.returncode == 0:
+        return
+    # Never send releases, cached builds, configuration or signing material as
+    # Docker build context. Only the checked-in compiler recipe is needed.
+    with tempfile.TemporaryDirectory(prefix='credmais-builder-') as folder:
+        context = Path(folder)
+        for name in ('Dockerfile', 'setup-sdk.py'):
+            shutil.copyfile(BASE / name, context / name)
+        shutil.copytree(BASE / 'licenses', context / 'licenses')
+        with (BASE / 'builder-image.log').open('w') as log:
+            subprocess.run(['docker', 'build', '-t', BUILDER_IMAGE, str(context)], check=True, timeout=600, stdout=log, stderr=subprocess.STDOUT)
+    print('Compilador Android recriado; assinatura preservada.', flush=True)
 
 
 def digest(data):
@@ -190,6 +209,7 @@ def main():
         (dist / 'web-release.json').write_bytes(web['catalog'])
     if snapshot(config)['fingerprint'] != web['fingerprint']:
         raise ValueError('Site mudou durante o empacotamento; tentará novamente')
+    ensure_builder_image()
     command = ['docker', 'run', '--rm', '--name', 'credmais-mobile-builder', '--cpus=1', '--memory=2g', '--memory-swap=2g',
         '--env-file', str(SIGNING / 'signing.env'),
         '-e', 'CREDMAIS_ANDROID_KEYSTORE=/signing/release.jks',
@@ -197,7 +217,7 @@ def main():
         '-e', 'CREDMAIS_ANDROID_VERSION_NAME=1.0.' + str(version - 1),
         '-v', str(PROJECT) + ':/build', '-v', str(SIGNING / 'CredMais-release.jks') + ':/signing/release.jks:ro',
         '-v', str(BASE / 'gradle-cache') + ':/root/.gradle',
-        'credmais-mobile-builder:1', 'bash', '/build/build-release.sh']
+        BUILDER_IMAGE, 'bash', '/build/build-release.sh']
     log_path = BASE / 'last-build.log'
     with log_path.open('w') as log:
         subprocess.run(command, check=True, timeout=1500, stdout=log, stderr=subprocess.STDOUT)

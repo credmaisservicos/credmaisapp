@@ -98,7 +98,7 @@ jobs:
   login:
     name: Login, rotas e interface (E2E local isolado)
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v5
@@ -114,6 +114,7 @@ jobs:
         run: sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list.d/ubuntu.sources
       - run: npx playwright install --with-deps chromium webkit
       - name: Testar login e interface com dados simulados
+        timeout-minutes: 12
         # WebKit exercises the iPhone fetch errors and recovery too.
         run: npm run test:e2e:local
 
