@@ -53,12 +53,14 @@ async function walletForm(page:Page,amount='12,34'){
  await page.goto('/carteira');await page.getByRole('button',{name:'Aporte',exact:true}).click();await page.getByLabel('Descrição',{exact:true}).fill('Aporte fictício');await page.getByLabel('Valor (R$)',{exact:true}).fill(amount);
 }
 const pending=(page:Page)=>page.getByRole('region',{name:'Tentativa financeira pendente'});
-for(const width of [320,1366])test(`resposta perdida do aporte é retomada após recarregar sem duplicar em ${width}px`,async({context,page},testInfo)=>{
+for(const width of [320,1366])test(`resposta perdida do aporte é retomada após recarregar sem duplicar em ${width}px`,async({context,page})=>{
  const state=await setup(context);await page.setViewportSize({width,height:900});await login(page);await walletForm(page);
  await page.getByRole('button',{name:'Confirmar Aporte',exact:true}).click();await expect(page.getByText('Não foi possível confirmar o lançamento',{exact:true})).toBeVisible();
  expect(state.cash).toHaveLength(1);const first=state.requests[0];await page.reload();await expect(pending(page)).toContainText('Aporte fictício');
  expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
- await page.screenshot({path:testInfo.outputPath('pending-cash.png'),fullPage:true});state.mode='ok';await pending(page).getByRole('button',{name:'Verificar e concluir'}).click();
+ // The failed-attempt trace/screenshot is retained by Playwright. A full-page
+ // capture here consumed the test budget before the actual recovery click.
+ state.mode='ok';await pending(page).getByRole('button',{name:'Verificar e concluir'}).click();
  try{await expect(pending(page)).toHaveCount(0);}catch(error){throw Error(`${(error as Error).message}\nSynthetic cash diagnostics: ${JSON.stringify({mode:state.mode,requests:state.requests.length,cash:state.cash.length,errors:state.errors,pending:await pending(page).textContent(),notices:await page.locator('[role="status"]').allTextContents()})}`);}
  expect(state.cash).toHaveLength(1);expect(state.requests.at(-1)).toEqual(first);expect(state.errors).toEqual([]);
 });
