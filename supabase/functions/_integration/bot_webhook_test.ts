@@ -478,7 +478,12 @@ for(const c of [
  {name:'only unpaid fees remain',days:0,rate:0.1,penalty:0,type:'percentage',paid:110,stored:20,cap:0,expected:10},
 ])Deno.test(`payment reply and encoded PIX agree: ${c.name}`,async()=>{
  reset();installment.paid_amount=c.paid;installment.late_fee=c.stored;
- installment.due_date=new Date(Date.now()-c.days*86400000).toISOString().slice(0,10);
+ // Build the fixture from the Brazilian civil day, including the UTC evening
+ // rollover. Calendar subtraction also avoids 23/25-hour daylight-saving days.
+ const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+ const part=(kind:string)=>parts.find(p=>p.type===kind)!.value;
+ const due=new Date(`${part('year')}-${part('month')}-${part('day')}T12:00:00Z`);
+ due.setUTCDate(due.getUTCDate()-c.days);installment.due_date=due.toISOString().slice(0,10);
  installment.contracts={status:'active',daily_interest_percent:c.rate,daily_penalty_value:c.penalty,daily_penalty_type:c.type,max_interest_cap_percent:c.cap};
  const {body}=await turn('PIX parcela 1','financial-case');assertEquals(body.status,'installment_selected');
  assertEquals(paymentQuote().pending_payment_amount,c.expected);assertEquals(pixAmount(),c.expected);
