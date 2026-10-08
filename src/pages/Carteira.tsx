@@ -33,6 +33,8 @@ import { useConfirm } from "@/components/ConfirmProvider";
 import { walletCashReportSchema } from "@/lib/walletCashReport";
 import { parseFinancialAmount } from "@/lib/financialEntry";
 import {PaymentAllocationNotice} from '@/components/PaymentAllocationNotice';
+import {useManualCashOperation} from '@/hooks/useManualCashOperation';
+import {PendingManualCash} from '@/components/PendingManualCash';
 
 type PeriodKey = "all" | "7d" | "30d" | "90d";
 const safeNumber = (value: unknown) => {
@@ -51,7 +53,8 @@ const Carteira = () => {
   const [dialogType, setDialogType] = useState<"in" | "out" | "withdraw">("in");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
-  const [saving, setSaving] = useState(false);
+  const manual=useManualCashOperation(user?.id,()=>{setAmount('');setDescription('');setDialogOpen(false);});
+  const saving=manual.busy;
 
   const [searchTerm, setSearchTerm] = useState("");
   const [historyPage, setHistoryPage] = useState(0);
@@ -76,54 +79,25 @@ const Carteira = () => {
       }finally{clearTimeout(timer);signal.removeEventListener('abort',cancel);}
     },
   });
-  const invalidateWallet=()=>{
-    void qc.invalidateQueries({queryKey:["carteira-cash-report",user?.id]});
-    void qc.invalidateQueries({queryKey:["payment-allocation-review",user?.id]});
-  };
   const loading=cashQuery.isPending;
   const loadError=cashQuery.error;
 
   const handleSave = async () => {
     if (!user || !amount || !description || saving) return;
-    setSaving(true);
     const now = new Date().toISOString();
     const val = parseFinancialAmount(amount);
     if (val === null) {
       toast({ title: "Valor inválido", variant: "destructive" });
-      setSaving(false);
       return;
     }
-
-    if (dialogType === "in") {
-      const { error } = await supabase.from("transactions").insert({
-        user_id: user.id, amount: val, description, date: now,
-        type: "capital_injection", category: "Aporte de capital",
-      });
-      if (error) { toast({ title: "Erro ao adicionar aporte", variant: "destructive" }); setSaving(false); return; }
-    } else if (dialogType === "withdraw") {
-      const { error } = await supabase.from("transactions").insert({
-        user_id: user.id, amount: val, description, date: now,
-        type: "capital_withdrawal", category: "Retirada de capital",
-      });
-      if (error) { toast({ title: "Erro ao retirar capital", variant: "destructive" }); setSaving(false); return; }
-    } else {
-      const { error } = await supabase.from("expenses").insert({ user_id: user.id, amount: val, description, date: now, category: "Retirada manual" });
-      if (error) { toast({ title: "Erro ao registrar saída", variant: "destructive" }); setSaving(false); return; }
-    }
-
-    toast({ title: dialogType === "in" ? "✓ Aporte adicionado!" : dialogType === "withdraw" ? "✓ Capital retirado!" : "✓ Saída registrada!" });
-    setAmount(""); setDescription(""); setDialogOpen(false); setSaving(false);
-    invalidateWallet();
-    qc.invalidateQueries({ queryKey: ["dashboard-data"] });
+    await manual.run({operation:dialogType==='in'?'capital_injection':dialogType==='withdraw'?'capital_withdrawal':'expense_create',
+      amount:val,description,date:now,category:dialogType==='out'?'Retirada manual':null});
   };
 
   const handleDeleteCapital = async (id: string) => {
     if (!(await confirm("Remover este lançamento de capital?"))) return;
     if (!user) return;
-    const { error } = await supabase.from("transactions").delete().eq("id", id).eq("user_id", user.id);
-    if (error) { toast({ title: "Erro ao remover", variant: "destructive" }); return; }
-    toast({ title: "✓ Lançamento removido" });
-    invalidateWallet();
+    await manual.run({operation:'capital_delete',entryId:id});
   };
 
   const summary=cashQuery.data;
@@ -158,9 +132,12 @@ const Carteira = () => {
     return acc;
   }, {} as Record<string, typeof timeline>),[timeline]);
 
+  const pendingNotice=<PendingManualCash pending={manual.pending} busy={manual.busy} storageError={manual.storageError} onRetry={()=>void manual.run()} onCancel={()=>void manual.cancel()} />;
+
   if (loading) {
     return (
       <div className="space-y-6">
+        {pendingNotice}
         <Skeleton className="h-32 rounded-3xl" />
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-32 rounded-2xl" />)}
@@ -173,6 +150,7 @@ const Carteira = () => {
   if (loadError) {
     return (
       <div className="rounded-2xl border border-destructive/30 bg-destructive/5 px-6 py-14 text-center">
+        {pendingNotice}
         <AlertTriangle className="mx-auto h-10 w-10 text-destructive" />
         <h2 className="mt-3 font-semibold text-foreground">Não foi possível carregar a carteira</h2>
         <p className="mt-1 text-sm text-muted-foreground">Confira sua conexão e tente novamente.</p>
@@ -215,6 +193,7 @@ const Carteira = () => {
 
   return (
     <div className="space-y-5 md:space-y-6">
+      {pendingNotice}
       {/* HERO — Saldo destacado */}
       <div className="rounded-2xl border border-white/8 bg-card/65 p-5 shadow-[0_18px_50px_-36px_rgba(0,0,0,.9)] animate-fade-in md:p-6">
         <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
@@ -241,18 +220,21 @@ const Carteira = () => {
 
           <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
             <button
+              disabled={!manual.ready || !!manual.pending || saving}
               onClick={() => { setDialogType("in"); setAmount(""); setDescription(""); setDialogOpen(true); }}
               className="flex items-center justify-center gap-1.5 rounded-xl border border-success/25 bg-success/10 px-4 py-2.5 text-sm font-semibold text-success transition-colors hover:bg-success/20"
             >
               <Plus size={16} /> Aporte
             </button>
             <button
+              disabled={!manual.ready || !!manual.pending || saving}
               onClick={() => { setDialogType("withdraw"); setAmount(""); setDescription(""); setDialogOpen(true); }}
               className="flex items-center justify-center gap-1.5 rounded-xl border border-warning/25 bg-warning/10 px-4 py-2.5 text-sm font-semibold text-warning transition-colors hover:bg-warning/20"
             >
               <Minus size={16} /> Retirar Capital
             </button>
             <button
+              disabled={!manual.ready || !!manual.pending || saving}
               onClick={() => { setDialogType("out"); setAmount(""); setDescription(""); setDialogOpen(true); }}
               className="col-span-2 flex items-center justify-center gap-1.5 rounded-xl border border-destructive/25 bg-destructive/10 px-4 py-2.5 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/20 sm:col-span-1"
             >
@@ -304,11 +286,12 @@ const Carteira = () => {
                     <ArrowUpRight size={20} /> Adicionar Aporte de Capital
                   </DialogTitle>
                 </DialogHeader>
+                {pendingNotice}
                 <div className="space-y-4 pt-2">
                   <p className="text-xs text-muted-foreground -mt-1">Dinheiro disponível para emprestar. Não conta como lucro.</p>
-                  <div><Label>Descrição</Label><Input placeholder="Ex: Depósito inicial, Aporte sócio..." value={description} onChange={(e) => setDescription(e.target.value)} /></div>
-                  <div><Label>Valor (R$)</Label><Input type="text" inputMode="decimal" placeholder="0,00" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
-                  <button disabled={saving || !amount || !description} onClick={handleSave} className="w-full py-2.5 rounded-xl bg-success text-success-foreground font-semibold hover:opacity-90 transition-colors disabled:opacity-50">
+                  <div><Label htmlFor="cash-description">Descrição</Label><Input id="cash-description" maxLength={500} disabled={saving || !!manual.pending} placeholder="Ex: Depósito inicial, Aporte sócio..." value={description} onChange={(e) => setDescription(e.target.value)} /></div>
+                  <div><Label htmlFor="cash-amount">Valor (R$)</Label><Input id="cash-amount" disabled={saving || !!manual.pending} type="text" inputMode="decimal" placeholder="0,00" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
+                  <button disabled={!manual.ready || !!manual.pending || saving || !amount || !description.trim()} onClick={handleSave} className="w-full py-2.5 rounded-xl bg-success text-success-foreground font-semibold hover:opacity-90 transition-colors disabled:opacity-50">
                     {saving ? "Salvando..." : "Confirmar Aporte"}
                   </button>
                 </div>
@@ -321,11 +304,12 @@ const Carteira = () => {
                     <ArrowDownRight size={20} /> Retirar Capital
                   </DialogTitle>
                 </DialogHeader>
+                {pendingNotice}
                 <div className="space-y-4 pt-2">
                   <p className="text-xs text-muted-foreground -mt-1">Reduz o capital disponível para emprestar. Não é gasto/despesa.</p>
-                  <div><Label>Descrição</Label><Input placeholder="Ex: Devolução sócio, Saque pessoal..." value={description} onChange={(e) => setDescription(e.target.value)} /></div>
-                  <div><Label>Valor (R$)</Label><Input type="text" inputMode="decimal" placeholder="0,00" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
-                  <button disabled={saving || !amount || !description} onClick={handleSave} className="w-full py-2.5 rounded-xl bg-warning text-warning-foreground font-semibold hover:opacity-90 transition-colors disabled:opacity-50">
+                  <div><Label htmlFor="cash-description">Descrição</Label><Input id="cash-description" maxLength={500} disabled={saving || !!manual.pending} placeholder="Ex: Devolução sócio, Saque pessoal..." value={description} onChange={(e) => setDescription(e.target.value)} /></div>
+                  <div><Label htmlFor="cash-amount">Valor (R$)</Label><Input id="cash-amount" disabled={saving || !!manual.pending} type="text" inputMode="decimal" placeholder="0,00" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
+                  <button disabled={!manual.ready || !!manual.pending || saving || !amount || !description.trim()} onClick={handleSave} className="w-full py-2.5 rounded-xl bg-warning text-warning-foreground font-semibold hover:opacity-90 transition-colors disabled:opacity-50">
                     {saving ? "Salvando..." : "Confirmar Retirada"}
                   </button>
                 </div>
@@ -338,10 +322,11 @@ const Carteira = () => {
                     <ArrowDownRight size={20} /> Registrar Saída
                   </DialogTitle>
                 </DialogHeader>
+                {pendingNotice}
                 <div className="space-y-4 pt-2">
-                  <div><Label>Descrição</Label><Input placeholder="Ex: Saque, Pagamento..." value={description} onChange={(e) => setDescription(e.target.value)} /></div>
-                  <div><Label>Valor (R$)</Label><Input type="text" inputMode="decimal" placeholder="0,00" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
-                  <button disabled={saving || !amount || !description} onClick={handleSave} className="w-full py-2.5 rounded-xl bg-destructive text-destructive-foreground font-semibold hover:opacity-90 transition-colors disabled:opacity-50">
+                  <div><Label htmlFor="cash-description">Descrição</Label><Input id="cash-description" maxLength={500} disabled={saving || !!manual.pending} placeholder="Ex: Saque, Pagamento..." value={description} onChange={(e) => setDescription(e.target.value)} /></div>
+                  <div><Label htmlFor="cash-amount">Valor (R$)</Label><Input id="cash-amount" disabled={saving || !!manual.pending} type="text" inputMode="decimal" placeholder="0,00" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
+                  <button disabled={!manual.ready || !!manual.pending || saving || !amount || !description.trim()} onClick={handleSave} className="w-full py-2.5 rounded-xl bg-destructive text-destructive-foreground font-semibold hover:opacity-90 transition-colors disabled:opacity-50">
                     {saving ? "Salvando..." : "Confirmar Saída"}
                   </button>
                 </div>
@@ -607,6 +592,7 @@ const Carteira = () => {
                         </span>
                         {t.removable && (
                           <button
+                            disabled={!manual.ready || saving || !!manual.pending}
                             onClick={() => t.remove_id && handleDeleteCapital(t.remove_id)}
                             className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive sm:opacity-0 sm:group-hover:opacity-100"
                             title="Remover"

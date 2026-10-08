@@ -105,6 +105,7 @@ aparelhos físicos, banco de staging e contas sandbox dos provedores.
 ## 12. Financeiro
 
 - [x] Carteira: relatório autenticado de caixa, recebimentos parciais pela data real, diferenças históricas sem data, composição explícita e histórico paginado. Testes e limites: `docs/caixa-carteira-2026-10-07.md`.
+- [x] Aportes, retiradas e despesas: repetição após falha de conexão preserva a mesma tentativa; cancelamento bloqueia chegadas atrasadas; edição concorrente de despesa exige revisão. Testes e limites: `docs/lancamentos-manuais-2026-10-08.md`.
 - [ ] TopBar exibe KPIs corretos (Capital, A Receber, Recebido, Lucro)
 - [ ] Filtro de período atualiza todos os KPIs
 - [ ] Despesas debitam de `expense_balance`

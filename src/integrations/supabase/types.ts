@@ -2716,6 +2716,14 @@ export type Database = {
       }
     }
     Functions: {
+      cancel_manual_cash_operation: {
+        Args: { _request_id: string; _expected_owner: string }
+        Returns: Json
+      }
+      apply_manual_cash_operation: {
+        Args: { _request_id: string; _expected_owner: string; _operation: string; _amount?: number | null; _description?: string | null; _date?: string | null; _category?: string | null; _entry_id?: string | null; _expected?: Json }
+        Returns: Json
+      }
       payment_allocation_review: {
         Args: Record<PropertyKey, never>
         Returns: Json

@@ -1,5 +1,9 @@
 # QA Report — CredMais
 
+## 2026-10-08 — Confirmação de lançamentos manuais
+
+Aportes, retiradas e despesas conservam a identidade da tentativa antes de enviar. Resposta perdida e recarga não criam outro lançamento; encerrar uma tentativa sem gravação bloqueia sua chegada tardia. Alterações concorrentes de despesas exigem revisão. PostgreSQL isolado verificou concorrência real, cancelamento e rollback; 808 testes unitários e 259 casos principais de navegador passaram. Tipos, lint, hooks e build passaram. Migração aplicada com backup, comparação idêntica das cinco tabelas financeiras e preservação das funções e permissões existentes. Frontend, APK e CI são verificados pela publicação. [Comportamento e limites](docs/lancamentos-manuais-2026-10-08.md). [Pendências da entrega completa](docs/pendencias-entrega-2026-10-08.md).
+
 ## 2026-10-07 — Recibos vinculados ao caixa e fila de envio
 
 Confirmações usam cada lançamento recebido, inclusive parcial, em vez do valor previsto ou do acumulado da parcela. O gatilho de status com URL antiga é aposentado; lançamento e agendamento ficam na mesma transação. Repetição mantém a mesma identidade, estorno cancela mensagens não iniciadas e aprovação humana não substitui a validação do caixa e do destinatário. A auditoria só registra envio após aceitação pelo provedor. Testes de pagamentos, estorno e pedidos concorrentes passaram no PostgreSQL isolado do servidor; HTTP simulado cobre telefone alterado, conta de outro dono, aprovação, resultado incerto e restrição do número de testes. Migração não envia nem agenda histórico e exige backup/conferência financeira para publicação. Conciliação legada, reprodução física do acesso e demais itens de entrega continuam pendentes. [Comportamento e limites](docs/recibos-pagamentos-2026-10-07.md).

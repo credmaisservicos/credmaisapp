@@ -17,11 +17,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { formatBR, parseLocalDate, todayLocalISO } from "@/lib/dateUtils";
 import { Button } from "@/components/ui/button";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useMultiTableRealtime } from "@/hooks/useRealtimeSubscription";
 import EmptyState from "@/components/EmptyState";
 import ErrorState from "@/components/feedback/ErrorState";
 import { parseFinancialAmount, parseFinancialDate } from "@/lib/financialEntry";
+import {useManualCashOperation} from '@/hooks/useManualCashOperation';
+import {PendingManualCash} from '@/components/PendingManualCash';
+import type {Database} from '@/integrations/supabase/types';
 
 const safeNumber = (value: unknown) => {
   const number = Number(value ?? 0);
@@ -48,14 +51,13 @@ const SUGGESTED_CATEGORIES = ["Operacional", "Pessoal", "Transporte", "Alimenta�
 const Gastos = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [desc, setDesc] = useState("");
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState("");
   const [date, setDate] = useState(todayLocalISO());
-  const [saving, setSaving] = useState(false);
+  const [originalExpense,setOriginalExpense]=useState<Database['public']['Tables']['expenses']['Row']|null>(null);
   const [search, setSearch] = useState("");
   const [catFilter, setCatFilter] = useState("all");
   const [timeFilter, setTimeFilter] = useState<"all" | "7d" | "30d" | "90d">("all");
@@ -77,13 +79,16 @@ const Gastos = () => {
 
   const resetForm = () => {
     setDesc(""); setAmount(""); setCategory(""); setDate(todayLocalISO());
-    setEditingId(null); setShowForm(false);
+    setEditingId(null); setOriginalExpense(null); setShowForm(false);
   };
+  const manual=useManualCashOperation(user?.id,()=>{resetForm();setDeleteConfirm(null);});
+  const saving=manual.busy;
 
   const handleEdit = (e: any) => {
+    if(!manual.ready||saving||manual.pending)return;
     setDesc(e.description); setAmount(String(e.amount));
     setCategory(e.category || ""); setDate(String(e.date || "").slice(0, 10));
-    setEditingId(e.id); setShowForm(true);
+    setEditingId(e.id); setOriginalExpense(e); setShowForm(true);
   };
 
   const handleSubmit = async () => {
@@ -98,40 +103,14 @@ const Gastos = () => {
       toast({ title: "Data inválida", description: "Informe uma data válida.", variant: "destructive" });
       return;
     }
-    setSaving(true);
-
-    const payload = {
-      description: desc.trim(), amount: parsedAmount,
-      date: parsedDate, category: category.trim() || null,
-    };
-    try {
-      const result = editingId
-        ? await supabase.from("expenses").update(payload).eq("id", editingId).eq("user_id", user.id)
-        : await supabase.from("expenses").insert({ ...payload, user_id: user.id });
-      if (result.error) {
-        toast({ ...friendlyError(result.error), variant: "destructive" });
-        return;
-      }
-      toast({ title: editingId ? "✓ Gasto atualizado!" : "✓ Gasto registrado!" });
-      resetForm();
-      qc.invalidateQueries({ queryKey: ["gastos-data"] });
-      qc.invalidateQueries({ queryKey: ["carteira-expenses"] });
-      qc.invalidateQueries({ queryKey: ["dashboard-data"] });
-    } finally {
-      setSaving(false);
-    }
+    await manual.run({operation:editingId?'expense_update':'expense_create',description:desc.trim(),amount:parsedAmount,
+      date:parsedDate,category:category.trim()||null,entryId:editingId,expected:editingId?originalExpense:null});
   };
 
   const handleDelete = async (id: string) => {
     if (!user) return;
-    // Confere o erro: antes avisava "Gasto excluído" mesmo quando a exclusão
-    // falhava, e o valor continuava descontando do saldo da carteira.
-    const { error } = await supabase.from("expenses").delete().eq("id", id).eq("user_id", user.id);
-    setDeleteConfirm(null);
-    if (error) { toast({ ...friendlyError(error, "Não foi possível excluir o gasto."), variant: "destructive" }); return; }
-    qc.invalidateQueries({ queryKey: ["gastos-data"] });
-    qc.invalidateQueries({ queryKey: ["carteira-expenses"] });
-    toast({ title: "Gasto excluído" });
+    const expense=expenses.find(item=>item.id===id);if(!expense)return;
+    await manual.run({operation:'expense_delete',entryId:id,expected:expense});
   };
 
   const handleExportCSV = () => {
@@ -216,6 +195,7 @@ const Gastos = () => {
 
   return (
     <div className="space-y-4 sm:space-y-5 animate-fade-in">
+      <PendingManualCash pending={manual.pending} busy={manual.busy} storageError={manual.storageError} onRetry={()=>void manual.run()} onCancel={()=>void manual.cancel()} />
       <div className="relative overflow-hidden rounded-2xl border border-border/60 bg-card/65 p-4 sm:p-6 shadow-[0_18px_50px_-40px_rgba(0,0,0,.9)] backdrop-blur-xl">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex min-w-0 items-start gap-3">
@@ -233,7 +213,7 @@ const Gastos = () => {
                 <Download size={14} /> CSV
               </button>
             )}
-            <button type="button" onClick={() => { resetForm(); setShowForm(true); }} className="btn-premium justify-center">
+            <button type="button" disabled={!manual.ready || saving || !!manual.pending} onClick={() => { resetForm(); setShowForm(true); }} className="btn-premium justify-center">
               <Plus size={16} /> Novo Gasto
             </button>
           </div>
@@ -417,7 +397,7 @@ const Gastos = () => {
           title={search ? `Sem resultados para "${search}"` : "Nenhum gasto registrado"}
           description={search ? "Tente outro termo de busca." : "Registre seus gastos para controlar despesas."}
           action={!search ? (
-            <button type="button" onClick={() => { resetForm(); setShowForm(true); }}
+            <button type="button" disabled={!manual.ready || saving || !!manual.pending} onClick={() => { resetForm(); setShowForm(true); }}
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-primary-foreground"
               style={{ background: "var(--gradient-button)" }}>
               <Plus size={14} /> Registrar Primeiro Gasto
@@ -489,21 +469,22 @@ const Gastos = () => {
               {editingId ? "Editar Gasto" : "Novo Gasto"}
             </DialogTitle>
           </DialogHeader>
+          <PendingManualCash pending={manual.pending} busy={manual.busy} storageError={manual.storageError} onRetry={()=>void manual.run()} onCancel={()=>void manual.cancel()} />
           <div className="space-y-4 pt-2">
             <div>
               <label htmlFor="expense-description" className="text-xs font-medium text-muted-foreground mb-1.5 block">Descrição</label>
-              <input id="expense-description" name="expense_description" type="text" placeholder="Ex: Aluguel, Gasolina..." value={desc} onChange={e => setDesc(e.target.value)} className={inputCls} />
+              <input id="expense-description" maxLength={500} disabled={saving || !!manual.pending} name="expense_description" type="text" placeholder="Ex: Aluguel, Gasolina..." value={desc} onChange={e => setDesc(e.target.value)} className={inputCls} />
             </div>
             <div>
               <label htmlFor="expense-amount" className="text-xs font-medium text-muted-foreground mb-1.5 block">Valor (R$)</label>
-              <input id="expense-amount" name="expense_amount" type="text" inputMode="decimal" placeholder="0,00" value={amount} onChange={e => setAmount(e.target.value)} className={inputCls} />
+              <input id="expense-amount" disabled={saving || !!manual.pending} name="expense_amount" type="text" inputMode="decimal" placeholder="0,00" value={amount} onChange={e => setAmount(e.target.value)} className={inputCls} />
             </div>
             <div>
               <label htmlFor="expense-category" className="text-xs font-medium text-muted-foreground mb-1.5 block">Categoria</label>
-              <input id="expense-category" name="expense_category" type="text" placeholder="Ex: Operacional" value={category} onChange={e => setCategory(e.target.value)} className={inputCls} />
+              <input id="expense-category" maxLength={100} disabled={saving || !!manual.pending} name="expense_category" type="text" placeholder="Ex: Operacional" value={category} onChange={e => setCategory(e.target.value)} className={inputCls} />
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {SUGGESTED_CATEGORIES.map(c => (
-                  <button key={c} type="button" onClick={() => setCategory(c)}
+                  <button key={c} type="button" disabled={saving || !!manual.pending} onClick={() => setCategory(c)}
                     className={`text-[10px] px-2 py-1 rounded-full border transition-colors ${
                       category === c ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border text-muted-foreground hover:bg-accent"
                     }`}>
@@ -514,12 +495,12 @@ const Gastos = () => {
             </div>
             <div>
               <label htmlFor="expense-date" className="text-xs font-medium text-muted-foreground mb-1.5 block">Data</label>
-              <input id="expense-date" name="expense_date" type="date" value={date} onChange={e => setDate(e.target.value)} className={inputCls} />
+              <input id="expense-date" disabled={saving || !!manual.pending} name="expense_date" type="date" value={date} onChange={e => setDate(e.target.value)} className={inputCls} />
             </div>
           </div>
           <DialogFooter className="mt-4">
             <Button variant="outline" onClick={resetForm}>Cancelar</Button>
-            <Button disabled={saving || !desc.trim() || !amount} onClick={handleSubmit} aria-busy={saving}
+            <Button disabled={!manual.ready || !!manual.pending || saving || !desc.trim() || !amount} onClick={handleSubmit} aria-busy={saving}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90 gap-2">
               {saving && <Loader2 size={15} className="animate-spin" />}
               {saving ? "Salvando…" : editingId ? "Atualizar" : "Registrar"}
@@ -540,7 +521,7 @@ const Gastos = () => {
           <p className="text-sm text-muted-foreground">Esta ação não pode ser desfeita.</p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteConfirm(null)}>Cancelar</Button>
-            <Button variant="destructive" onClick={() => deleteConfirm && handleDelete(deleteConfirm)}>Excluir</Button>
+            <Button variant="destructive" disabled={!manual.ready || saving || !!manual.pending} onClick={() => deleteConfirm && handleDelete(deleteConfirm)}>Excluir</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

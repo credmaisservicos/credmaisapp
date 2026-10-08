@@ -45,7 +45,7 @@ export default defineConfig({
     },
     {
       name: "webkit-login",
-      testMatch: /login-recovery\.spec\.ts/,
+      testMatch: /(?:login-recovery|manual-cash)\.spec\.ts/,
       use: { ...devices["iPhone 13"] },
     },
   ],
