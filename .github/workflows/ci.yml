@@ -76,11 +76,20 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: Instalar dependências fixadas para o bundle Deno
+        run: npm ci
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
       - name: Preparar a função para o runtime sem acesso externo
-        run: deno bundle --platform deno --output test-results/saas/runtime/main/index.js supabase/functions/upload-urls/index.ts
+        run: |
+          mkdir -p test-results/saas/runtime/main
+          deno bundle --platform deno --output test-results/saas/runtime/main/index.js supabase/functions/upload-urls/index.ts > test-results/saas/bundle.log 2>&1
+          cat test-results/saas/bundle.log
       - name: PostgreSQL, login Auth, permissões, caixa, portais e Storage reais
         run: |
           mkdir -p test-results/saas
