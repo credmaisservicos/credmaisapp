@@ -147,7 +147,7 @@ def main():
           location /rest/v1/ { proxy_pass http://rest:3000/; }
           location /storage/v1/ { proxy_pass http://storage:5000/; }
         }''')
-        start('gateway','nginx:stable-alpine',{},8080,memory='64m',mounts={proxy:'/etc/nginx/conf.d/default.conf'})
+        gateway=start('gateway','nginx:stable-alpine',{},8080,memory='64m',mounts={proxy:'/etc/nginx/conf.d/default.conf'})
         uploads=start('uploads','supabase/edge-runtime:v1.71.2',{
             'SUPABASE_URL':'http://gateway:8080','SUPABASE_PUBLIC_URL':gateway,
             'SUPABASE_ANON_KEY':anon,'SUPABASE_SERVICE_ROLE_KEY':service},9000,
