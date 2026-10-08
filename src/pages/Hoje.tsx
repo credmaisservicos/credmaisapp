@@ -454,7 +454,7 @@ const Hoje = () => {
             { label: "Cobrar atrasadas", value: totals.overdueCount, detail: `R$ ${fmtBRL(totals.overdue)}`, to: "/cobrancas" },
             { label: "Receber hoje", value: totals.dueTodayCount, detail: `R$ ${fmtBRL(totals.dueToday)}`, to: "/cobrancas" },
             { label: "Promessas vencidas", value: data?.brokenPromises || 0, detail: "retomar contato", to: "/hoje#promessas" },
-            { label: "Tarefas abertas", value: data?.todos?.length || 0, detail: "organizar operação", to: "/tarefas" },
+            { label: "Tarefas abertas", value: data?.todos?.length || 0, detail: "organizar operação", to: "/ferramentas/tarefas" },
           ].map((priority) => (
             <button key={priority.label} onClick={() => navigate(priority.to)}
               className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-border/40 bg-background/30 px-3 py-2.5 text-left hover:bg-accent/30">
