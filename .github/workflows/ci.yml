@@ -133,6 +133,11 @@ jobs:
     name: Login, rotas e interface (E2E local isolado)
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    # Browsers and codecs are already installed; apt mirrors must not block tests.
+    # Keep this image aligned with package-lock.json and verify it before testing.
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e
+      options: --ipc=host
 
     steps:
       - uses: actions/checkout@v5
@@ -143,10 +148,18 @@ jobs:
           cache: npm
 
       - run: npm ci
-      # The Azure HTTP mirror stalled repeatedly while fetching WebKit's codecs.
-      - name: Usar o mirror oficial do Ubuntu por HTTPS
-        run: sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list.d/ubuntu.sources
-      - run: npx playwright install --with-deps chromium webkit
+      - name: Conferir versão e navegadores da imagem
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync, existsSync } from 'node:fs';
+          import { chromium, webkit } from '@playwright/test';
+          const version = JSON.parse(readFileSync('node_modules/@playwright/test/package.json', 'utf8')).version;
+          if (version !== '1.62.1') throw new Error('Atualize a imagem oficial junto com o Playwright.');
+          for (const browser of [chromium, webkit]) {
+            if (!existsSync(browser.executablePath())) throw new Error('Navegador ausente da imagem: ' + browser.name());
+          }
+          console.log('Playwright ' + version + ': Chromium e WebKit disponíveis.');
+          NODE
       - name: Testar login e interface com dados simulados
         timeout-minutes: 12
         # WebKit exercises the iPhone fetch errors and recovery too.
