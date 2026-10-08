@@ -149,7 +149,7 @@ def main():
         }''')
         start('gateway','nginx:stable-alpine',{},8080,memory='64m',mounts={proxy:'/etc/nginx/conf.d/default.conf'})
         uploads=start('uploads','supabase/edge-runtime:v1.71.2',{
-            'SUPABASE_URL':'http://gateway:8080','SUPABASE_PUBLIC_URL':'http://gateway:8080',
+            'SUPABASE_URL':'http://gateway:8080','SUPABASE_PUBLIC_URL':gateway,
             'SUPABASE_ANON_KEY':anon,'SUPABASE_SERVICE_ROLE_KEY':service},9000,
             command=('start','--main-service','/home/deno/functions/main'),mounts={runtime:'/home/deno/functions'})
         ready(auth, '/health'); ready(rest, '/'); ready(storage, '/status');ready(uploads,'/')
@@ -343,6 +343,9 @@ def main():
                 return {'references':[reference], 'access':{'kind':kind, **({'token':credential} if credential else {})}}
             status, result=http(uploads,'/',own['jwt'],'POST',access('owner'))
             check(label + ': actual Edge returns five-minute owner URL', status==200 and result['expires_in']==300 and bool(result['urls'][0]))
+            check(label + ': owner Edge URL uses reachable public gateway', urllib.parse.urlsplit(result['urls'][0]).netloc==urllib.parse.urlsplit(gateway).netloc)
+            status, content=http('',result['urls'][0])
+            check(label + ': owner Edge signed URL downloads exact private bytes',status==200 and content==b'synthetic private file')
             status, result=http(uploads,'/',other['jwt'],'POST',access('owner'))
             check(label + ': actual Edge refuses another tenant file', status==200 and result['urls']==[None])
             status, _=http(uploads,'/',anon,'POST',access('owner'))
@@ -352,6 +355,9 @@ def main():
             sql(f"UPDATE contract_installments SET receipt_url='{reference}',receipt_storage_path='{path}' WHERE id='{own['installments'][0]}';")
             status, result=http(uploads,'/',anon,'POST',access('portal',own['portal']))
             check(label + ': valid customer portal signs its receipt', status==200 and bool(result['urls'][0]))
+            check(label + ': portal Edge URL uses reachable public gateway', urllib.parse.urlsplit(result['urls'][0]).netloc==urllib.parse.urlsplit(gateway).netloc)
+            status, content=http('',result['urls'][0])
+            check(label + ': portal Edge signed URL downloads exact private bytes',status==200 and content==b'synthetic private file')
             status, result=http(uploads,'/',anon,'POST',access('portal',other['portal']))
             check(label + ': foreign customer portal cannot sign receipt', status==200 and result['urls']==[None])
             status, result=http(uploads,'/',anon,'POST',access('collector',own['collector_token']))

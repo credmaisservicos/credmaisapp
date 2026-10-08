@@ -25,3 +25,17 @@ export function uploadPath(reference:unknown,origins:readonly string[]):string|n
  }
  try {const path=decodeURIComponent(encoded);return validUploadPath(path)?path:null;}catch{return null;}
 }
+/** Signing happens through an internal gateway. Only replace that trusted
+ * gateway with the configured public base; preserve the signature and path. */
+export function publicSignedUploadUrl(signed:unknown,publicBase:string,internalBase:string):string|null {
+ if(typeof signed!=='string')return null;
+ try {
+  const target=new URL(publicBase),internal=new URL(internalBase),url=new URL(signed,internal);
+  if(!['https:','http:'].includes(target.protocol)||target.username||target.password||target.search||target.hash)return null;
+  if(url.username||url.password||![internal.origin,target.origin].includes(url.origin))return null;
+  if(!url.pathname.startsWith('/storage/v1/object/sign/uploads/')||!uploadPath(url.href,[internal.origin,target.origin]))return null;
+  url.protocol=target.protocol;url.host=target.host;url.port=target.port;
+  url.pathname=target.pathname.replace(/\/$/,'')+url.pathname;url.hash='';
+  return url.href;
+ }catch{return null;}
+}
