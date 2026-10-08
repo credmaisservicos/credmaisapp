@@ -1,28 +1,55 @@
-# Verificação completa solicitada
+# Testes completos com conta exclusiva de QA — 8 de outubro de 2026
 
-Rodada solicitada pelo usuário em 8 de outubro de 2026, após a correção de DNS. Executar uma matriz completa uma vez, conservar falhas e corrigir somente quando a evidência identificar o problema. Não repetir testes para ocultar falhas.
+Criada uma empresa exclusiva de QA, sem privilégio administrativo, contatos externos, número WhatsApp ou credenciais de pagamento. O bloqueio de conta sem assinatura foi conferido; depois, somente essa empresa recebeu sete dias de acesso para QA. Cliente, contrato, tarefas, anotações, investidor e arquivo são explicitamente fictícios. Nenhuma operação financeira foi aplicada a contas preexistentes.
 
-Produção: criar uma empresa exclusiva de QA, sem número WhatsApp nem credenciais de pagamento, com clientes e contratos explicitamente fictícios. Testar autenticação e módulos publicados em desktop e celular emulado. Escritas financeiras reais dessa empresa só podem usar os registros fictícios criados para esta rodada. Nenhuma conta ou cliente preexistente recebe alterações. Mensagens externas permanecem restritas ao número previamente autorizado na conta de testes do usuário.
+## Publicação
 
-Homologação isolada: executar a CI completa, incluindo tipos, lint, dependências, funções, integrações, unitários, navegadores e PostgreSQL/Auth/Storage/Edge com duas empresas fictícias. Operações destrutivas, concorrência, isolamento entre empresas e provedores de pagamento são verificados nessa rede isolada.
+Web: **340b098ea4e26ff9ad4ce10f4d08119040d16313**. Cloudflare: **6a58aca0-8a37-4db6-8cec-e86fe12b044a**, concluída às **16:50:13 UTC**. Fingerprint: **54c23fa7f84ca2616457a23c581b18df6d6144250b245fcca94a16a24b653285**; catálogo publicado igual ao build local. Publicação automática permanece habilitada. O foco desta rodada é a web; o APK não foi usado como comprovação.
 
-| Escopo | Estado |
-| --- | --- |
-| CI completa do código atual e fixture corrigida | [37806673464](https://github.com/credmaisservicos/credmaisapp/actions/runs/37806673464) aprovada; nova validação necessária após correções identificadas na produção. |
-| Conta exclusiva de QA e login real | Criada sem privilégio administrativo, sem contatos externos; bloqueio de conta sem assinatura conferido. Acesso de QA concedido por sete dias apenas nessa empresa. |
-| Módulos publicados, desktop e celular emulado | Primeira rodada em 34 rotas, Chromium desktop/360px e WebKit iPhone emulado. Evidência identificou HTTP 400 na leitura dos clientes comerciais, HTTP 404 em chamada opcional da tela Hoje e landmarks main aninhados. Corrigir e validar publicação. |
-| Cliente, contrato, parcial, quitação, estorno e caixa fictícios | Cliente/contrato de três parcelas criados pela interface. Última paga mantém contrato ativo; parcial mantém saldo; quitação completa conclui; estorno reabre e corrige o caixa. R$ 10 de aporte - R$ 30 de liberação + R$ 24 recebidos = R$ 4, todos fictícios. |
-| Relatórios, exportação, anexos e isolamento | PDF de relatório real gerado na empresa fictícia. Upload real aprovado, mas a URL renovada apontou para kong:8000 e falhou com ENOTFOUND. Correção usa o gateway público configurado, preservando caminho/token, autorização e prazo. Regressões unitárias e downloads reais de owner/portal na homologação adicionados; conferir publicação. |
-| Portal da conta autorizada | Quatro combinações 360/1366px claro/escuro aprovadas: acesso, filtros, detalhes, recarga, PDF, saída e empresa preservada. Sem negociação automática. |
-| Cobranças e contexto do WhatsApp autorizado | Gemini real preservou resultado da ferramenta fictícia. Conversa autorizada atualmente pausada para humano; webhook real devolveu paused, zero respostas e finanças preservadas. Configuração atual tem envio automático ativo; testes antigos que presumiam flag desativada recusaram execução antes de enviar. Não alterar a escolha atual do usuário. |
-| Recuperação de acesso, rede e sessão | A executar |
+## Matriz automatizada completa
 
-Credenciais, CPF, tokens, mensagens e capturas com dados ficam somente na pasta privada ignorada `.delivery.local`. Relatório público deve registrar resultados e limites sem expor esses dados. Recebimento físico no WhatsApp/e-mail, uso prolongado em aparelhos externos e pagamentos do Mercado Pago não podem ser declarados aprovados apenas por emulação ou aceite do provedor.
+[CI 37809899592](https://github.com/credmaisservicos/credmaisapp/actions/runs/37809899592) aprovada na base **925042459186ccc575f1e05becd03cbfc91e7539**:
 
-Correções desta rodada: consultas comerciais passam a solicitar somente as colunas existentes id/name/cpf_cnpj. Hoje conserva o resumo financeiro canônico e seus alertas de composição/data, removendo a chamada opcional inexistente e o selo de conciliação que ela alimentava. Páginas internas comerciais e chat usam section dentro do main único do layout. Nenhuma migração nem alteração de contas financeiras preexistentes.
+- **955 testes unitários / 117 arquivos**, tipos, lint, hooks, funções, build e dependências aprovados; auditoria reportou zero vulnerabilidades.
+- **225 testes compartilhados** e **312 integrações HTTP com provedores simulados** aprovados.
+- **196 verificações reais isoladas** com PostgreSQL, Auth, PostgREST, Storage e Edge Runtime: duas empresas fictícias, rede Docker interna, zero conexões a produção, mensagens ou dados de clientes copiados. Pagamento parcial/integral/estorno, caixa, classificação humana, concorrência, referências entre empresas, portais, recuperação de senha, permissões e downloads de anexos assinados.
+- Interface isolada: **275 casos principais, 16 responsivos, três de isolamento de uploads e dez de classificação humana**, aprovados diretamente, sem retry/flaky registrado.
 
-A leitura real de um arquivo recém-criado revelou a terceira falha: o SDK assinava pelo endereço interno do Docker. O endpoint upload-urls agora converte somente assinaturas do gateway interno/público confiável para SUPABASE_PUBLIC_URL. Não usa Host/Origin da requisição para decidir o destino, nem permite origem estrangeira, credenciais ou rota de objetos públicos. Também substitui a porta interna. Regressões cobrem token/caminho codificados, prefixo público e origens/rotas inválidas. A homologação passa a baixar os bytes dos links emitidos pelo Edge, além de verificar a sua presença.
+[Evidência da homologação](https://github.com/credmaisservicos/credmaisapp/actions/runs/37809899592/artifacts/11565365047) e [da interface](https://github.com/credmaisservicos/credmaisapp/actions/runs/37809899592/artifacts/11564224549) retidas por sete dias. Somente sondagens opcionais de UI externa foram puladas; a homologação real obrigatória executou.
 
-Quarta correção, limitada a um endereço: o botão Tarefas abertas de Hoje abriu /tarefas e mostrou Página não encontrada no navegador real. Destino corrigido para /ferramentas/tarefas. A suíte completa valida a base 9250424; essa mudança posterior de endereço recebe lint/tipos/build e verificação do clique nos três contextos de produção, sem repetir a CI inteira por um link.
+O commit publicado acrescenta à base validada somente o destino do botão Tarefas abertas. Esse endereço recebeu lint/tipos/build locais e teste de clique nos três contextos publicados, sem repetir a CI completa por um link.
 
-Diagnósticos de automação preservados: tour inicial aberto bloqueou clique da primeira execução; o teste passou a esperar e encerrar o tour pela interface. Duas asserções usavam rótulos diferentes dos valores reais do servidor (completed e loan_disbursement); foram ajustadas sem reexecutar pagamentos já aplicados. WebKit registrou cancelamentos por navegação durante a carga inicial; a próxima rodada espera o fim dessa carga, sem ignorar erros. A primeira matriz de produção continua retida separadamente.
+## Quatro correções comprovadas e publicadas
+
+1. **Clientes comerciais:** Comercial, Vendas, Locações e Garantias solicitavam coluna inexistente, causando HTTP 400. Agora usam id/name/cpf_cnpj. Cliente fictício selecionável nas três operações; contrato da garantia também listado.
+2. **Hoje:** retirada chamada opcional a RPC inexistente que gerava HTTP 404, junto com o selo dependente dela. Preservados resumo financeiro canônico e alertas de composição/data. Páginas comerciais e chat usam section dentro do main único do layout, corrigindo landmarks aninhados.
+3. **Anexos:** upload real criou link renovado para kong:8000, inacessível ao usuário. Endpoint passa a usar o gateway público configurado, preservando token, caminho e validade. Aceita somente origens confiáveis e rota privada válida; não confia no Host/Origin do visitante. Seis regressões unitárias e oito verificações isoladas de URL/download acrescentadas. Produção confirmou bytes exatos e prazo de cinco minutos; visitante e outra empresa não obtêm o link.
+4. **Tarefas:** botão de Hoje abria /tarefas e mostrava Página não encontrada. Corrigido para /ferramentas/tarefas e clicado nos três contextos publicados.
+
+Backend de anexos publicado com backup **/root/.credmais/upload-public-origin-20261008T163914Z**, hashes conferidos, sem migração financeira, reinício global, movimentação ou exclusão de arquivos de clientes.
+
+## Testes reais no aplicativo publicado
+
+**34 rotas em Chromium desktop, Chromium celular 360px e WebKit iPhone emulado**, com login real na empresa QA: **109 verificações** incluindo retorno de rede/recarga, atalhos e PDF. Rotas sem overflow, erros de página ou HTTP nos contextos aprovados. Páginas públicas, proteção de área autenticada e PWA offline/retorno: **31 verificações**. Seletores comerciais: **três verificações**. Catálogo: **227 JS/CSS** com bytes, hashes e tipos conferidos, incluindo as duas respostas iniciais transitórias descritas abaixo.
+
+Pela interface, criado cliente e contrato de três parcelas. Pagar a última manteve o contrato ativo enquanto havia outras dívidas; parcial manteve saldo; quitação completa concluiu; estorno reabriu e ajustou o caixa. Conferência real: **R$ 10 de aporte − R$ 30 de liberação + R$ 24 recebidos = R$ 4**, inteiramente fictícios.
+
+Anotação criada/editada/recarregada; tarefa criada/concluída/reaberta; tarefa offline sincronizada uma única vez ao reconectar. Gasto fictício criado, editado, exportado em CSV e excluído somente na empresa QA; caixa voltou ao valor anterior. Investidor fictício cadastrado sem contato ou empréstimo. PDF gerado. Upload, renovação da URL, download e recusas de acesso externo conferidos.
+
+Login real pelo domínio principal e www identifica a mesma empresa. Sair de uma sessão temporária invalidou seu refresh sem invalidar a outra; sessão original de QA permaneceu válida. Nenhum e-mail enviado ao endereço fictício.
+
+## Portal, agente e provedores
+
+Portal da conta de testes previamente autorizada aprovado em **360/1366px e claro/escuro**: login, filtros, detalhes, recarga, PDF e saída; empresa preservada, sem negociação automática, overflow ou erros HTTP/página. Nenhuma operação financeira nessa conta.
+
+Gemini real preservou o valor devolvido pela ferramenta fictícia. Conversa WhatsApp autorizada está pausada para atendimento humano: webhook real retornou paused, zero respostas externas e finanças preservadas. Envio automático está atualmente habilitado nessa conta, mas a pausa foi respeitada; não alterada a configuração do usuário nem acionado runner geral. Testes antigos que presumiam envio desativado recusaram execução antes de enviar e foram conservados como diagnóstico.
+
+Leitura real confirmou **ausência das três credenciais do Mercado Pago**; endpoint indica não configurado. Nenhum pagamento real/sandbox foi declarado testado. SMTP está configurado, mas recebimento em caixa postal externa não foi comprovado.
+
+## Diagnósticos conservados e limites
+
+Fixtures corrigidas: tour inicial bloqueando clique; asserções com nomes diferentes dos enums reais completed/loan_disbursement; navegação durante carga inicial WebKit; botão comercial chamado Registrar venda em vez do nome presumido. Não repetidos pagamentos já aplicados. A primeira matriz que revelou os problemas do aplicativo foi preservada.
+
+Imediatamente após a publicação, dois dos 227 JS/CSS retornaram 404. Ambos depois responderam 200 com bytes/hashes corretos, conferidos individualmente; causa exata da janela inicial não comprovada. Na mesma janela, o primeiro login desktop não apareceu em 12 segundos. Tentativa retida; verificação separada desse contexto passou com 37 casos, sem repetir os 72 casos móveis aprovados. Três asserções públicas leram texto antes da montagem; passaram a esperar a interface, conferindo também erros HTTP/página nos casos afetados. Esses diagnósticos não foram apagados nem contados como aprovação inicial.
+
+Credenciais, CPF, tokens, capturas e relatórios privados ficam somente na pasta ignorada .delivery.local. Emulação não comprova o aparelho físico com sem conexão, instalação/uso prolongado ou recebimento no WhatsApp/e-mail. URLs atuais corrigidas não revogam links antigos de longa duração. Decisão sobre juros zero e conciliação histórica com documentos reais continuam abertas. A [lista de pendências](pendencias-entrega-2026-10-08.md) mantém esses limites e o histórico das causas ainda não comprovadas.
