@@ -31,7 +31,7 @@ const MarcaSection = ({ ctx }: SectionProps) => {
               <div className="flex items-center gap-4">
                 <div className="w-20 h-20 rounded-2xl bg-muted/30 border-2 border-dashed border-border flex items-center justify-center overflow-hidden shrink-0 hover:border-primary/30 transition-colors">
                   {form.company_logo_url ? (
-                    <UploadImage access={{kind:'brand'}} src={form.company_logo_url} alt="Logo" className="w-full h-full object-cover" />
+                    <UploadImage access={{kind:'owner'}} src={form.company_logo_url} alt="Logo" className="w-full h-full object-cover" />
                   ) : (
                     <div className="text-center">
                       <Image size={24} className="text-muted-foreground/30 mx-auto" />
@@ -65,7 +65,7 @@ const MarcaSection = ({ ctx }: SectionProps) => {
               <div className="flex items-center gap-4 pt-2 border-t border-border/20">
                 <div className="w-14 h-14 rounded-xl bg-muted/30 border-2 border-dashed border-border flex items-center justify-center overflow-hidden shrink-0">
                   {form.favicon_url ? (
-                    <UploadImage access={{kind:'brand'}} src={form.favicon_url} alt="Favicon" className="w-full h-full object-cover" />
+                    <UploadImage access={{kind:'owner'}} src={form.favicon_url} alt="Favicon" className="w-full h-full object-cover" />
                   ) : (
                     <Image size={18} className="text-muted-foreground/30" />
                   )}
@@ -190,7 +190,7 @@ const MarcaSection = ({ ctx }: SectionProps) => {
                   <div className="w-[140px] border-r border-border p-3 space-y-2 bg-card shrink-0 hidden sm:block">
                     <div className="flex items-center gap-2 mb-3">
                       <div className="w-7 h-7 rounded-lg overflow-hidden shrink-0" style={{ background: `linear-gradient(135deg, ${form.primary_color}, ${form.accent_color})` }}>
-                        {form.company_logo_url && <UploadImage access={{kind:'brand'}} src={form.company_logo_url} alt="" className="w-full h-full object-cover" />}
+                        {form.company_logo_url && <UploadImage access={{kind:'owner'}} src={form.company_logo_url} alt="" className="w-full h-full object-cover" />}
                       </div>
                       <p className="text-[9px] font-bold truncate" style={{ background: `linear-gradient(135deg, ${form.primary_color}, ${form.accent_color})`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
                         {form.company_name || "CREDMAIS APP"}

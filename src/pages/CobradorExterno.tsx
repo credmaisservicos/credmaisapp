@@ -1,3 +1,4 @@
+import {clientPortalUrl} from '@/lib/publicAppLinks';
 import {UploadImage,UploadLink} from '@/components/UploadMedia';
 import { Credinho } from "@/components/brand/Credinho";
 import {paymentReviewDescription} from '@/lib/paymentFeedback';
@@ -534,7 +535,7 @@ const CobradorExterno = () => {
                                 nome: a.clients?.name || "",
                                 empresa: ownerProfile?.name || "",
                                 pix: ownerProfile?.pix_key || "",
-                                portal: `${window.location.origin}/portal-cliente`,
+                                portal: clientPortalUrl(userId),
                               })
                             )}`}
                             target="_blank" rel="noopener noreferrer"

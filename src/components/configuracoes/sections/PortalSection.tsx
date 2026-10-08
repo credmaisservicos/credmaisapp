@@ -1,4 +1,6 @@
 import {UploadImage} from '@/components/UploadMedia';
+import {useAuth} from '@/contexts/AuthContext';
+import {clientPortalUrl} from '@/lib/publicAppLinks';
 import {
   Settings, Building, Percent, MessageSquare, Webhook, Bell, Save, Plus, Trash2, Check, AlertTriangle, Palette, Upload, Image, Key, CreditCard, Bot, Clock, Shield, Zap, ToggleLeft, Send, Volume2, Sun, Moon, Monitor, Eye, LayoutDashboard, Users, Receipt, Info, Copy, ExternalLink, FileText, RotateCcw, Sparkles, Package,
 } from "lucide-react";
@@ -9,6 +11,8 @@ import { COLOR_PRESETS } from "../constants";
 import type { SectionProps } from "../types";
 
 const PortalSection = ({ ctx }: SectionProps) => {
+  const {user}=useAuth();
+  const portalLink=clientPortalUrl(user?.id);
   const {
     form, setForm, inputCls, settings, templates,
     newTemplate, setNewTemplate, onAddTemplate, onDeleteTemplate, onAddPresetTemplate,
@@ -23,7 +27,7 @@ const PortalSection = ({ ctx }: SectionProps) => {
 
   const copyPortalLink = async () => {
     try {
-      await navigator.clipboard.writeText(`${window.location.origin}/portal-cliente`);
+      await navigator.clipboard.writeText(portalLink);
       notify("Link copiado!");
     } catch {
       notify("Não foi possível copiar. Selecione o link manualmente.");
@@ -53,9 +57,9 @@ const PortalSection = ({ ctx }: SectionProps) => {
               </div>
               <div className="flex items-center gap-2 bg-card border border-border rounded-xl px-3 py-2">
                 <p className="text-xs text-muted-foreground truncate flex-1 font-mono">
-                  {window.location.origin}/portal-cliente
+                  {portalLink}
                 </p>
-                <button type="button" onClick={() => window.open(`${window.location.origin}/portal-cliente`, "_blank", "noopener,noreferrer")} className="p-1 rounded-lg hover:bg-accent text-muted-foreground transition-colors" title="Abrir link do portal" aria-label="Abrir link do portal">
+                <button type="button" onClick={() => window.open(portalLink, "_blank", "noopener,noreferrer")} className="p-1 rounded-lg hover:bg-accent text-muted-foreground transition-colors" title="Abrir link do portal" aria-label="Abrir link do portal">
                   <ExternalLink size={14} aria-hidden="true" />
                 </button>
               </div>
@@ -124,9 +128,9 @@ const PortalSection = ({ ctx }: SectionProps) => {
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
                 <div className="w-16 h-16 rounded-xl bg-muted/30 border-2 border-dashed border-border flex items-center justify-center overflow-hidden shrink-0">
                   {form.portal_logo_url ? (
-                    <UploadImage access={{kind:'brand'}} src={form.portal_logo_url} alt="Logo Portal" className="w-full h-full object-cover" />
+                    <UploadImage access={{kind:'owner'}} src={form.portal_logo_url} alt="Logo Portal" className="w-full h-full object-cover" />
                   ) : form.company_logo_url ? (
-                    <UploadImage access={{kind:'brand'}} src={form.company_logo_url} alt="Logo padrão" className="w-full h-full object-cover opacity-50" />
+                    <UploadImage access={{kind:'owner'}} src={form.company_logo_url} alt="Logo padrão" className="w-full h-full object-cover opacity-50" />
                   ) : (
                     <Image size={20} className="text-muted-foreground/30" />
                   )}

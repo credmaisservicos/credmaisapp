@@ -26,6 +26,10 @@ const COLOR_PRESETS = [
 ];
 
 const Configuracoes = () => {
+  const { user } = useAuth();
+  return <ConfiguracoesForOwner key={user?.id || "signed-out"} />;
+};
+const ConfiguracoesForOwner = () => {
   const confirm = useConfirm();
   const { user, profile, isPlatformAdmin } = useAuth();
   const { data: ownRole } = useQuery({
@@ -51,7 +55,7 @@ const Configuracoes = () => {
   const [uploadingFavicon, setUploadingFavicon] = useState(false);
   const [uploadingPortalLogo, setUploadingPortalLogo] = useState(false);
 
-  const { data: settings } = useQuery({
+  const { data: settings, isSuccess: settingsLoaded } = useQuery({
     queryKey: ["settings", user?.id],
     queryFn: async () => {
       // Sem `as any`: é justamente esse cast que deixava o form ler/gravar colunas
@@ -239,7 +243,7 @@ const Configuracoes = () => {
   };
 
   const handleSave = async () => {
-    if (!user) return;
+    if (!user || !settingsLoaded || saving) return;
     setSaving(true);
     const payload: any = {
       user_id: user.id,
@@ -543,7 +547,7 @@ const Configuracoes = () => {
             {installed ? <Check size={15} className="text-success" /> : <Download size={15} className="text-primary" />}
             <span className="hidden sm:inline">{installed ? "Instalado" : installing ? "Instalando..." : "Instalar"}</span>
           </button>
-          <button type="button" onClick={handleSave} disabled={saving} aria-label={saving ? "Salvando configurações" : saved ? "Configurações salvas" : "Salvar configurações"}
+          <button type="button" onClick={handleSave} disabled={saving || !settingsLoaded} aria-label={saving ? "Salvando configurações" : saved ? "Configurações salvas" : "Salvar configurações"}
             className={`px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition shrink-0 ${
               saved ? "bg-success text-success-foreground" : "bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             }`}>

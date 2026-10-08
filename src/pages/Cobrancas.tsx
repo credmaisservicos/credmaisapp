@@ -1,3 +1,4 @@
+import {clientPortalUrl} from '@/lib/publicAppLinks';
 import { useSessionPreference } from "@/hooks/useSessionPreference";
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import InstallmentRow from "@/components/cobrancas/InstallmentRow";
@@ -400,7 +401,7 @@ const Cobrancas = () => {
   };
 
   const buildMessage = (inst: any, opts: { includePix?: boolean } = {}) => {
-    const portalUrl = `${window.location.origin}/portal-cliente?o=${user!.id}`;
+    const portalUrl = clientPortalUrl(user?.id);
     const total = inst.contracts?.num_installments || inst.total_installments || "";
     const parcelaInfo = total ? `${inst.installment_number}/${total}` : `${inst.installment_number}`;
     const nome = inst.client_name || "";
@@ -484,7 +485,7 @@ const Cobrancas = () => {
 
   const buildBulkWhatsAppMessage = (clientName: string, items: any[]) => {
     const pix = (profile as any)?.pix_key;
-    const portalUrl = `${window.location.origin}/portal-cliente?o=${user!.id}`;
+    const portalUrl = clientPortalUrl(user?.id);
     let total = 0;
     let totalFees = 0;
     const lines = items.map((i: any) => {
@@ -869,7 +870,7 @@ const Cobrancas = () => {
       const extra = bd.total > 0 ? ` [parcela R$ ${fmt(bd.base)} + juros R$ ${fmt(bd.total)} · ${bd.daysLate}d]` : "";
       return `- Parcela #${i.installment_number} · R$ ${fmt(due)} (venc. ${formatBR(i.due_date)})${extra}`;
     }).join("\n");
-    const portalUrl = `${window.location.origin}/portal-cliente?o=${user!.id}`;
+    const portalUrl = clientPortalUrl(user?.id);
     const feesBlock = totalFees > 0 ? `\nJuros de atraso incluídos: R$ ${fmt(totalFees)}` : "";
     const msg = `Olá ${group.client_name}, tudo bem?\n\nIdentificamos ${unpaid.length} parcelas pendentes totalizando R$ ${fmt(total)}:\n${lines}${feesBlock}\n\nVocê pode regularizar via PIX ou pelo portal: ${portalUrl}`;
     window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, "_blank", "noopener,noreferrer");

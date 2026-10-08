@@ -1,3 +1,4 @@
+import {clientPortalUrl} from '@/lib/publicAppLinks';
 import {UploadImage} from '@/components/UploadMedia';
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
@@ -808,7 +809,7 @@ const NovoCliente = () => {
     };
 
     const phoneDigits = (whatsapp || telefone).replace(/\D/g, "");
-    const portalUrl = `${window.location.origin}/portal-cliente`;
+    const portalUrl = clientPortalUrl(user?.id);
     const shareMessage =
       `Olá ${nome}, seu contrato foi gerado! 📄\n\n` +
       `• Valor: R$ ${calc.totalAmount.toFixed(2)}\n` +

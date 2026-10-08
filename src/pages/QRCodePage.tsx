@@ -1,4 +1,6 @@
 import { useRef, useState } from "react";
+import {useAuth} from '@/contexts/AuthContext';
+import {publicAppOrigin} from '@/lib/publicAppLinks';
 import { QRCodeCanvas } from "qrcode.react";
 import {
   QrCode,
@@ -31,6 +33,7 @@ type Preset = {
 };
 
 const QRCodePage = () => {
+  const {user}=useAuth();
   const [inputUrl, setInputUrl] = useState("");
   const [activeUrl, setActiveUrl] = useState("");
   const [copied, setCopied] = useState(false);
@@ -38,7 +41,7 @@ const QRCodePage = () => {
   const [dark, setDark] = useState(true);
   const qrRef = useRef<HTMLCanvasElement | null>(null);
 
-  const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
+  const baseUrl = publicAppOrigin();
 
   const presets: Preset[] = [
     {
@@ -46,7 +49,7 @@ const QRCodePage = () => {
       label: "Portal do Cliente",
       desc: "Login por CPF, extrato e pagamento PIX",
       icon: Users,
-      path: "/portal-cliente",
+      path: "/portal-cliente?o="+encodeURIComponent(user?.id || ''),
       accent: "from-primary/30 via-primary/10 to-transparent",
       tag: "Cliente",
     },

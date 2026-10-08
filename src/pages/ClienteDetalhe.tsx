@@ -1,3 +1,4 @@
+import {clientPortalUrl} from '@/lib/publicAppLinks';
 import {UploadImage} from '@/components/UploadMedia';
 import "@/components/cliente-detalhe/client-profile.css";
 import {paymentReviewDescription} from '@/lib/paymentFeedback';
@@ -990,7 +991,7 @@ const ClienteDetalhe = () => {
   const sendPortalLink = () => {
     const phone = getPhone();
     if (!phone) { toast({ title: "Sem telefone", variant: "destructive" }); return; }
-    const portalUrl = `${window.location.origin}/portal-cliente?o=${user!.id}`;
+    const portalUrl = clientPortalUrl(user?.id);
     const msg = encodeURIComponent(`Olá ${client?.name}, aqui está o link para o seu portal do cliente: ${portalUrl}\n\nLá você pode conferir suas parcelas, gerar PIX para pagamento e ver seu saldo devedor.\n\nPara acessar, informe somente o seu CPF.`);
     window.open(`https://wa.me/${phone}?text=${msg}`, "_blank", "noopener,noreferrer");
   };

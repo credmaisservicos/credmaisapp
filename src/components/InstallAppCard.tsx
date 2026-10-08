@@ -1,3 +1,4 @@
+import {UploadImage} from '@/components/UploadMedia';
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Check, Download, Share, Plus, Smartphone, Apple, Globe, Monitor } from "lucide-react";
@@ -70,7 +71,7 @@ const InstallAppCard = ({ showDownloadsLink = true }: { showDownloadsLink?: bool
   return <>
     <div className="rounded-2xl border border-primary/20 bg-primary/4 p-5 space-y-4">
       <div className="flex items-center gap-3">
-        <img src={icon} alt="" className="w-12 h-12 rounded-xl object-cover bg-white/5 ring-1 ring-border/40 shrink-0" />
+        <UploadImage access={{kind:'brand'}} src={icon} alt="" className="w-12 h-12 rounded-xl object-cover bg-white/5 ring-1 ring-border/40 shrink-0" />
         <div className="min-w-0"><p className="text-sm font-bold text-foreground truncate">Instalar {appName}</p>
           <p className="text-xs leading-relaxed text-muted-foreground">{isDesktop ? "Abra em uma janela própria pelo ícone nos seus aplicativos e continue usando sua conta." : "Tenha o app na tela inicial e continue usando sua conta."}</p></div>
       </div>
