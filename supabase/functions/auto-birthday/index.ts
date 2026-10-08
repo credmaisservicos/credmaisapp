@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.117.2";
 import { checkSharedSecret } from "../_shared/guard.ts";
+import { testRecipientScope } from "../_shared/bot_test_scope.ts";
+import { financialDay } from "../_shared/financial_calendar.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -22,9 +24,7 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    const today = new Date();
-    const mm = String(today.getMonth() + 1).padStart(2, "0");
-    const dd = String(today.getDate()).padStart(2, "0");
+    const monthDay = financialDay(new Date())!.slice(5);
 
     // Buscar clientes que fazem aniversário hoje (compara MM-DD)
     const { data: clients } = await supabase
@@ -34,9 +34,7 @@ serve(async (req) => {
 
     const birthdayClients = (clients || []).filter((c) => {
       if (!c.birth_date) return false;
-      const d = new Date(c.birth_date);
-      return String(d.getMonth() + 1).padStart(2, "0") === mm &&
-             String(d.getDate()).padStart(2, "0") === dd;
+      return financialDay(c.birth_date)?.slice(5) === monthDay;
     });
 
     // Agrupar por user_id para buscar settings 1x
@@ -60,18 +58,23 @@ serve(async (req) => {
 
       for (const c of list) {
         const phone = (c.whatsapp || c.phone || "").replace(/\D/g, "");
+        // This legacy sender bypasses the delivery queue. Enforce the test
+        // account's recipient restriction before any provider request too.
+        if (testRecipientScope(user_id,phone) === false) continue;
         const msg = `🎉 Olá *${c.name}*, feliz aniversário!\n\nQue seu dia seja repleto de alegria e realizações. ✨\n\nUm abraço,\n_${company}_`;
 
         if (canSend && phone) {
           try {
             const url = `${settings.whatsapp_api_url!.replace(/\/$/, "")}/message/sendText/${settings.whatsapp_instance}`;
-            await fetch(url, {
+            const response = await fetch(url, {
               method: "POST",
               headers: { "Content-Type": "application/json", apikey: settings.whatsapp_api_key! },
               body: JSON.stringify({ number: phone, text: msg }),
+              signal: AbortSignal.timeout(12_000),
             });
-            sent++;
-          } catch (e) { console.error("WA err:", e); }
+            await response.body?.cancel();
+            if(response.ok)sent++;
+          } catch { console.error("Birthday WhatsApp delivery unavailable"); }
         }
 
         // Notificação interna sempre

@@ -35,7 +35,10 @@ export default defineConfig({
 
   use: {
     baseURL,
-    trace: "on-first-retry",
+    // Keep the failed attempt even if a retry succeeds. Local/synthetic only:
+    // authenticated production checks must explicitly disable trace recording.
+    trace: "retain-on-failure",
+    screenshot: "only-on-failure",
   },
 
   projects: [
@@ -45,7 +48,7 @@ export default defineConfig({
     },
     {
       name: "webkit-login",
-      testMatch: /(?:login-recovery|manual-cash|financial-totals)\.spec\.ts/,
+      testMatch: /(?:login-recovery|manual-cash|financial-totals|boot-resilience)\.spec\.ts/,
       use: { ...devices["iPhone 13"] },
     },
   ],

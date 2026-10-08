@@ -117,6 +117,15 @@ jobs:
         # WebKit exercises the iPhone fetch errors and recovery too.
         run: npm run test:e2e:local
 
+      - name: Guardar diagnóstico das tentativas de interface
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: interface-simulada-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
   segredos:
     name: Nenhum segredo no diff
     runs-on: ubuntu-latest

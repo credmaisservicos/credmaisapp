@@ -7,7 +7,9 @@
     <title>CredMais App — Mais controle. Mais conquistas.</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Manrope:wght@500;600;700;800&amp;family=Instrument+Serif:ital@0;1&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" />
+    <!-- External fonts must not block the inline recovery script or app boot.
+         System fonts render immediately; the web fonts apply when available. -->
+    <link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Manrope:wght@500;600;700;800&amp;family=Instrument+Serif:ital@0;1&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" />
     <link rel="preload" href="/mascots/credinho-v2/loading.webp" as="image" type="image/webp" fetchpriority="high" />
     <meta name="description" content="Organize clientes, contratos e cobranças com o CredMais e o Credinho. Mais controle para sua rotina e suas próximas conquistas.">
     <meta name="author" content="CredMais App" />

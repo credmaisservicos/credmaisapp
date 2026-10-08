@@ -7,6 +7,9 @@ const b64=(value:unknown)=>Buffer.from(JSON.stringify(value)).toString('base64ur
 async function backend(page:Page){
  const state={status:'active',requests:[] as any[]};
  await page.clock.setFixedTime(new Date('2026-08-31T22:00:00-03:00'));
+ // Financial fixtures do not depend on the public font CDN. Its unavailable
+ // response is exercised separately in boot-resilience in both browsers.
+ await page.route('https://fonts.googleapis.com/**',route=>route.fulfill({contentType:'text/css',body:''}));
  await page.routeWebSocket('**',socket=>socket.close());
  const origin=new URL(process.env.VITE_SUPABASE_URL||'https://supabase-not-configured.invalid').origin;
  const contract=()=>({id:contractId,user_id:owner,client_id:owner,capital:1000,total_amount:1200,total_interest:200,num_installments:10,status:state.status,daily_interest_percent:4,max_interest_cap_percent:0,daily_penalty_type:'percentage',daily_penalty_value:0,loan_mode:'fixed',created_at:'2026-07-01T12:00:00Z',clients:{id:owner,name:'Cliente fictício'}});
@@ -32,10 +35,13 @@ async function backend(page:Page){
    const item=installment();data=state.status==='active'?[item]:[{...item,status:'paid',paid_amount:100,paid_at:'2026-09-01T01:00:00Z'}];
    if(url.searchParams.get('status')==='eq.paid'&&state.status==='active')data=[];
    const gte=url.searchParams.get('due_date');if(gte?.startsWith('gte.')&&Date.parse(gte.slice(4))>Date.parse(item.due_date))data=[];
-  }else if(path==='/rest/v1/clients')data=[{id:owner,user_id:owner,name:'Cliente fictício',status:'Ativo',created_at:user.created_at}];
+  }else if(path==='/rest/v1/clients'){
+   const client={id:owner,user_id:owner,name:'Cliente fictício',status:'Ativo',created_at:user.created_at};
+   data=route.request().headers().accept?.includes('pgrst.object')?client:[client];
+  }
   await route.fulfill({status:200,json:data,headers:{'content-range':'0-0/0'}});
  });
- await page.goto('/login');await page.getByLabel(/e-?mail/i).fill(user.email);await page.getByLabel(/senha/i).first().fill('SenhaDeTeste123!');await page.getByRole('button',{name:/entrar/i}).click();await expect(page).toHaveURL(/dashboard$/);
+ await page.goto('/login',{waitUntil:'domcontentloaded'});await page.getByLabel(/e-?mail/i).fill(user.email);await page.getByLabel(/senha/i).first().fill('SenhaDeTeste123!');await page.getByRole('button',{name:/entrar/i}).click();await expect(page).toHaveURL(/dashboard$/);
  return state;
 }
 test('painel mantém recebido, lucro e principal comprovados depois da conclusão',async({page})=>{
@@ -64,4 +70,16 @@ test('filtro Hoje acompanha a virada brasileira com a tela aberta',async({page})
  const received=page.getByRole('button').filter({hasText:'Recebido no período'});await expect(received).toContainText('60,00');
  await page.clock.runFor(70000);await expect(received).toContainText('0,00');
  await expect(received).not.toContainText('60,00');
+});
+for(const width of [390,1366])test(`detalhes do cliente usam caixa comprovado e gráfico real em ${width}px`,async({page},testInfo)=>{
+ await page.setViewportSize({width,height:900});const state=await backend(page);await page.goto(`/clientes/${owner}`);
+ const summary=page.getByRole('region',{name:'Resumo financeiro'});
+ const metric=(label:string)=>summary.locator('article').filter({has:page.getByText(label,{exact:true})});
+ await expect(metric('Total recebido')).toContainText('100,00');await expect(metric('Capital em aberto')).toContainText('920,00');
+ await expect(metric('Juros e encargos recebidos')).toContainText('20,00');await expect(metric('Saldo em aberto')).toContainText('64,00');
+ const graph=page.getByRole('img',{name:'Recebimentos registrados nos últimos seis meses'});
+ await expect(graph.locator('title')).toContainText('2026-07: R$ 40,00');await expect(graph.locator('title')).toContainText('2026-08: R$ 60,00');
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
+ await page.screenshot({path:testInfo.outputPath('client-cash-summary.png'),fullPage:true});
+ state.status='completed';await page.reload();await expect(metric('Total recebido')).toContainText('100,00');await expect(metric('Capital em aberto')).toContainText('920,00');await expect(metric('Saldo em aberto')).toContainText('0,00');
 });

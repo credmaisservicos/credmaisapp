@@ -22,6 +22,10 @@ import { interestOnlyAmount } from "@/lib/interestOnly";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import {clientFinancialSummary} from '@/lib/clientFinancialSummary';
+import {financialAnalyticsSchema} from '@/lib/financialAnalytics';
+import {useFinancialClock} from '@/hooks/useFinancialClock';
+import ClientReceiptChart from '@/components/cliente-detalhe/ClientReceiptChart';
 import { useMultiTableRealtime } from "@/hooks/useRealtimeSubscription";
 
 import jsPDF from "jspdf";
@@ -67,6 +71,7 @@ const ClienteDetalhe = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const qc = useQueryClient();
+  const clock = useFinancialClock();
 
   const [contractFilter, setContractFilter] = useState<"all" | "active" | "settled">("all");
   const [contractSearch, setContractSearch] = useState("");
@@ -129,29 +134,31 @@ const ClienteDetalhe = () => {
   const [editInstSaving, setEditInstSaving] = useState(false);
   const [renegotiating, setRenegotiating] = useState<any>(null);
 
-  const inv = useCallback((key: string) => qc.invalidateQueries({ queryKey: [key, id] }), [qc, id]);
+  const inv = useCallback((key: string) => qc.invalidateQueries({ queryKey: [key, id, user?.id] }), [qc, id, user?.id]);
   const invAll = useCallback(() => {
     ["client-detail", "client-contracts", "client-installments", "client-transactions", "client-profits"].forEach(k => inv(k));
     qc.invalidateQueries({ queryKey: ["dashboard-data"] });
     qc.invalidateQueries({ queryKey: ["cobrancas-installments"] });
     qc.invalidateQueries({ queryKey: ["payment-allocation-review"] });
+    qc.invalidateQueries({ queryKey: ["financial-analytics"] });
   }, [inv, qc]);
 
   useMultiTableRealtime(
     ["clients", "contracts", "contract_installments", "transactions", "profits"],
     [
-      ["client-detail", id || ""],
-      ["client-contracts", id || ""],
-      ["client-installments", id || ""],
-      ["client-transactions", id || ""],
-      ["client-profits", id || ""],
+      ["client-detail", id || "", user?.id || ""],
+      ["client-contracts", id || "", user?.id || ""],
+      ["client-installments", id || "", user?.id || ""],
+      ["client-transactions", id || "", user?.id || ""],
+      ["client-profits", id || "", user?.id || ""],
+      ["financial-analytics", user?.id || ""],
     ],
   );
 
   const { data: client, isLoading, error: clientError, refetch: refetchClient } = useQuery({
-    queryKey: ["client-detail", id],
+    queryKey: ["client-detail", id, user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase.from("clients").select("*").eq("id", id!).single();
+      const { data, error } = await supabase.from("clients").select("*").eq("id", id!).eq("user_id", user!.id).single();
       if (error) throw error;
       return data;
     },
@@ -172,11 +179,11 @@ const ClienteDetalhe = () => {
     staleTime: 5 * 60_000,
   });
 
-  const { data: contracts = [] } = useQuery({
-    queryKey: ["client-contracts", id],
+  const { data: contracts = [], isLoading: contractsLoading, error: contractsError } = useQuery({
+    queryKey: ["client-contracts", id, user?.id],
     queryFn: async () => {
       return fetchAll((from, to) => supabase.from("contracts").select("*")
-        .eq("client_id", id!).order("created_at", { ascending: false }).range(from, to));
+        .eq("client_id", id!).eq("user_id", user!.id).order("created_at", { ascending: false }).range(from, to));
     },
     enabled: !!id && !!user,
     staleTime: 30_000,
@@ -207,12 +214,12 @@ const ClienteDetalhe = () => {
 
 
 
-  const { data: installments = [] } = useQuery({
-    queryKey: ["client-installments", id],
+  const { data: installments = [], isLoading: installmentsLoading, error: installmentsError } = useQuery({
+    queryKey: ["client-installments", id, user?.id],
     queryFn: async () => {
       const data = await fetchAll((from, to) => supabase.from("contract_installments")
         .select("*, contracts(capital, frequency, daily_interest_percent, max_interest_cap_percent, daily_penalty_type, daily_penalty_value)")
-        .eq("client_id", id!).order("due_date").range(from, to));
+        .eq("client_id", id!).eq("user_id", user!.id).order("due_date").range(from, to));
       const now = new Date();
       return (data || []).map((i: any) => {
         const dueTime = parseLocalDate(i.due_date)?.getTime() ?? NaN;
@@ -224,7 +231,7 @@ const ClienteDetalhe = () => {
   });
 
   const { data: transactions = [] } = useQuery({
-    queryKey: ["client-transactions", id],
+    queryKey: ["client-transactions", id, user?.id],
     queryFn: async () => {
       return fetchAll((from, to) => supabase.from("transactions").select("*")
         .eq("client_id", id!).eq("user_id", user!.id)
@@ -235,73 +242,45 @@ const ClienteDetalhe = () => {
   });
 
   const { data: profits = [] } = useQuery({
-    queryKey: ["client-profits", id],
+    queryKey: ["client-profits", id, user?.id],
     queryFn: async () => {
       return fetchAll((from, to) => supabase.from("profits").select("*")
-        .eq("client_id", id!).order("date", { ascending: false }).range(from, to));
+        .eq("client_id", id!).eq("user_id", user!.id).order("date", { ascending: false }).range(from, to));
     },
     enabled: !!id && !!user,
     staleTime: 30_000,
   });
 
-  const kpis = useMemo(() => {
-    const activeContracts = contracts.filter((c: any) => c.status === "active" || c.status === "overdue");
-    const returnedPrincipal = new Map<string, number>();
-    for (const installment of installments as any[]) {
-      if (installment.status !== "paid") continue;
-      const contract = activeContracts.find((c: any) => c.id === installment.contract_id);
-      if (!contract) continue;
-      const fallback = safeNumber(contract.capital) / (safeNumber(contract.num_installments) || 1);
-      returnedPrincipal.set(
-        contract.id,
-        (returnedPrincipal.get(contract.id) || 0) + safeNumber(installment.paid_principal ?? fallback),
-      );
-    }
-    const totalCapital = activeContracts.reduce((s: number, c: any) =>
-      s + Math.max(0, safeNumber(c.capital) - (returnedPrincipal.get(c.id) || 0)), 0);
-    const lifetimeCapital = contracts.reduce((s: number, c: any) => s + safeNumber(c.capital), 0);
-    const totalAmount = contracts.reduce((s: number, c: any) => s + safeNumber(c.total_amount), 0);
-    const paidInst = installments.filter((i: any) => i.status === "paid");
-    const overdueInst = installments.filter((i: any) => i.status === "overdue");
-    const pendingInst = installments.filter((i: any) => i.status === "pending");
-    const totalPaid = paidInst.reduce((s: number, i: any) => s + safeNumber(i.paid_amount ?? i.amount), 0);
-    const balanceOf = (i: any) => {
-      const contract = contracts.find((c: any) => c.id === i.contract_id) as any;
-      return portalInstallmentAmount({
-        ...i,
-        daily_interest_percent: contract?.daily_interest_percent,
-        max_interest_cap_percent: contract?.max_interest_cap_percent,
-      });
-    };
-    const totalOverdue = overdueInst.reduce((s: number, i: any) => s + balanceOf(i), 0);
-    const totalPending = pendingInst.reduce((s: number, i: any) => s + balanceOf(i), 0);
-    const totalProfit = profits.reduce((s: number, p: any) => s + safeNumber(p.amount), 0);
-    const ltvPct = totalAmount > 0 ? Math.max(0, Math.min(100, Math.round((totalPaid / totalAmount) * 100))) : 0;
-    const ticketMedio = contracts.length > 0 ? lifetimeCapital / contracts.length : 0;
-    const totalDueInst = paidInst.length + overdueInst.length;
-    const latePayRate = totalDueInst > 0 ? Math.max(0, Math.min(100, Math.round((overdueInst.length / totalDueInst) * 100))) : 0;
-    const nextDueInst = pendingInst
-      .slice()
-      .sort((a: any, b: any) => (parseLocalDate(a.due_date)?.getTime() ?? Number.MAX_SAFE_INTEGER) - (parseLocalDate(b.due_date)?.getTime() ?? Number.MAX_SAFE_INTEGER))[0];
-    return { totalCapital, lifetimeCapital, totalAmount, totalPaid, totalOverdue, totalPending, totalProfit, remaining: totalPending + totalOverdue, paidInst, overdueInst, pendingInst, ltvPct, ticketMedio, latePayRate, nextDueInst, activeContracts };
-  }, [contracts, installments, profits]);
+  const {data:cash,error:cashError,isLoading:cashLoading,refetch:refetchCash}=useQuery({
+    queryKey:['financial-analytics',user?.id,'client',id,financialDay(clock)],enabled:!!user&&!!id,
+    queryFn:async()=>{const {data,error}=await supabase.rpc('financial_analytics_report',{_expected_owner:user!.id});if(error)throw error;return financialAnalyticsSchema.parse(data);},
+  });
+  const financialReady=!!cash&&!cashError&&!cashLoading&&!contractsLoading&&!installmentsLoading&&!contractsError&&!installmentsError;
+  const kpis=useMemo(()=>clientFinancialSummary(id||'',contracts,installments,financialReady?cash:undefined,clock),[id,contracts,installments,cash,financialReady,clock]);
+  const financialFailure=cashError||contractsError||installmentsError;
+  const requireFinancialReport=()=>{
+    if(financialReady)return true;
+    toast({title:'Aguarde a conferência financeira',description:'O resumo só pode ser exportado após confirmar os recebimentos.',variant:'destructive'});return false;
+  };
 
   // ===== Documentos & Anexos (Storage) =====
-  const docsFolder = id ? `client-docs/${id}` : "";
-  const { data: clientDocs = [] } = useQuery({
-    queryKey: ["client-docs", id],
-    enabled: !!id,
+  const docsFolder = id && user ? `${user.id}/client-docs/${id}` : "";
+  const { data: clientDocs = [], error: clientDocsError, refetch: refetchDocs } = useQuery({
+    queryKey: ["client-docs", id, user?.id],
+    enabled: !!id && !!user,
     queryFn: async () => {
-      const { data, error } = await supabase.storage.from("uploads").list(docsFolder, {
-        limit: 100, sortBy: { column: "created_at", order: "desc" },
-      });
-      if (error) return [];
-      return (data || []).filter((f: any) => f.name && !f.name.startsWith("."));
+      const folders=[docsFolder,`client-docs/${id}`];
+      const lists=await Promise.all(folders.map(async folder=>{
+        const {data,error}=await supabase.storage.from('uploads').list(folder,{limit:100,sortBy:{column:'created_at',order:'desc'}});
+        if(error)throw error;
+        return (data||[]).filter(f=>f.name&&!f.name.startsWith('.')&&f.id).map(f=>({...f,path:`${folder}/${f.name}`}));
+      }));
+      return lists.flat();
     },
   });
   const [docUploading, setDocUploading] = useState(false);
   const uploadDoc = async (file: File) => {
-    if (!file || !id) return;
+    if (!file || !id || !user) return;
     setDocUploading(true);
     try {
       const ext = file.name.split(".").pop() || "bin";
@@ -316,15 +295,15 @@ const ClienteDetalhe = () => {
       toast({ title: "Falha ao anexar", description: e.message, variant: "destructive" });
     } finally { setDocUploading(false); }
   };
-  const deleteDoc = async (name: string) => {
-    if (!confirm("Remover este documento?")) return;
-    const { error } = await supabase.storage.from("uploads").remove([`${docsFolder}/${name}`]);
+  const deleteDoc = async (path: string) => {
+    if (!(await confirm("Remover este documento?"))) return;
+    const { error } = await supabase.storage.from("uploads").remove([path]);
     if (error) return toast({ title: "Erro", description: error.message, variant: "destructive" });
     toast({ title: "Documento removido" });
     inv("client-docs");
   };
-  const signedUrl = async (name: string) => {
-    const { data } = await supabase.storage.from("uploads").createSignedUrl(`${docsFolder}/${name}`, 60 * 10);
+  const signedUrl = async (path: string) => {
+    const { data } = await supabase.storage.from("uploads").createSignedUrl(path, 60 * 10);
     if (data?.signedUrl) window.open(data.signedUrl, "_blank", "noopener,noreferrer");
   };
 
@@ -801,7 +780,7 @@ const ClienteDetalhe = () => {
 
 
   const patchInstallment = (instId: string, patch: any) => {
-    const key = ["client-installments", id];
+    const key = ["client-installments", id, user?.id];
     const prev = qc.getQueryData<any[]>(key);
     qc.setQueryData<any[]>(key, (old) =>
       (old || []).map((i: any) => (i.id === instId ? { ...i, ...patch, _optimistic: true } : i))
@@ -838,7 +817,7 @@ const ClienteDetalhe = () => {
       _fee_discount: Math.max(0, safeNumber(feeDiscount)),
     });
     if (error) {
-      qc.setQueryData(["client-installments", id], snapshot);
+      qc.setQueryData(["client-installments", id, user?.id], snapshot);
       const paymentFailure = friendlyError(error, "Não foi possível quitar a parcela.");
       toast({
         ...paymentFailure,
@@ -892,7 +871,7 @@ const ClienteDetalhe = () => {
         _fee_discount: Math.max(0, safeNumber(payFeeDiscount)),
       });
       if (error) {
-        qc.setQueryData(["client-installments", id], snapshot);
+        qc.setQueryData(["client-installments", id, user?.id], snapshot);
         toast({ ...friendlyError(error, "Não foi possível registrar o pagamento."), variant: "destructive" });
       } else {
         toast({title:`R$ ${fmt(val)} registrado!`,description:paymentReviewDescription(payment)});
@@ -991,7 +970,7 @@ const ClienteDetalhe = () => {
     // paid_amount/paid_fees/paid_interest/paid_principal e recalcula o status.
     const { error } = await supabase.rpc("reverse_installment_payment", { _installment_id: instId });
     if (error) {
-      qc.setQueryData(["client-installments", id], snapshot);
+      qc.setQueryData(["client-installments", id, user?.id], snapshot);
       toast({ ...friendlyError(error, "Não foi possível estornar o pagamento."), variant: "destructive" });
       return;
     }
@@ -1062,15 +1041,17 @@ const ClienteDetalhe = () => {
   };
 
   const exportSummary = () => {
+    if(!requireFinancialReport())return;
     navigator.clipboard.writeText([
       `=== ${client?.name} ===`, `CPF: ${client?.cpf_cnpj || "—"}`,
-      `Capital: R$ ${fmt(kpis.totalCapital)}`, `Recebido: R$ ${fmt(kpis.totalPaid)}`,
+      `Capital em aberto: R$ ${fmt(kpis.totalCapital!)}`, `Recebido: R$ ${fmt(kpis.totalPaid!)}`,
       `Atraso: R$ ${fmt(kpis.totalOverdue)}`, `Restante: R$ ${fmt(kpis.remaining)}`,
     ].join("\n"));
     toast({ title: "Resumo copiado!" });
   };
 
   const generatePDF = () => {
+    if(!requireFinancialReport())return;
     const doc = new jsPDF();
     const now = new Date();
     doc.setFillColor(20, 20, 25); doc.rect(0, 0, 210, 38, "F");
@@ -1088,11 +1069,11 @@ const ClienteDetalhe = () => {
       startY: y,
       head: [["Descrição", "Valor"]],
       body: [
-        ["Capital Emprestado", `R$ ${fmt(kpis.totalCapital)}`],
-        ["Total Recebido", `R$ ${fmt(kpis.totalPaid)}`],
+        ["Capital em aberto", `R$ ${fmt(kpis.totalCapital!)}`],
+        ["Total Recebido", `R$ ${fmt(kpis.totalPaid!)}`],
         ["Total em Atraso", `R$ ${fmt(kpis.totalOverdue)}`],
         ["Saldo Restante", `R$ ${fmt(kpis.remaining)}`],
-        ["Lucro Gerado", `R$ ${fmt(kpis.totalProfit)}`],
+        ["Juros e encargos recebidos", `R$ ${fmt(kpis.totalProfit!)}`],
       ],
       theme: "grid",
       headStyles: { fillColor: [20, 20, 25], fontSize: 9 },
@@ -1259,7 +1240,7 @@ const ClienteDetalhe = () => {
 
   const toggleStatus = async () => {
     const s = client?.status === "Ativo" ? "Inativo" : "Ativo";
-    const key = ["client-detail", id];
+    const key = ["client-detail", id, user?.id];
     const prev = qc.getQueryData<any>(key);
     qc.setQueryData(key, (old: any) => (old ? { ...old, status: s } : old));
     toast({ title: `Status: ${s}` });
@@ -1272,7 +1253,7 @@ const ClienteDetalhe = () => {
 
   const updateScore = async (delta: number) => {
     const ns = Math.max(0, Math.min(100, (client?.credit_score || 0) + delta));
-    const key = ["client-detail", id];
+    const key = ["client-detail", id, user?.id];
     const prev = qc.getQueryData<any>(key);
     qc.setQueryData(key, (old: any) => (old ? { ...old, credit_score: ns } : old));
     toast({ title: `Score: ${ns}` });
@@ -1509,11 +1490,14 @@ const ClienteDetalhe = () => {
       <section className="client-profile-metrics" aria-label="Resumo financeiro">
         {[
           {label:'Saldo em aberto',value:kpis.remaining,detail:`${kpis.pendingInst.length + kpis.overdueInst.length} parcelas a receber`,Icon:Wallet,featured:true},
-          {label:'Capital ativo',value:kpis.totalCapital,detail:`${kpis.activeContracts.length} contratos ativos`,Icon:FileText},
-          {label:'Total recebido',value:kpis.totalPaid,detail:`${kpis.paidInst.length} parcelas pagas`,Icon:CheckCircle},
-          {label:'Lucro recebido',value:kpis.totalProfit,detail:'Resultado dos recebimentos',Icon:TrendingUp},
-        ].map(metric => <article key={metric.label} className={metric.featured ? 'is-featured' : ''}><div className="client-profile-metric-label"><span>{metric.label}</span><metric.Icon size={17} /></div><p><span>R$</span> {fmt(metric.value)}</p><small>{metric.detail}</small></article>)}
+          {label:'Capital em aberto',value:kpis.totalCapital,detail:'Capital liberado menos principal devolvido',Icon:FileText},
+          {label:'Total recebido',value:kpis.totalPaid,detail:`${kpis.receiptCount} recebimentos registrados`,Icon:CheckCircle},
+          {label:'Juros e encargos recebidos',value:kpis.totalProfit,detail:'Composição comprovada dos recebimentos',Icon:TrendingUp},
+        ].map(metric => <article key={metric.label} className={metric.featured ? 'is-featured' : ''}><div className="client-profile-metric-label"><span>{metric.label}</span><metric.Icon size={17} /></div><p><span>R$</span> {financialReady&&metric.value!=null?fmt(metric.value):"—"}</p><small>{metric.detail}</small></article>)}
       </section>
+
+      {financialFailure&&<div role="alert" className="rounded-xl border border-border p-4 text-sm">Não foi possível conferir os recebimentos. <button type="button" onClick={()=>{void refetchCash();inv('client-contracts');inv('client-installments');}} className="underline">Conferir novamente</button></div>}
+      {financialReady&&((kpis.unclassified||0)>0||(kpis.undated||0)>0||kpis.missingDisbursements>0)&&<p role="status" className="rounded-xl border border-border p-4 text-sm">{(kpis.unclassified||0)>0&&`R$ ${fmt(kpis.unclassified!)} recebidos sem classificação de principal, juros e encargos. `}{(kpis.undated||0)>0&&`R$ ${fmt(kpis.undated!)} recebidos sem data válida; fora do gráfico mensal. `}{kpis.missingDisbursements>0&&`${kpis.missingDisbursements} contrato(s) sem liberação comprovada no caixa.`}</p>}
 
       <nav className="client-profile-action-strip" aria-label="Ações rápidas do cliente">
         <button onClick={() => { const phone = getPhone(); if (phone) window.open(`https://wa.me/${phone}`, '_blank', 'noopener,noreferrer'); }}><span className="action-icon whatsapp"><MessageSquare size={20}/></span><span><strong>WhatsApp</strong><small>Enviar mensagem</small></span></button>
@@ -1547,9 +1531,9 @@ const ClienteDetalhe = () => {
 
       <section id="resumo" className="client-profile-reference-layout" aria-label="Visão geral do cliente">
         <article className="reference-card reference-summary-card">
-          <div className="reference-card-heading"><div><span className="client-profile-eyebrow">RESUMO FINANCEIRO</span><h2>Visão geral dos valores</h2></div><button className="reference-select">Últimos 6 meses <ChevronDown size={14}/></button></div>
-          <div className="reference-chart" aria-label="Evolução dos recebimentos"><div className="chart-y"><span>R$ 300</span><span>R$ 200</span><span>R$ 100</span><span>R$ 0</span></div><div className="chart-area"><div className="chart-grid-lines"><i/><i/><i/><i/></div><svg viewBox="0 0 620 170" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="clientChartFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="hsl(var(--primary))" stopOpacity=".32"/><stop offset="1" stopColor="hsl(var(--primary))" stopOpacity="0"/></linearGradient></defs><path d="M0 143 C72 136 110 155 172 140 S278 143 338 84 S428 111 492 104 S570 110 620 107 L620 170 L0 170 Z" fill="url(#clientChartFill)"/><path d="M0 143 C72 136 110 155 172 140 S278 143 338 84 S428 111 492 104 S570 110 620 107" fill="none" stroke="hsl(var(--primary))" strokeWidth="2.5" vectorEffect="non-scaling-stroke"/></svg><div className="chart-x"><span>ABR</span><span>MAI</span><span>JUN</span><span>JUL</span><span>AGO</span><span>SET</span></div></div></div>
-          <div className="reference-summary-legend"><span><i className="dot green"/> {moneyLike(kpis.totalPaid)}<small>Total recebido</small></span><span><i className="dot gold"/> {moneyLike(kpis.totalCapital)}<small>Total emprestado</small></span><span><i className="dot blue"/> {moneyLike(kpis.totalProfit)}<small>Lucro líquido</small></span></div>
+          <div className="reference-card-heading"><div><span className="client-profile-eyebrow">RESUMO FINANCEIRO</span><h2>Visão geral dos valores</h2></div><span className="reference-select">Últimos 6 meses</span></div>
+          <ClientReceiptChart months={kpis.monthly}/>
+          <div className="reference-summary-legend"><span><i className="dot green"/> {financialReady?moneyLike(kpis.totalPaid!):"—"}<small>Total recebido</small></span><span><i className="dot gold"/> {financialReady?moneyLike(kpis.totalCapital!):"—"}<small>Capital em aberto</small></span><span><i className="dot blue"/> {financialReady?moneyLike(kpis.totalProfit!):"—"}<small>Juros e encargos recebidos</small></span></div>
         </article>
         <article id="info-cliente" className="reference-card reference-info-card"><div className="reference-card-heading"><div><span className="client-profile-eyebrow">CADASTRO</span><h2>Informações do cliente</h2></div><button className="reference-select" onClick={startEdit}><Edit size={14}/> Editar</button></div><div className="reference-info-grid"><InfoCell icon={Phone} label="Telefone" value={getPreferredPhone(client) || 'Adicionar'} /><InfoCell icon={MessageSquare} label="WhatsApp" value={getPhone() || 'Adicionar'} tone="green"/><InfoCell icon={Mail} label="E-mail" value={client.email || 'Adicionar'} tone="gold"/><InfoCell icon={User} label="CPF/CNPJ" value={client.cpf_cnpj || 'Adicionar'} tone="violet"/><InfoCell icon={MapPin} label="Endereço" value={address?.street ? `${address.street}${address.number ? `, ${address.number}` : ''}` : 'Adicionar'} tone="red"/><InfoCell icon={Building2} label="Cidade" value={address?.city || 'Adicionar'} tone="blue"/></div><div className="reference-info-footer"><InfoCell icon={Calendar} label="Cliente desde" value={clientSince} tone="gold"/><InfoCell icon={Clock} label="Última atividade" value="Hoje" tone="slate"/></div></article>
         <article id="estatisticas" className="reference-card reference-stats-card"><div className="reference-card-heading"><div><span className="client-profile-eyebrow">PERFORMANCE</span><h2>Estatísticas</h2></div><button className="reference-select">Ver mais <ChevronRight size={14}/></button></div><div className="reference-stat-grid"><StatCell icon={FileText} value={String(contracts.length)} label="Contratos"/><StatCell icon={CheckCircle} value={`${kpis.paidInst.length}/${installments.length || 0}`} label="Parcelas pagas" tone="green"/><StatCell icon={Clock} value={`${kpis.overdueInst.length ? Math.round((kpis.overdueInst.length / Math.max(1, installments.length)) * 100) : 0}%`} label="Taxa de atraso" tone="red"/><StatCell icon={CircleDollarSign} value={moneyLike(kpis.ticketMedio)} label="Ticket médio" tone="gold"/></div><div className="reference-donut-row"><div className="reference-donut" style={{'--progress':`${Math.round((kpis.paidInst.length / Math.max(1, installments.length)) * 100)}%`} as React.CSSProperties}><strong>{Math.round((kpis.paidInst.length / Math.max(1, installments.length)) * 100)}%</strong><small>Taxa de pagamento</small></div><div className="reference-key"><span><i className="dot green"/>Pagas <b>{kpis.paidInst.length}</b></span><span><i className="dot gold"/>Em aberto <b>{kpis.pendingInst.length}</b></span><span><i className="dot red"/>Atrasadas <b>{kpis.overdueInst.length}</b></span><span><i className="dot slate"/>Total <b>{installments.length}</b></span></div></div></article>
@@ -1764,7 +1748,7 @@ const ClienteDetalhe = () => {
               <input type="file" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadDoc(f); e.currentTarget.value = ""; }} />
             </label>
 
-            {clientDocs.length === 0 ? (
+            {clientDocsError ? <ErrorState error={clientDocsError} onRetry={()=>refetchDocs()}/> : clientDocs.length === 0 ? (
               <EmptyState compact icon={FileIcon} title="Nenhum documento anexado" description="RG, comprovante de renda, contrato assinado..." />
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-[60vh] overflow-y-auto pr-1">
@@ -1772,15 +1756,15 @@ const ClienteDetalhe = () => {
                   const documentName = String(d.name || "documento");
                   const isImg = /\.(png|jpe?g|gif|webp|heic)$/i.test(documentName);
                   return (
-                    <div key={d.name} className="group relative flex items-center gap-2 px-3 py-2.5 rounded-xl border border-border bg-background/40 hover:border-primary/40 transition-colors">
+                    <div key={d.path} className="group relative flex items-center gap-2 px-3 py-2.5 rounded-xl border border-border bg-background/40 hover:border-primary/40 transition-colors">
                       <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${isImg ? "bg-violet-500/10 text-violet-400" : "bg-sky-500/10 text-sky-400"}`}>
                         {isImg ? <ImageIcon size={14} /> : <FileIcon size={14} />}
                       </div>
-                      <button type="button" onClick={() => signedUrl(documentName)} className="flex-1 min-w-0 text-left">
+                      <button type="button" onClick={() => signedUrl(d.path)} className="flex-1 min-w-0 text-left">
                         <p className="text-[11px] text-foreground font-semibold truncate">{documentName.replace(/^\d+-/, "")}</p>
                         <p className="text-[9px] text-muted-foreground">{d.metadata?.size ? `${Math.round(d.metadata.size / 1024)} KB` : ""}</p>
                       </button>
-                      <button type="button" onClick={() => deleteDoc(documentName)} className="opacity-0 group-hover:opacity-100 p-1 rounded-md hover:bg-destructive/10 text-destructive transition-opacity" title="Remover">
+                      <button type="button" onClick={() => deleteDoc(d.path)} className="opacity-0 group-hover:opacity-100 p-1 rounded-md hover:bg-destructive/10 text-destructive transition-opacity" title="Remover">
                         <Trash2 size={12} />
                       </button>
                     </div>

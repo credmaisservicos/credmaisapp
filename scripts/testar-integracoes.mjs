@@ -10,6 +10,8 @@ const tests = [
   "supabase/functions/_integration/late_fees_test.ts",
   "supabase/functions/_integration/receipt_outbox_test.ts",
   "supabase/functions/_integration/welcome_email_test.ts",
+  "supabase/functions/_integration/test_recipient_senders_test.ts",
+  "supabase/functions/_integration/entitlement_quota_test.ts",
 ];
 
 // Fetch the complete graph without executing any handler. Dynamic imports of

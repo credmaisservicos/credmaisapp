@@ -2,7 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.117.2";
 
 export type EntitlementResult =
   | { ok: true; tier: string }
-  | { ok: false; status: 402 | 403 | 429; error: string; retryAfterMs?: number };
+  | { ok: false; status: 402 | 403 | 429 | 503; error: string; retryAfterMs?: number };
 
 /** Server-side subscription, plan and cost gate for authenticated functions. */
 export async function enforceEntitlement(
@@ -44,13 +44,23 @@ export async function enforceEntitlement(
 
   const capacity = Math.max(1, options.capacity ?? 30);
   const windowSeconds = Math.max(60, options.windowSeconds ?? 3600);
-  const { data: limit } = await admin.rpc("try_consume_rate_limit", {
-    _key: `user:${userId}:${feature}`,
-    _capacity: capacity,
-    _refill_per_sec: capacity / windowSeconds,
-  });
-  if (limit && limit.allowed === false) {
-    return { ok: false, status: 429, error: "rate_limit_exceeded", retryAfterMs: limit.retry_after_ms };
+  try {
+    const { data: limit, error } = await admin.rpc("try_consume_rate_limit", {
+      _key: `user:${userId}:${feature}`,
+      _capacity: capacity,
+      _refill_per_sec: capacity / windowSeconds,
+    }).abortSignal(AbortSignal.timeout(10_000));
+    // A missing/invalid quota is an unavailable cost gate, never permission to
+    // contact the paid provider. Do not fall back to a per-process counter.
+    if(error || !limit || typeof limit.allowed!=='boolean' || !Number.isFinite(limit.remaining) || limit.remaining<0
+      || !Number.isFinite(limit.retry_after_ms) || limit.retry_after_ms<0 || (!limit.allowed&&limit.retry_after_ms===0)) {
+      return {ok:false,status:503,error:'entitlement_unavailable'};
+    }
+    if (!limit.allowed) {
+      return { ok: false, status: 429, error: "rate_limit_exceeded", retryAfterMs: limit.retry_after_ms };
+    }
+  } catch {
+    return {ok:false,status:503,error:'entitlement_unavailable'};
   }
   return { ok: true, tier };
 }
@@ -61,6 +71,6 @@ export function entitlementResponse(
 ) {
   return new Response(JSON.stringify({ error: result.error, retry_after_ms: result.retryAfterMs }), {
     status: result.status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: { ...corsHeaders, "Content-Type": "application/json", ...(result.retryAfterMs?{'Retry-After':String(Math.max(1,Math.ceil(result.retryAfterMs/1000)))}:{}) },
   });
 }

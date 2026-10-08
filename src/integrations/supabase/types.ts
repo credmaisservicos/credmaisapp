@@ -2716,6 +2716,10 @@ export type Database = {
       }
     }
     Functions: {
+      financial_analytics_report: {
+        Args: { _from?: string | null; _to?: string | null; _expected_owner?: string | null }
+        Returns: Json
+      }
       cancel_manual_cash_operation: {
         Args: { _request_id: string; _expected_owner: string }
         Returns: Json

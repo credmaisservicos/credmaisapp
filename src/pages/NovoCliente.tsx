@@ -226,7 +226,7 @@ const NovoCliente = () => {
 
   // Load existing client when adding a new contract to an existing client (?clientId=…)
   const { data: existingClient } = useQuery({
-    queryKey: ["existing-client-for-new-contract", existingClientId],
+    queryKey: ["existing-client-for-new-contract", existingClientId, user?.id],
     queryFn: async () => {
       const { data, error } = await supabase.from("clients").select("*")
         .eq("id", existingClientId!).eq("user_id", user!.id).maybeSingle();
@@ -238,7 +238,7 @@ const NovoCliente = () => {
   });
 
   const { data: existingRisk = [] } = useQuery({
-    queryKey: ["existing-client-credit-risk", existingClientId],
+    queryKey: ["existing-client-credit-risk", existingClientId, user?.id],
     queryFn: async () => {
       const { data, error } = await supabase.from("contract_installments").select("id,amount,paid_amount,due_date,status")
         .eq("client_id", existingClientId!).eq("user_id", user!.id).neq("status", "paid").neq("status", "cancelled")

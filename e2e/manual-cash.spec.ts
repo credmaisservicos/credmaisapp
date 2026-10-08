@@ -6,6 +6,7 @@ const owner='11111111-1111-4111-8111-111111111111',entry='77777777-7777-4777-877
 const user={id:owner,email:'cash@example.test',aud:'authenticated',role:'authenticated',app_metadata:{},user_metadata:{},created_at:'2026-01-01T00:00:00Z'};
 const origin=new URL(process.env.VITE_SUPABASE_URL||'https://supabase-not-configured.invalid').origin;
 async function setup(context:BrowserContext){
+ await context.route('https://fonts.googleapis.com/**',route=>route.fulfill({contentType:'text/css',body:''}));
  const state={mode:'after' as 'after'|'before'|'ok'|'invalid',requests:[]as any[],cancelRequests:[]as any[],cash:[]as any[],journal:new Map<string,any>(),errors:[]as string[]};
  context.on('page',page=>page.on('pageerror',e=>state.errors.push(e.message)));
  await context.routeWebSocket('**',socket=>socket.close());
@@ -58,7 +59,8 @@ for(const width of [320,1366])test(`resposta perdida do aporte é retomada após
  expect(state.cash).toHaveLength(1);const first=state.requests[0];await page.reload();await expect(pending(page)).toContainText('Aporte fictício');
  expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
  await page.screenshot({path:testInfo.outputPath('pending-cash.png'),fullPage:true});state.mode='ok';await pending(page).getByRole('button',{name:'Verificar e concluir'}).click();
- await expect(pending(page)).toHaveCount(0);expect(state.cash).toHaveLength(1);expect(state.requests.at(-1)).toEqual(first);expect(state.errors).toEqual([]);
+ try{await expect(pending(page)).toHaveCount(0);}catch(error){throw Error(`${(error as Error).message}\nSynthetic cash diagnostics: ${JSON.stringify({mode:state.mode,requests:state.requests.length,cash:state.cash.length,errors:state.errors,pending:await pending(page).textContent(),notices:await page.locator('[role="status"]').allTextContents()})}`);}
+ expect(state.cash).toHaveLength(1);expect(state.requests.at(-1)).toEqual(first);expect(state.errors).toEqual([]);
 });
 test('encerrar um envio não recebido permite revisar e bloqueia sua chegada tardia',async({context,page})=>{
  const state=await setup(context);state.mode='before';await login(page);await walletForm(page);

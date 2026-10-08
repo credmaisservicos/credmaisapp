@@ -17,6 +17,8 @@ const b64 = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("bas
 const supabaseOrigin = new URL(process.env.VITE_SUPABASE_URL || "https://supabase-not-configured.invalid").origin;
 
 async function mockBackend(page: Page, failFirstProfile: boolean|'temporary'|'network' = false) {
+  // Keep authentication fault fixtures independent from the public font CDN.
+  await page.route('https://fonts.googleapis.com/**',route=>route.fulfill({contentType:'text/css',body:''}));
   let profileReads = 0;
   let topbarReads = 0;
   await page.routeWebSocket("**", socket => socket.close());

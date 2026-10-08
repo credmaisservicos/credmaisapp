@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { enforceEntitlement, entitlementResponse } from "../_shared/entitlement.ts";
 import { guard as rateLimitGuard } from "../_shared/rate_limit.ts";
+import { testRecipientScope } from "../_shared/bot_test_scope.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -73,6 +74,10 @@ serve(async (req) => {
     }
     // Accept payload either nested under `data` or flat at the top level
     const data = (reqBody?.data && typeof reqBody.data === "object") ? { ...reqBody, ...reqBody.data } : reqBody;
+
+    if (action === 'send_message' && testRecipientScope(user.id,String(data.phone || '')) === false) {
+      return new Response(JSON.stringify({error:'test_recipient_blocked'}),{status:403,headers:{...corsHeaders,'Content-Type':'application/json'}});
+    }
 
     const { data: settings, error: settingsError } = await supabaseClient
       .from("settings")
