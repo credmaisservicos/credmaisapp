@@ -1,0 +1,23 @@
+import {cleanup,fireEvent,render,screen} from '@testing-library/react';
+import {afterEach,expect,it,vi} from 'vitest';
+import PaymentClassificationDialog from '@/components/PaymentClassificationDialog';
+const state=vi.hoisted(()=>({version:'c'.repeat(32)}));
+vi.mock('@tanstack/react-query',()=>({useQuery:()=>({data:{version:state.version,can_reconcile:true,installment:{id:'33333333-3333-4333-8333-333333333333',paid_amount:100},transactions:[{id:'44444444-4444-4444-8444-444444444444',amount:100,date:'2026-01-01',principal:80,interest:15,fees:5,unallocated:0}],history:[]},isPending:false,error:null})}));
+afterEach(cleanup);
+it('atualização automática exige nova conferência e não troca a versão do envio silenciosamente',()=>{
+ state.version='c'.repeat(32);
+ const operation={pending:null,busy:false,ready:true,storageError:false,run:vi.fn(),cancel:vi.fn()};
+ const element=<PaymentClassificationDialog owner="11111111-1111-4111-8111-111111111111" installmentId="33333333-3333-4333-8333-333333333333" operation={operation} onClose={vi.fn()}/>;
+ const view=render(element);
+ fireEvent.change(screen.getByLabelText('Recebimento',{exact:true}),{target:{value:'44444444-4444-4444-8444-444444444444'}});
+ fireEvent.change(screen.getByLabelText('Motivo da correção'),{target:{value:'Conferência humana do extrato'}});
+ fireEvent.change(screen.getByLabelText('Referência do extrato ou comprovante'),{target:{value:'Extrato fictício TESTE-001'}});
+ fireEvent.click(screen.getByRole('checkbox'));expect(screen.getByRole('button',{name:'Salvar classificação'})).toBeEnabled();
+ state.version='d'.repeat(32);view.rerender(<PaymentClassificationDialog owner="11111111-1111-4111-8111-111111111111" installmentId="33333333-3333-4333-8333-333333333333" operation={operation} onClose={vi.fn()}/>);
+ expect(screen.getByRole('alert')).toHaveTextContent('recebimentos mudaram');
+ const save=screen.getByRole('button',{name:'Salvar classificação'});expect(save).toBeDisabled();
+ fireEvent.submit(save.closest('form')!);expect(operation.run).not.toHaveBeenCalled();
+ fireEvent.click(screen.getByRole('button',{name:'Atualizar conferência'}));expect(save).toBeDisabled();expect(screen.getByRole('checkbox')).not.toBeChecked();
+ fireEvent.click(screen.getByRole('checkbox'));fireEvent.click(save);
+ expect(operation.run).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({version:'d'.repeat(32),principal:80,interest:15,fees:5}));
+});
