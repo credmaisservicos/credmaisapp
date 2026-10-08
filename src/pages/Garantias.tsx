@@ -20,7 +20,7 @@ export default function Garantias() {
   const { data: clients = [] } = useQuery({
     queryKey: ['commercial-clients', user?.id],
     enabled: !!user,
-    queryFn: () => fetchAll((from, to) => supabase.from('clients').select('id,name,full_name,cpf_cnpj').eq('user_id', user!.id).order('name').range(from, to)),
+    queryFn: () => fetchAll((from, to) => supabase.from('clients').select('id,name,cpf_cnpj').eq('user_id', user!.id).order('name').range(from, to)),
   });
   const reload = async () => {
     await refresh();
@@ -33,10 +33,10 @@ export default function Garantias() {
     return sum + (Number.isFinite(value) ? value : 0);
   }, 0);
 
-  return <main className="commercial-page guarantees-page">
+  return <section className="commercial-page guarantees-page">
     <section className="commercial-hero"><div><span className="commercial-eyebrow"><ShieldCheck size={15}/> Área independente</span><h1>Garantias sob guarda.</h1><p>Receba, identifique, acompanhe e devolva bens vinculados aos contratos com histórico claro para toda a equipe.</p></div><button className="commercial-primary" onClick={() => setShowDialog(true)}><Plus size={16}/> Nova garantia</button></section>
     <section className="commercial-kpis"><article><span>Em guarda</span><strong>{held}</strong></article><article><span>Devolvidas</span><strong>{returned}</strong></article><article><span>Valor estimado</span><strong>{money(estimated)}</strong></article></section>
     {isLoading ? <div className="commercial-empty"><h2>Carregando garantias…</h2></div> : error ? <div className="commercial-empty"><h2>Não foi possível carregar as garantias</h2><p className="commercial-muted">Aplique a migração comercial antes de usar este módulo.</p></div> : <CollateralList items={data.collateral} onNew={() => setShowDialog(true)} onSaved={reload} />}
     {showDialog && <CollateralDialog clients={clients} onClose={() => setShowDialog(false)} onSaved={reload} />}
-  </main>;
+  </section>;
 }

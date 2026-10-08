@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import {
   Sunrise, AlertCircle, CheckCircle2, ListTodo, Receipt,
   ArrowRight, MessageSquare, Loader2, Plus, Clock, Sparkles,
-  UserPlus, Cake, DollarSign, TrendingUp, CalendarDays, Wallet, History, ShieldCheck
+  UserPlus, Cake, DollarSign, TrendingUp, CalendarDays, Wallet, History
 } from "lucide-react";
 import SmartAlerts from "@/components/SmartAlerts";
 import { formatBR, parseLocalDate } from "@/lib/dateUtils";
@@ -75,7 +75,7 @@ const Hoje = () => {
       const [
         dueTodayRes, overdueRes, todosRes, notifRes,promisesRes,
         next7Res,pendingMonthRes, clientsRes,
-        cash, reconciliationRes,
+        cash,
       ] = await Promise.all([
         fetchAll((f, t) => supabase.from("contract_installments")
           .select("*, clients:client_id(name, phone, whatsapp), contracts:contract_id(capital, total_amount, total_interest, interest_rate, num_installments, loan_mode, frequency, daily_interest_percent, max_interest_cap_percent, status, daily_penalty_type, daily_penalty_value)")
@@ -107,7 +107,6 @@ const Hoje = () => {
           .not("birth_date", "is", null)
           .range(f, t)).then((d) => ({ data: d })),
         (supabase as any).rpc("financial_analytics_report",{_expected_owner:user!.id}).then(({data,error}:any)=>{if(error)throw error;return financialAnalyticsSchema.parse(data);}),
-        (supabase as any).rpc("financial_reconciliation"),
       ]);
 
       const failed = [dueTodayRes, todosRes, notifRes, promisesRes, next7Res, clientsRes]
@@ -174,7 +173,6 @@ const Hoje = () => {
         aReceberMonth,
         availableCash:cash.wallet.totals.balance,
         cashWarnings:cash.wallet.totals.unclassified+cash.wallet.warnings.undated_amount,
-        reconciliation: reconciliationRes.error ? null : reconciliationRes.data,
       };
     },
     enabled: !!user,
@@ -449,12 +447,6 @@ const Hoje = () => {
             <span className="rounded-full border border-border px-2.5 py-1 text-muted-foreground">
               Caixa <strong className="text-foreground">R$ {fmtBRL(Number(data?.availableCash || 0))}</strong>
             </span>
-            {data?.reconciliation && (
-              <span className={`rounded-full border px-2.5 py-1 font-semibold ${data.reconciliation.ok ? "border-success/25 text-success" : "border-destructive/30 text-destructive"}`}>
-                <ShieldCheck size={11} className="mr-1 inline" />
-                {data.reconciliation.ok ? "Contas conciliadas" : `${data.reconciliation.anomaly_count} divergência(s)`}
-              </span>
-            )}
           </div>
         </div>
         <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">

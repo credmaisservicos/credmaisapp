@@ -29,7 +29,7 @@ export default function Comercial() {
   const [showAsset, setShowAsset] = useState(false); const [showOperation, setShowOperation] = useState<'sale'|'rental'|null>(null);
   const [asset, setAsset] = useState(initialAsset); const [saving, setSaving] = useState(false);
   const { data, isLoading, error, refresh } = useCommercial();
-  const { data: clients = [] } = useQuery({ queryKey: ['commercial-clients', user?.id], enabled: !!user, queryFn: () => fetchAll((f,t) => supabase.from('clients').select('id,name,full_name,cpf_cnpj').eq('user_id', user!.id).order('name').range(f,t)) });
+  const { data: clients = [] } = useQuery({ queryKey: ['commercial-clients', user?.id], enabled: !!user, queryFn: () => fetchAll((f,t) => supabase.from('clients').select('id,name,cpf_cnpj').eq('user_id', user!.id).order('name').range(f,t)) });
   const availablePhones = data.assets.filter(a => a.kind === 'phone' && a.status === 'available');
   const availableVehicles = data.assets.filter(a => (a.kind === 'car' || a.kind === 'motorcycle') && a.status === 'available');
   const activeRentals = data.operations.filter(o => o.kind === 'rental' && o.status === 'active');
@@ -39,7 +39,7 @@ export default function Comercial() {
   const reload = async () => { await refresh(); await qc.invalidateQueries({ queryKey:['commercial-clients'] }); };
   const saveAsset = async (e: React.FormEvent) => { e.preventDefault(); if (saving) return; setSaving(true); try { await commercialRpc('save_business_asset', { _data:{ ...asset, cost:Number(asset.cost)||0, price:Number(asset.price)||0 }, _id:null }); toast({ title:'Bem cadastrado', description:'Ele já está disponível para uma nova operação.' }); setShowAsset(false); setAsset(initialAsset); await reload(); } catch (err) { toast({ title:'Não foi possível salvar', description:(err as Error).message, variant:'destructive' }); } finally { setSaving(false); } };
   if (isOverview) return <><CommercialHub data={data} isLoading={isLoading} error={error} /><QuickActions /></>;
-  return <main className="commercial-page">
+  return <section className="commercial-page">
     <section className="commercial-hero"><div><span className="commercial-eyebrow">Operações comerciais</span><h1>{isOverview ? 'Seu comercial, organizado por módulo.' : tab==='inventory' ? 'Estoque de bens e celulares.' : tab==='sales' ? 'Vendas de celulares.' : 'Locações de carros e motos.'}</h1><p>{isOverview ? 'Escolha uma frente de trabalho e acompanhe cada operação com clareza.' : tab==='inventory' ? 'Cadastre IMEI, placas, custos e preços em um inventário sempre atualizado.' : tab==='sales' ? 'Registre vendas à vista ou parceladas, vinculadas ao celular e ao cliente.' : 'Controle diárias, cauções, quilometragem e devoluções sem perder nenhum detalhe.'}</p></div><div className="commercial-actions">{isOverview ? <><Link className="commercial-primary" to="/comercial/estoque"><Package size={16}/> Abrir estoque</Link><Link className="commercial-secondary" to="/comercial/vendas"><Smartphone size={16}/> Nova venda</Link></> : tab==='inventory' ? <button className="commercial-primary" onClick={()=>setShowAsset(true)}><Plus size={16}/> Novo bem</button> : <button className="commercial-primary" onClick={()=>setShowOperation(tab==='sales'?'sale':'rental')}><Plus size={16}/> Nova operação</button>}</div></section>
     <nav className="commercial-subnav" aria-label="Módulos comerciais"><Link className={isOverview?'is-active':''} to="/comercial">Visão geral</Link>{tabs.map(({path,label,icon:Icon,id})=><Link key={id} className={!isOverview&&tab===id?'is-active':''} to={path}><Icon size={15}/> {label}</Link>)}</nav>
     <section className="commercial-kpis"><article><span>Bens disponíveis</span><strong>{data.assets.filter(a=>a.status==='available').length}</strong></article><article><span>Locações ativas</span><strong>{activeRentals.length}</strong></article><article><span>A receber</span><strong>{money(totalOpen)}</strong></article></section>
@@ -52,7 +52,7 @@ export default function Comercial() {
     </>}
     {showAsset && <div className="commercial-overlay" role="dialog" aria-modal="true"><div className="commercial-modal commercial-dialog"><div className="commercial-toolbar"><div><span className="commercial-eyebrow">Estoque</span><h2>Novo bem comercial</h2></div><button type="button" className="commercial-secondary" onClick={()=>setShowAsset(false)} aria-label="Fechar"><X size={17}/></button></div><form onSubmit={saveAsset}><div className="commercial-form-grid"><SelectField label="Tipo" value={asset.kind} onChange={v=>setAsset({...asset,kind:v as AssetKind})} required><option value="phone">Celular</option><option value="car">Carro</option><option value="motorcycle">Moto</option></SelectField><Field label="Nome / modelo" required minLength={2} value={asset.label} onChange={e=>setAsset({...asset,label:e.target.value})}/><Field label={asset.kind==='phone'?'IMEI (15 dígitos)':'Placa'} required value={asset.identifier} onChange={e=>setAsset({...asset,identifier:e.target.value})}/><Field label="Custo de aquisição (R$)" type="number" min="0" step="0.01" value={asset.cost} onChange={e=>setAsset({...asset,cost:e.target.value})}/><Field label={asset.kind==='phone'?'Preço de venda (R$)':'Valor de referência (R$)'} type="number" min="0" step="0.01" value={asset.price} onChange={e=>setAsset({...asset,price:e.target.value})}/><Field label="Condição" value={asset.condition} onChange={e=>setAsset({...asset,condition:e.target.value})}/></div><div className="commercial-actions"><button type="button" className="commercial-secondary" onClick={()=>setShowAsset(false)}>Cancelar</button><button className="commercial-primary" disabled={saving}>{saving?'Salvando…':'Salvar bem'}</button></div></form></div></div>}
     {showOperation && <OperationDialog kind={showOperation} assets={showOperation==='sale'?availablePhones:availableVehicles} clients={clients} onClose={()=>setShowOperation(null)} onSaved={reload}/>} 
-  </main>;
+  </section>;
 }
 
 function CommercialHub({ data, isLoading, error }: { data: any; isLoading: boolean; error: unknown }) {
@@ -66,7 +66,7 @@ function CommercialHub({ data, isLoading, error }: { data: any; isLoading: boole
     .reduce((sum: number, receivable: any) => sum + Math.max(0, safeNumber(receivable.amount) - safeNumber(receivable.paid_amount)), 0);
 
   return (
-    <main className="commercial-page commercial-hub">
+    <section className="commercial-page commercial-hub">
       <section className="commercial-hero">
         <div>
           <span className="commercial-eyebrow">Central comercial</span>
@@ -108,7 +108,7 @@ function CommercialHub({ data, isLoading, error }: { data: any; isLoading: boole
           </section>
         </>
       )}
-    </main>
+    </section>
   );
 }
 

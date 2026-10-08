@@ -835,7 +835,7 @@ const Chat = () => {
       )}
 
       {/* ============ MAIN CHAT AREA ============ */}
-      <main className="flex-1 flex flex-col min-w-0 bg-background">
+      <section className="flex-1 flex flex-col min-w-0 bg-background">
         {!scope ? (
           <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
             <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
@@ -1228,7 +1228,7 @@ const Chat = () => {
             )}
           </>
         )}
-      </main>
+      </section>
 
       {/* Create channel modal */}
       {showCreateChannel && (
