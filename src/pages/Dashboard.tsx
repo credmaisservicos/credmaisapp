@@ -25,6 +25,7 @@ import BentoKPI from "@/components/dashboard/BentoKPI";
 import PendingCenter from "@/components/dashboard/PendingCenter";
 import { formatBR, parseLocalDate } from "@/lib/dateUtils";
 import { fetchAll } from "@/lib/fetchAll";
+import {financialAnalyticsSchema,periodReceiptTotals,financialDay,addFinancialDays,openFinancialInstallments} from "@/lib/financialAnalytics";
 import { computeDashboardMetrics } from "@/lib/dashboardMetrics";
 
 const safeNumber = (value: unknown) => {
@@ -44,30 +45,31 @@ const Dashboard = () => {
   }, []);
 
   useMultiTableRealtime(
-    ["contracts", "contract_installments", "profits", "clients", "goals"],
+    ["contracts", "contract_installments", "profits", "transactions", "expenses", "clients", "goals"],
     [["dashboard-data", user?.id || ""]],
   );
 
   const { data, isLoading, isPending, isFetching, dataUpdatedAt, error: dashError, refetch: refetchDash } = useQuery({
-    queryKey: ["dashboard-data", user?.id],
+    queryKey: ["dashboard-data", user?.id,financialDay(currentTime)],
     queryFn: async () => {
       // Só as colunas que as métricas usam. Antes vinha `select("*")` das ~1.700
       // parcelas e de todos os contratos, com anexos e observações que a tela nem
       // abre — payload grande à toa, e no celular isso pesa.
-      const [contracts, installments, clients, goals, profits] = await Promise.all([
+      const [contracts, installments, clients, goals, cash] = await Promise.all([
         fetchAll((f, t) => supabase.from("contracts")
-          .select("id, capital, total_interest, num_installments, status, created_at, client_id, clients(name, cpf_cnpj)")
+          .select("id, capital, total_interest, num_installments, status, created_at, client_id, daily_interest_percent, daily_penalty_type, daily_penalty_value, max_interest_cap_percent, clients(name, cpf_cnpj)")
           .eq("user_id", user!.id).range(f, t)),
         fetchAll((f, t) => supabase.from("contract_installments")
-          .select("id, contract_id, client_id, amount, paid_amount, late_fee, due_date, paid_at, status")
+          .select("id, contract_id, client_id, installment_number, amount, paid_amount, paid_principal, paid_interest, paid_fees, late_fee, pre_settlement_snapshot, due_date, paid_at, status")
           .eq("user_id", user!.id).range(f, t)),
         fetchAll((f, t) => supabase.from("clients").select("id, name, credit_score, status").eq("user_id", user!.id).range(f, t)),
         fetchAll((f, t) => supabase.from("goals").select("*").eq("user_id", user!.id).range(f, t)),
-        fetchAll((f, t) => supabase.from("profits").select("amount, date").eq("user_id", user!.id).order("date", { ascending: false }).range(f, t)),
+        (supabase as any).rpc("financial_analytics_report",{_expected_owner:user!.id}).then(({data,error}:any)=>{if(error)throw error;return financialAnalyticsSchema.parse(data);}),
       ]);
       return {
         contracts, installments, clients, goals,
-        profits,
+        cash,
+        profits:cash.receipts.map(r=>({amount:r.interest+r.fees,date:r.date})),
       };
     },
     enabled: !!user,
@@ -75,26 +77,17 @@ const Dashboard = () => {
 
   // O cálculo mora em lib/dashboardMetrics para poder ser testado. Ficando aqui
   // dentro, o filtro errado de inadimplência passou meses sem ninguém notar.
-  const metrics = useMemo(() => (data ? computeDashboardMetrics(data as any) : null), [data]);
+  const metrics = useMemo(() => (data ? computeDashboardMetrics(data as any,currentTime) : null), [data,currentTime]);
 
   // ⚠️ IMPORTANTE: todos os hooks antes de qualquer early return
   const deltaReceived = useMemo(() => {
     if (!data) return undefined;
-    const now = new Date();
-    const d30 = new Date(now.getTime() - 30 * 86400000);
-    const d60 = new Date(now.getTime() - 60 * 86400000);
-    const paid = data.installments.filter((i: any) => i.status === "paid" && i.paid_at);
-    const cur = paid.filter((i: any) => {
-      const date = parseLocalDate(i.paid_at);
-      return !!date && date >= d30;
-    }).reduce((s: number, i: any) => s + safeNumber(i.paid_amount ?? i.amount), 0);
-    const prev = paid.filter((i: any) => {
-      const date = parseLocalDate(i.paid_at);
-      return !!date && date >= d60 && date < d30;
-    }).reduce((s: number, i: any) => s + safeNumber(i.paid_amount ?? i.amount), 0);
+    const today=financialDay(currentTime)!;
+    const cur=periodReceiptTotals(data.cash.receipts,addFinancialDays(today,-29),today).received;
+    const prev=periodReceiptTotals(data.cash.receipts,addFinancialDays(today,-59),addFinancialDays(today,-30)).received;
     if (prev === 0) return cur > 0 ? 100 : 0;
     return ((cur - prev) / prev) * 100;
-  }, [data]);
+  }, [data,currentTime]);
 
   // Estava lá embaixo, DEPOIS dos dois returns antecipados — exatamente o que o
   // aviso acima proíbe. `usePlan` usa `useMemo`: enquanto o painel carregava o
@@ -239,6 +232,7 @@ const Dashboard = () => {
         </div>
       </section>
 
+      {(data.cash.wallet.totals.unclassified>0||data.cash.warnings.contracts_without_disbursement>0)&&<p role="status" className="rounded-xl border border-border p-3 text-sm text-muted-foreground">Há recebimentos sem composição ou contratos sem comprovação de liberação. Os indicadores mostram somente valores comprovados; revise o histórico na Carteira.</p>}
       <PendingCenter overdueCount={metrics.overdueCount} />
 
       {/* ─── Narrativa Executiva ─── */}
@@ -262,8 +256,8 @@ const Dashboard = () => {
 
       {/* ─── KPIs financeiros ─── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 md:gap-4">
-        <BentoKPI label="Capital na Rua" value={`R$ ${fmt(metrics.capitalNaRua)}`} explanation="Soma do capital de todos os contratos que ainda estão ativos ou em atraso. É o dinheiro que está trabalhando por você." hint={`${metrics.contratosAtivos} contrato${metrics.contratosAtivos === 1 ? "" : "s"} ativo${metrics.contratosAtivos === 1 ? "" : "s"}`} icon={Landmark} tone="primary" onClick={() => navigate("/carteira")} />
-        <BentoKPI label="Total Recebido" value={`R$ ${fmt(metrics.totalReceived)}`} explanation="Tudo que já entrou no caixa vindo das parcelas pagas — capital + juros." hint="Somando todas as parcelas quitadas" icon={Wallet} tone="success" delta={deltaReceived} positiveIsGood onClick={() => navigate("/analises")} />
+        <BentoKPI label="Capital na Rua" value={`R$ ${fmt(metrics.capitalNaRua)}`} explanation="Liberações de capital registradas menos principal comprovadamente recebido. Encerramento ou cancelamento não comprovam devolução." hint={`${metrics.contratosAtivos} contrato${metrics.contratosAtivos === 1 ? "" : "s"} ativo${metrics.contratosAtivos === 1 ? "" : "s"}`} icon={Landmark} tone="primary" onClick={() => navigate("/carteira")} />
+        <BentoKPI label="Total Recebido" value={`R$ ${fmt(metrics.totalReceived)}`} explanation="Tudo que já entrou no caixa vindo das parcelas pagas — capital + juros." hint="Recebimentos registrados, inclusive parciais" icon={Wallet} tone="success" delta={deltaReceived} positiveIsGood onClick={() => navigate("/analises")} />
         <BentoKPI label="Lucro Gerado" value={`R$ ${fmt(metrics.totalProfitAmount)}`} explanation="Parte de juros dos pagamentos recebidos — o que sobra depois de devolver o capital emprestado." hint={`ROI de ${metrics.roi.toFixed(1)}% sobre o capital`} icon={TrendingUp} tone="primary" onClick={() => navigate("/analises")} />
         <BentoKPI label="Em Atraso" value={`R$ ${fmt(metrics.totalOverdueAmount)}`} explanation="Parcelas cujo vencimento já passou e continuam pendentes. Priorize a cobrança para não virar prejuízo." hint={`${metrics.taxaInadimplencia.toFixed(1)}% de inadimplência`} icon={AlertCircle} tone={metrics.totalOverdueAmount > 0 ? "danger" : "muted"} onClick={() => navigate("/cobrancas")} />
       </div>
@@ -299,7 +293,7 @@ const Dashboard = () => {
       </div>
 
       {/* ─── Indicadores Executivos ─── */}
-      <ExecutiveKPIs contracts={data.contracts} installments={data.installments} />
+      <ExecutiveKPIs contracts={data.contracts} installments={openFinancialInstallments(data.contracts,data.installments,currentTime).concat(data.installments.filter(i=>i.status==="paid"))} />
 
 
       {/* ─── Tabs: Visão Geral / Análises / Listas ─── */}
@@ -421,9 +415,9 @@ const Dashboard = () => {
 
         {/* ─── TAB: Análises ─── */}
         <TabsContent value="analytics" className="space-y-5 mt-5">
-          <PeriodComparison installments={data?.installments || []} />
+          <PeriodComparison installments={data.cash.receipts.filter(r=>r.date).map(r=>({...r,status:"paid",paid_at:r.date,paid_amount:r.amount}))} />
           <Suspense fallback={<div className="h-72 skeleton-shimmer rounded-2xl" aria-label="Carregando gráficos" />}>
-            <DashboardCharts contracts={metrics.contracts} installments={data?.installments || []} profits={data?.profits || []} />
+            <DashboardCharts contracts={data.contracts} installments={data.cash.receipts.filter(r=>r.date).map(r=>({...r,status:"paid",paid_at:r.date,paid_amount:r.amount})).concat(openFinancialInstallments(data.contracts,data.installments,currentTime))} profits={data.profits} />
           </Suspense>
         </TabsContent>
 

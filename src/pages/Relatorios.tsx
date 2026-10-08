@@ -9,7 +9,10 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { formatBR } from "@/lib/dateUtils";
 import { reportableInstallments, summarizeReportInstallments } from "@/lib/reportMetrics";
-import { buildMonthlyReportRange } from "@/lib/reportPeriod";
+import {useQuery} from "@tanstack/react-query";
+import {financialAnalyticsSchema,financialBounds,financialDay,addFinancialDays,sumMoney} from "@/lib/financialAnalytics";
+import {useFinancialClock} from "@/hooks/useFinancialClock";
+import {useMultiTableRealtime} from "@/hooks/useRealtimeSubscription";
 
 const safeNumber = (value: unknown) => {
   const number = Number(value);
@@ -33,84 +36,45 @@ const Relatorios = () => {
   const [companySettings, setCompanySettings] = useState<any>(null);
 
   useEffect(() => {
+    let active=true;
+    setCompanySettings(null);
     if (!user) return;
     supabase.from("settings").select("company_name, company_cnpj, company_logo_url").eq("user_id", user.id).single()
-      .then(({ data }) => setCompanySettings(data));
-  }, [user]);
+      .then(({ data }) => {if(active)setCompanySettings(data);});
+    return()=>{active=false;};
+  }, [user?.id]);
   const [month, setMonth] = useState(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    return financialDay(new Date())!.slice(0,7);
   });
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
-  const [reportError, setReportError] = useState<string | null>(null);
-
-  const fetchReport = async () => {
-    if (!user) return;
-    setLoading(true);
-    setReportError(null);
-    const range = buildMonthlyReportRange(month);
-    if (!range) {
-      setData(null);
-      setReportError("Selecione um mês válido.");
-      setLoading(false);
-      return;
-    }
-    const { startDay, endDay, startDateTime, endDateTime } = range;
-
-    try {
-    const [profitData, expenseData, clientData, installmentDataRaw, receivedInstallments, contractsRaw] = await Promise.all([
-      fetchAll((f, t) => supabase.from("profits").select("*").eq("user_id", user.id).gte("date", startDateTime).lte("date", endDateTime).range(f, t)),
-      fetchAll((f, t) => supabase.from("expenses").select("*").eq("user_id", user.id).gte("date", startDateTime).lte("date", endDateTime).range(f, t)),
-      fetchAll((f, t) => supabase.from("clients").select("*").eq("user_id", user.id).range(f, t)),
-      fetchAll((f, t) => supabase.from("contract_installments").select("*").eq("user_id", user.id).gte("due_date", startDay).lte("due_date", endDay).range(f, t)),
-      fetchAll((f, t) => supabase.from("contract_installments").select("id,amount,paid_amount,paid_at,status").eq("user_id", user.id).eq("status", "paid").gte("paid_at", startDateTime).lte("paid_at", endDateTime).range(f, t)),
-      fetchAll((f, t) => supabase.from("contracts").select("id,status").eq("user_id", user.id).range(f, t)),
-    ]);
-
-    // Mantém parcelas de contratos já quitados no mês e remove cancelamentos;
-    // assim o último pagamento não desaparece depois da quitação.
-    const installmentData = reportableInstallments(installmentDataRaw, contractsRaw);
-
-    const totalProfit = profitData.reduce((a: number, p: any) => a + safeNumber(p.amount), 0);
-    const totalExpense = expenseData.reduce((a: number, e: any) => a + safeNumber(e.amount), 0);
-    const totalReceived = receivedInstallments.reduce((a: number, i: any) => a + safeNumber(i.paid_amount ?? i.amount), 0);
-    const installmentSummary = summarizeReportInstallments(installmentData);
-
-    setData({
-      profitData, expenseData, clientData, installmentData,
-      totalProfit, totalExpense, totalReceived, totalOverdue: installmentSummary.totalOverdue,
-      paidCount: installmentSummary.paidCount,
-      overdueCount: installmentSummary.overdueCount,
-      pendingCount: installmentSummary.pendingCount,
-      activeClients: clientData.filter((c: any) => c.status === "Ativo").length,
-      balance: totalProfit - totalExpense,
-    });
-    } catch (error) {
-      setData(null);
-      setReportError(error instanceof Error ? error.message : "Não foi possível gerar o relatório.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { 
-    fetchReport(); 
-    
-  }, [user, month]);
-
-  useEffect(() => {
-    if (!user) return;
-    const ch = supabase
-      .channel("realtime-relatorios")
-      .on("postgres_changes" as any, { event: "*", schema: "public", table: "profits", filter: `user_id=eq.${user.id}` }, () => fetchReport())
-      .on("postgres_changes" as any, { event: "*", schema: "public", table: "expenses", filter: `user_id=eq.${user.id}` }, () => fetchReport())
-      .on("postgres_changes" as any, { event: "*", schema: "public", table: "contract_installments", filter: `user_id=eq.${user.id}` }, () => fetchReport())
-      .on("postgres_changes" as any, { event: "*", schema: "public", table: "contracts", filter: `user_id=eq.${user.id}` }, () => fetchReport())
-      .on("postgres_changes" as any, { event: "*", schema: "public", table: "clients", filter: `user_id=eq.${user.id}` }, () => fetchReport())
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [user, month]);
+  const clock=useFinancialClock();
+  const today=financialDay(clock)!;
+  const {data,isLoading:loading,error,refetch:refetchReport}=useQuery({
+    queryKey:['financial-analytics',user?.id,month,today],enabled:!!user,
+    queryFn:async()=>{
+      if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))throw Error('Selecione um mês válido.');
+      const end=new Date(month+'-01T12:00:00Z');end.setUTCMonth(end.getUTCMonth()+1);end.setUTCDate(0);
+      const bounds=financialBounds(month+'-01',end.toISOString().slice(0,10));
+      const [cash,clientData,installmentDataRaw,contractsRaw]=await Promise.all([
+        (supabase as any).rpc('financial_analytics_report',{_from:bounds.startDay,_to:bounds.endDay,_expected_owner:user!.id}).then(({data,error}:any)=>{if(error)throw error;return financialAnalyticsSchema.parse(data);}),
+        fetchAll((f,t)=>supabase.from('clients').select('*').eq('user_id',user!.id).range(f,t)),
+        fetchAll((f,t)=>supabase.from('contract_installments').select('*').eq('user_id',user!.id).gte('due_date',bounds.startDateTime).lt('due_date',bounds.endDateTime).range(f,t)),
+        fetchAll((f,t)=>supabase.from('contracts').select('*').eq('user_id',user!.id).range(f,t)),
+      ]);
+      const installmentData=reportableInstallments(installmentDataRaw,contractsRaw).map(i=>({...i,contracts:contractsRaw.find(c=>c.id===i.contract_id)}));
+      const profitData=cash.receipts.filter(r=>r.interest+r.fees>0).map(r=>({...r,amount:r.interest+r.fees}));
+      const expenseData=cash.expenses;
+      const totalProfit=sumMoney(profitData,p=>p.amount),totalExpense=sumMoney(expenseData,e=>e.amount);
+      const totalReceived=sumMoney(cash.receipts,r=>r.amount);
+      const summary=summarizeReportInstallments(installmentData,clock);
+      return {profitData,expenseData,clientData,installmentData,totalProfit,totalExpense,totalReceived,totalOverdue:summary.totalOverdue,
+        paidCount:summary.paidCount,overdueCount:summary.overdueCount,pendingCount:summary.pendingCount,
+        activeClients:clientData.filter(c=>c.status==='Ativo').length,balance:totalProfit-totalExpense,
+        unclassified:sumMoney(cash.receipts,r=>r.unclassified),undated:cash.wallet.warnings.undated_amount};
+    },
+  });
+  const reportError=error instanceof Error?error.message:error?'Não foi possível gerar o relatório.':null;
+  const fetchReport=()=>refetchReport();
+  useMultiTableRealtime(['transactions','expenses','contract_installments','contracts'],[['financial-analytics',user?.id||'']]);
 
   const monthLabel = (() => {
     const [y, m] = month.split("-").map(Number);
@@ -121,6 +85,8 @@ const Relatorios = () => {
     if (!data) return;
     let csv = "RELATÓRIO MENSAL;" + csvCell(monthLabel.toUpperCase()) + "\r\n\r\n";
     csv += "RESUMO\r\n";
+    csv += `Recebimentos sem composição;${safeNumber(data.unclassified).toFixed(2).replace(".", ",")}\r\n`;
+    csv += `Valores sem data (histórico);${safeNumber(data.undated).toFixed(2).replace(".", ",")}\r\n`;
     csv += `Lucro Total;${safeNumber(data.totalProfit).toFixed(2).replace(".", ",")}\r\n`;
     csv += `Gastos Total;${safeNumber(data.totalExpense).toFixed(2).replace(".", ",")}\r\n`;
     csv += `Saldo;${safeNumber(data.balance).toFixed(2).replace(".", ",")}\r\n`;
@@ -178,7 +144,7 @@ const Relatorios = () => {
         body: [
           ["Lucro Total", `R$ ${fmt(data.totalProfit)}`],
           ["Gastos Total", `R$ ${fmt(data.totalExpense)}`],
-          ["Saldo Líquido", `R$ ${fmt(data.balance)}`],
+          ["Resultado do período", `R$ ${fmt(data.balance)}`],
           ["Total Recebido (parcelas)", `R$ ${fmt(data.totalReceived)}`],
           ["Total em Atraso", `R$ ${fmt(data.totalOverdue)}`],
           ["Clientes Ativos", String(data.activeClients)],
@@ -325,12 +291,13 @@ const Relatorios = () => {
           </div>
 
 
+          {(data.unclassified>0||data.undated>0)&&<p role="status" className="rounded-xl border border-border p-3 text-sm text-muted-foreground">Há recebimentos sem composição ou sem data comprovada. Valores sem data não entram no período; o lucro considera somente a composição comprovada.</p>}
           {/* Main stats */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 stagger-fade-in">
             {[
               { label: "Lucros", value: `R$ ${fmt(data.totalProfit)}`, icon: TrendingUp, color: "text-success", bg: "bg-success/8", glow: data.totalProfit > 0 ? "success-glow" : "" },
               { label: "Gastos", value: `R$ ${fmt(data.totalExpense)}`, icon: ArrowDownRight, color: "text-destructive", bg: "bg-destructive/8", glow: "" },
-              { label: "Saldo", value: `R$ ${fmt(data.balance)}`, icon: Wallet, color: data.balance >= 0 ? "text-success" : "text-destructive", bg: data.balance >= 0 ? "bg-success/8" : "bg-destructive/8", glow: data.balance >= 0 ? "success-glow" : "danger-glow" },
+              { label: "Resultado", value: `R$ ${fmt(data.balance)}`, icon: Wallet, color: data.balance >= 0 ? "text-success" : "text-destructive", bg: data.balance >= 0 ? "bg-success/8" : "bg-destructive/8", glow: data.balance >= 0 ? "success-glow" : "danger-glow" },
               { label: "Recebido", value: `R$ ${fmt(data.totalReceived)}`, icon: CheckCircle, color: "text-success", bg: "bg-success/8", glow: "" },
               { label: "Em Atraso", value: `R$ ${fmt(data.totalOverdue)}`, icon: AlertTriangle, color: "text-destructive", bg: "bg-destructive/8", glow: data.totalOverdue > 0 ? "danger-glow" : "" },
               { label: "Clientes Ativos", value: String(data.activeClients), icon: Users, color: "text-primary", bg: "bg-primary/8", glow: "" },

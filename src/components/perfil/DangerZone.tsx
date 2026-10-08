@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Download, Trash2, AlertTriangle, Loader2, ShieldAlert } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { supabaseFetch } from "@/integrations/supabase/transport";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -24,7 +25,7 @@ export const DangerZone = () => {
       const token = sess.session?.access_token;
       if (!token) throw new Error("Sua sessão expirou. Entre novamente para exportar os dados.");
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export-user-data`;
-      const resp = await fetch(url, {
+      const resp = await supabaseFetch(url, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,

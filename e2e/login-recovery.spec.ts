@@ -1,3 +1,4 @@
+import {emptyFinancialAnalyticsReport} from './helpers/financialAnalytics';
 import { expect, test, type Page } from "@playwright/test";
 
 // A conta e todas as respostas de backend são simuladas no navegador.
@@ -38,7 +39,7 @@ async function mockBackend(page: Page, failFirstProfile: boolean|'temporary'|'ne
         return;
       }
       body = profile;
-    } else if (path === "/rest/v1/rpc/is_admin") body = false;
+    } else if (path === "/rest/v1/rpc/is_admin") body = false; else if(path==='/rest/v1/rpc/financial_analytics_report') body=emptyFinancialAnalyticsReport();
     else if (path === "/rest/v1/platform_settings") body = { maintenance_mode: false, allow_new_registrations: true };
     await route.fulfill({ status: 200, json: body, headers: { "content-range": "0-0/0" } });
   });

@@ -33,6 +33,9 @@ export function useMultiTableRealtime(
     if (!subscribedTables.length) return;
     const keys: string[][] = JSON.parse(keySignature);
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let poll: ReturnType<typeof setInterval> | undefined;
+    let healthTimer: ReturnType<typeof setTimeout> | undefined;
+    let degraded = false;
     let closed = false;
     const scheduleRefresh = () => {
       if (closed || timer !== undefined) return;
@@ -44,6 +47,24 @@ export function useMultiTableRealtime(
         keys.forEach(key => { void queryClient.invalidateQueries({ queryKey: key }); });
       }, 250);
     };
+    const refreshIfAvailable = () => {
+      if (!closed && degraded && navigator.onLine && document.visibilityState === "visible") scheduleRefresh();
+    };
+    const startFallback = () => {
+      if (closed || degraded) return;
+      degraded = true;
+      refreshIfAvailable();
+      // A blocked WebSocket must not leave financial data permanently stale.
+      // Refresh reads only, with a bounded interval and only in a visible tab.
+      poll = setInterval(refreshIfAvailable, 30_000);
+    };
+    const stopFallback = () => {
+      const wasDegraded = degraded;
+      degraded = false;
+      clearInterval(poll); poll = undefined;
+      clearTimeout(healthTimer); healthTimer = undefined;
+      if (wasDegraded) scheduleRefresh();
+    };
     const channel = supabase.channel(
       `tenant:${user.id}:rt-multi-${Math.random().toString(36).slice(2)}`,
     );
@@ -51,11 +72,24 @@ export function useMultiTableRealtime(
       channel.on("postgres_changes" as any,
         { event: "*", schema: "public", table }, scheduleRefresh);
     });
-    channel.subscribe();
+    healthTimer = setTimeout(startFallback, 15_000);
+    try {
+      channel.subscribe(status => {
+        if (closed) return;
+        if (status === "SUBSCRIBED") stopFallback();
+        else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") startFallback();
+      });
+    } catch { startFallback(); }
+    window.addEventListener("online", refreshIfAvailable);
+    document.addEventListener("visibilitychange", refreshIfAvailable);
 
     return () => {
       closed = true;
       clearTimeout(timer);
+      clearTimeout(healthTimer);
+      clearInterval(poll);
+      window.removeEventListener("online", refreshIfAvailable);
+      document.removeEventListener("visibilitychange", refreshIfAvailable);
       void supabase.removeChannel(channel);
     };
   }, [queryClient, user?.id, tableSignature, keySignature]);

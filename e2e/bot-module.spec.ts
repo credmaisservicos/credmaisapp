@@ -1,3 +1,4 @@
+import {emptyFinancialAnalyticsReport} from './helpers/financialAnalytics';
 import {expect,test,type Page} from '@playwright/test';
 test.use({serviceWorkers:'block'});
 const user={id:'11111111-1111-4111-8111-111111111111',email:'bot@example.test',aud:'authenticated',role:'authenticated',app_metadata:{},user_metadata:{},created_at:'2026-01-01T00:00:00Z'};
@@ -10,7 +11,7 @@ async function setup(page:Page,failSettings=false){
     if(path==='/auth/v1/token'){const exp=Math.floor(Date.now()/1000)+3600,b64=(v:unknown)=>Buffer.from(JSON.stringify(v)).toString('base64url');data={access_token:`${b64({alg:'HS256',typ:'JWT'})}.${b64({sub:user.id,exp,role:'authenticated'})}.test`,refresh_token:'test-refresh',token_type:'bearer',expires_in:3600,expires_at:exp,user};}
     else if(path==='/auth/v1/user')data=user;
     else if(path==='/rest/v1/profiles')data={...user,name:'Conta teste',subscription_type:'lifetime',plan_tier:'completo',is_blocked:false,onboarding_completed_at:'2026-01-01T00:00:00Z'};
-    else if(path==='/rest/v1/rpc/is_admin')data=false;
+    else if(path==='/rest/v1/rpc/is_admin')data=false; else if(path==='/rest/v1/rpc/financial_analytics_report') data=emptyFinancialAnalyticsReport();
     else if(path==='/rest/v1/platform_settings')data={maintenance_mode:false};
     else if(path==='/rest/v1/settings_safe'){if(failSettings){await route.fulfill({status:503,json:{message:'Unavailable'}});return;}data=settings;}
     else if(path==='/rest/v1/settings'&&request.method()==='PATCH'){writes.push(request.postDataJSON());settings={...settings,...request.postDataJSON()};data={id:settings.id};}

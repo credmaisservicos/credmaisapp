@@ -19,6 +19,7 @@ const parcela = (over: Partial<MetricsInstallment> = {}): MetricsInstallment => 
   id: crypto.randomUUID(),
   contract_id: "c1",
   amount: 100,
+  pre_settlement_snapshot:{},
   due_date: dias(-1),
   status: "pending",
   ...over,
@@ -184,8 +185,8 @@ describe("carteira e capital", () => {
     // contrato de 1000 em 10 parcelas: cada parcela devolve 100 de capital
     const m = computeDashboardMetrics(
       entrada([
-        parcela({ status: "paid", amount: 120, paid_amount: 120, paid_at: dias(-1) }),
-        parcela({ status: "paid", amount: 120, paid_amount: 120, paid_at: dias(-2) }),
+        parcela({ status: "paid", amount: 120, paid_amount: 120, paid_principal:100,paid_interest:20, paid_at: dias(-1) }),
+        parcela({ status: "paid", amount: 120, paid_amount: 120, paid_principal:100,paid_interest:20, paid_at: dias(-2) }),
       ]),
       AGORA,
     );
@@ -197,7 +198,7 @@ describe("carteira e capital", () => {
   it("reduz capital na rua pelo principal efetivamente devolvido", () => {
     const m = computeDashboardMetrics(
       entrada([
-        parcela({ status: "paid", paid_amount: 300, paid_principal: 180, paid_at: dias(-1) }),
+        parcela({ status: "paid", paid_amount: 300, paid_principal: 180, paid_interest:120, paid_at: dias(-1) }),
         parcela({ status: "pending", due_date: dias(10) }),
       ]),
       AGORA,

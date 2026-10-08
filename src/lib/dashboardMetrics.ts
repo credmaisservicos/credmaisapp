@@ -13,6 +13,7 @@
 
 export type InstallmentStatus = "pending" | "overdue" | "paid" | "cancelled" | string;
 import { parseLocalDate } from "./dateUtils";
+import {financialDay,addFinancialDays,financialDaysBetween,openFinancialInstallments,sumMoney,type FinancialAnalytics} from "./financialAnalytics";
 
 export interface MetricsInstallment {
   id: string;
@@ -20,6 +21,10 @@ export interface MetricsInstallment {
   amount: number | string | null;
   paid_amount?: number | string | null;
   paid_principal?: number | string | null;
+  paid_interest?:number|string|null;
+  paid_fees?:number|string|null;
+  late_fee?:number|string|null;
+  pre_settlement_snapshot?:unknown;
   due_date: string;
   paid_at?: string | null;
   status: InstallmentStatus;
@@ -39,6 +44,7 @@ export interface DashboardInput {
   installments: MetricsInstallment[];
   clients: unknown[];
   goals: unknown[];
+  cash?: FinancialAnalytics;
 }
 
 const num = (v: unknown) => {
@@ -50,110 +56,76 @@ export function computeOutstandingPrincipal(
   contracts: MetricsContract[],
   installments: MetricsInstallment[],
 ) {
-  const active = contracts.filter((c) => c.status === "active" || c.status === "overdue");
-  const activeIds = new Set(active.map((c) => c.id));
-  const returned = new Map<string, number>();
-  for (const installment of installments) {
-    if (installment.status !== "paid" || !activeIds.has(installment.contract_id)) continue;
-    const contract = active.find((c) => c.id === installment.contract_id);
-    const fallback = contract ? num(contract.capital) / (num(contract.num_installments) || 1) : 0;
-    returned.set(installment.contract_id, (returned.get(installment.contract_id) || 0) +
-      (installment.paid_principal == null ? fallback : num(installment.paid_principal)));
-  }
-  return active.reduce((sum, contract) =>
-    sum + Math.max(0, num(contract.capital) - (returned.get(contract.id) || 0)), 0);
+  // Without a cash report, expose only explicitly recorded principal; no rateio.
+  return contracts.filter(c=>c.status==="active"||c.status==="overdue").reduce((sum,c)=>sum+Math.max(0,num(c.capital)-installments.filter(i=>i.contract_id===c.id)
+    .reduce((s,i)=>s+num(i.paid_principal),0)),0);
 }
 
 // As três definições vivem em `supabase/functions/_shared/installmentStatus.ts`
 // e são reexportadas aqui. Compartilhar em vez de copiar é proposital: o mesmo
 // conceito precisa valer no navegador e nos crons, e foi a divergência entre os
 // dois que deixou 265 parcelas fora da cobrança automática.
-export {
-  isEncerrada,
-  isEmAberto,
-  isEmAtraso,
-  venceHoje,
-  diasEmAtraso,
-} from "../../supabase/functions/_shared/installmentStatus";
-
-import { isEmAberto, isEmAtraso, venceHoje } from "../../supabase/functions/_shared/installmentStatus";
+export {isEncerrada,isEmAberto} from "../../supabase/functions/_shared/installmentStatus";
+import {isEmAberto} from "../../supabase/functions/_shared/installmentStatus";
+export function isEmAtraso(i:{status?:string|null;due_date?:string|null},now=new Date()){return isEmAberto(i)&&!!financialDay(i.due_date)&&financialDaysBetween(i.due_date,now)>0;}
+export function venceHoje(i:{status?:string|null;due_date?:string|null},now=new Date()){return isEmAberto(i)&&!!financialDay(i.due_date)&&financialDaysBetween(i.due_date,now)===0;}
+export function diasEmAtraso(i:{status?:string|null;due_date?:string|null},now=new Date()){return isEmAtraso(i,now)?financialDaysBetween(i.due_date,now):0;}
 
 export function computeDashboardMetrics(data: DashboardInput, agora: Date = new Date()) {
-  const { contracts, installments, clients, goals } = data;
+  const { contracts, installments, clients, goals, cash } = data;
 
   // O painel fala do dinheiro que está NA RUA: contratos encerrados vivem no
   // histórico financeiro.
   const activeContracts = contracts.filter((c) => c.status === "active" || c.status === "overdue");
   const activeIds = new Set(activeContracts.map((c) => c.id));
   const activeInstallments = installments.filter((i) => activeIds.has(i.contract_id));
+  const quotedOpen=openFinancialInstallments(contracts,installments,agora);
 
-  const capitalNaRua = computeOutstandingPrincipal(activeContracts, activeInstallments);
+  const capitalNaRua = cash ? Math.max(0,cash.wallet.totals.disbursements-cash.wallet.totals.principal) : computeOutstandingPrincipal(activeContracts,activeInstallments);
   const lucroAReceber = activeContracts.reduce((s, c) => s + num(c.total_interest), 0);
 
   const totalInstallments = activeInstallments.length;
-  const overdueInstallments = activeInstallments.filter((i) => isEmAtraso(i, agora));
+  const overdueInstallments = quotedOpen.filter((i) => isEmAtraso(i, agora));
   const overdueContractIds = new Set([
     ...activeContracts.filter((contract) => contract.status === "overdue").map((contract) => contract.id),
     ...overdueInstallments.map((installment) => installment.contract_id),
   ]);
-  const paidInstallments = activeInstallments.filter((i) => i.status === "paid");
+  const paidInstallments = installments.filter((i) => i.status === "paid");
+  const receipts=cash?.receipts||[];
 
   const taxaInadimplencia = totalInstallments > 0
     ? (overdueInstallments.length / totalInstallments) * 100
     : 0;
 
-  const totalReceived = paidInstallments.reduce((s, i) => s + num(i.paid_amount ?? i.amount), 0);
+  const totalReceived = cash?.wallet.totals.receipts ?? sumMoney(installments,i=>i.paid_amount);
   const totalOverdueAmount = overdueInstallments.reduce((s, i) => s + num(i.amount), 0);
 
-  const vencendoHoje = activeInstallments.filter((i) => venceHoje(i, agora));
+  const vencendoHoje = quotedOpen.filter((i) => venceHoje(i, agora));
 
-  const em7dias = new Date(agora.getTime() + 7 * 86400000);
-  const proximos7 = activeInstallments.filter((i) => {
-    if (!isEmAberto(i) || !i.due_date) return false;
-    const d = parseLocalDate(i.due_date);
-    return !!d && d > agora && d <= em7dias;
-  });
-
-  const todayStr = agora.toISOString().split("T")[0];
-
-  const weeklyActivity = Array.from({ length: 7 }, (_, idx) => {
-    const day = new Date(agora);
-    day.setDate(day.getDate() - (6 - idx));
-    const dayStr = day.toISOString().split("T")[0];
-    const count = paidInstallments.filter((p) => p.paid_at?.startsWith(dayStr)).length;
-    return { day: day.toLocaleDateString("pt-BR", { weekday: "short" }).slice(0, 3), count };
+  const todayStr=financialDay(agora)!;
+  const proximos7=quotedOpen.filter(i=>{const day=financialDay(i.due_date);return day&&day>todayStr&&day<=addFinancialDays(todayStr,7);});
+  const weeklyActivity=Array.from({length:7},(_,idx)=>{
+    const dayStr=addFinancialDays(todayStr,idx-6);
+    return {day:new Date(dayStr+'T12:00:00Z').toLocaleDateString('pt-BR',{weekday:'short',timeZone:'America/Sao_Paulo'}).slice(0,3),
+      count:receipts.filter(r=>r.day===dayStr).length};
   });
   const maxActivity = Math.max(...weeklyActivity.map((w) => w.count), 1);
 
-  const recentPayments = [...paidInstallments]
-    .sort((a, b) => (parseLocalDate(b.paid_at)?.getTime() ?? 0) - (parseLocalDate(a.paid_at)?.getTime() ?? 0))
-    .slice(0, 6);
-
+  const recentPayments = receipts.filter(r=>r.day).slice(0,6).map(r=>({...r,paid_at:r.date,paid_amount:r.amount}));
   const overdueList = overdueInstallments
     .map((i) => {
       const contract = contracts.find((c) => c.id === i.contract_id);
       const due = parseLocalDate(i.due_date);
-      const daysOverdue = due ? Math.max(0, Math.floor((agora.getTime() - due.getTime()) / 86400000)) : 0;
+      const daysOverdue = due ? Math.max(0,financialDaysBetween(i.due_date,agora)) : 0;
       return { ...i, clientName: contract?.clients?.name || "—", daysOverdue, contractId: i.contract_id };
     })
     .sort((a, b) => b.daysOverdue - a.daysOverdue);
 
-  const paidToday = paidInstallments.filter((p) => p.paid_at?.startsWith(todayStr));
-  const paidTodayAmount = paidToday.reduce((s, p) => s + num(p.paid_amount ?? p.amount), 0);
-
-  // Lucro: do que já entrou, quanto era juros e não devolução de capital.
-  const totalCapitalReturned = paidInstallments.reduce((s, i) => {
-    if (i.paid_principal != null) return s + num(i.paid_principal);
-    const contract = activeContracts.find((c) => c.id === i.contract_id);
-    return contract ? s + num(contract.capital) / (num(contract.num_installments) || 1) : s;
-  }, 0);
-  const totalProfitAmount = Math.max(0, totalReceived - totalCapitalReturned);
-
+  const paidTodayAmount=sumMoney(receipts.filter(r=>r.day===todayStr),r=>r.amount);
+  const totalProfitAmount=cash?.wallet.totals.profit ?? sumMoney(installments,i=>num((i as any).paid_interest)+num((i as any).paid_fees));
   const roi = capitalNaRua > 0 ? (totalProfitAmount / capitalNaRua) * 100 : 0;
 
-  const pendingReceivable = activeInstallments
-    .filter(isEmAberto)
-    .reduce((s, i) => s + num(i.amount), 0);
+  const pendingReceivable=sumMoney(quotedOpen,i=>i.amount);
 
   return {
     capitalNaRua,

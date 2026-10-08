@@ -1,3 +1,4 @@
+import {emptyFinancialAnalyticsReport} from './helpers/financialAnalytics';
 import { expect, test, type Page } from "@playwright/test";
 import {emptyWalletCashReport} from './helpers/walletCash';
 
@@ -70,7 +71,7 @@ async function mockBackend(page: Page) {
       body = profile;
     } else if (path === "/rest/v1/rpc/is_admin") {
       body = false;
-    } else if(path==='/rest/v1/rpc/wallet_cash_report') {
+    } else if(path==='/rest/v1/rpc/financial_analytics_report') { body=emptyFinancialAnalyticsReport(); } else if(path==='/rest/v1/rpc/wallet_cash_report') {
       body=emptyWalletCashReport();
     } else if (path === "/rest/v1/rpc/payment_allocation_review") {
       body = {allocation_review_count:0,unallocated_received_total:0,overallocated_received_total:0,installments:[]};

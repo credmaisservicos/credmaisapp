@@ -2,6 +2,8 @@ import { useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { TrendingUp, TrendingDown, Clock, Target, Repeat, Calendar, LineChart } from "lucide-react";
 import { isEmAtraso, isEmAberto } from "@/lib/dashboardMetrics";
+import {financialDay,addFinancialDays} from "@/lib/financialAnalytics";
+import {useFinancialClock} from "@/hooks/useFinancialClock";
 import { parseLocalDate } from "@/lib/dateUtils";
 
 interface Props {
@@ -19,8 +21,9 @@ const safeDate = (value: unknown) => {
 const fmt = (v: number) => `R$ ${safeNumber(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const ExecutiveKPIs = ({ contracts, installments }: Props) => {
+  const now=useFinancialClock();
   const kpis = useMemo(() => {
-    const now = new Date();
+    const today=financialDay(now)!;
     const paid = installments.filter((i) => i.status === "paid" && i.paid_at);
     // Atraso e "em aberto" pelas mesmas regras do painel: um filtro por status
     // específico deixava de fora as parcelas que o check-overdue já marcou.
@@ -76,12 +79,11 @@ const ExecutiveKPIs = ({ contracts, installments }: Props) => {
 
     // Projeção de caixa 30 / 60 / 90 dias
     const bucket = (from: number, to: number) => {
-      const start = new Date(now.getTime() + from * 86400000);
-      const end = new Date(now.getTime() + to * 86400000);
+      const start=addFinancialDays(today,from),end=addFinancialDays(today,to);
       return pending
         .filter((i) => {
-          const d = safeDate(i.due_date);
-          return !!d && d >= start && d < end;
+          const d=financialDay(i.due_date);
+          return !!d&&d>=start&&d<end;
         })
         .reduce((s, i) => s + safeNumber(i.amount), 0);
     };
@@ -98,7 +100,7 @@ const ExecutiveKPIs = ({ contracts, installments }: Props) => {
       : 0;
 
     return { dso, pmr, recovery, cash30, cash60, cash90, cashTotal, ticket };
-  }, [contracts, installments]);
+  }, [contracts,installments,now]);
 
   const executiveCards = [
     { label: "DSO", value: `${kpis.dso.toFixed(1)}d`, hint: "Days Sales Outstanding · atraso médio de recebimento", icon: Clock, tone: kpis.dso <= 3 ? "success" : kpis.dso <= 10 ? "warning" : "danger" },

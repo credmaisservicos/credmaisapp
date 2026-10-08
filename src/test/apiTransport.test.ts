@@ -5,6 +5,18 @@ afterEach(()=>vi.unstubAllGlobals());
 it.each(['https://credmaisapp.com.br','https://www.credmaisapp.com.br','https://build.credmaisapp-vtf.pages.dev'])('uses the app domain for HTTP on %s',origin=>{
  expect(apiTransportUrl(backend+'/auth/v1/token?grant_type=password',origin,false)).toBe(origin+'/api/supabase/auth/v1/token?grant_type=password');
 });
+it('entrega o primeiro trecho do agente sem aguardar o fim do stream',async()=>{
+ let streamController:ReadableStreamDefaultController<Uint8Array>;
+ const body=new ReadableStream<Uint8Array>({start(controller){streamController=controller;controller.enqueue(new TextEncoder().encode('data: first\n\n'));}});
+ const upstream=new Response(body,{headers:{'content-type':'text/event-stream'}});
+ const arrayBuffer=vi.spyOn(upstream,'arrayBuffer');const stub=vi.fn(async(_input:RequestInfo|URL,_options?:RequestInit)=>upstream);vi.stubGlobal('fetch',stub);
+ const controller=new AbortController();
+ const response=await supabaseFetch(backend+'/functions/v1/agent-chat',{method:'POST',body:'{}',headers:{Authorization:'Bearer isolated'},signal:controller.signal});
+ const reader=response.body!.getReader();expect(new TextDecoder().decode((await reader.read()).value)).toBe('data: first\n\n');
+ expect(arrayBuffer).not.toHaveBeenCalled();expect(stub).toHaveBeenCalledTimes(1);
+ expect(stub.mock.calls[0][1]).toMatchObject({method:'POST',signal:controller.signal,headers:{Authorization:'Bearer isolated'}});
+ streamController!.close();expect((await reader.read()).done).toBe(true);
+});
 it('native login uses the production app domain',()=>expect(apiTransportUrl(backend+'/rest/v1/profiles?select=id','https://localhost',true)).toBe('https://credmaisapp.com.br/api/supabase/rest/v1/profiles?select=id'));
 it('keeps local tests, staging backends and realtime separate',()=>{
  expect(apiTransportUrl(backend+'/auth/v1/user','http://localhost:8080',false)).toBe(backend+'/auth/v1/user');

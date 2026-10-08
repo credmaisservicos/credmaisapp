@@ -1,3 +1,4 @@
+import {emptyFinancialAnalyticsReport} from './helpers/financialAnalytics';
 import {test,expect,type BrowserContext,type Page} from '@playwright/test';
 import {emptyWalletCashReport} from './helpers/walletCash';
 test.use({serviceWorkers:'block'});
@@ -15,7 +16,7 @@ async function setup(context:BrowserContext){
    data={access_token:`${b64({alg:'HS256',typ:'JWT'})}.${b64({sub:owner,exp,role:'authenticated'})}.test`,refresh_token:'fictional',expires_in:3600,expires_at:exp,token_type:'bearer',user};
   }else if(path==='/auth/v1/user')data=user;
   else if(path==='/rest/v1/profiles')data={...user,name:'Conta fictícia',subscription_type:'lifetime',is_blocked:false,onboarding_completed_at:'2026-01-01T00:00:00Z'};
-  else if(path==='/rest/v1/rpc/is_admin')data=false;
+  else if(path==='/rest/v1/rpc/is_admin')data=false; else if(path==='/rest/v1/rpc/financial_analytics_report') data=emptyFinancialAnalyticsReport();
   else if(path==='/rest/v1/platform_settings')data={maintenance_mode:false};
   else if(path==='/rest/v1/rpc/payment_allocation_review')data={allocation_review_count:0,unallocated_received_total:0,overallocated_received_total:0,installments:[]};
   else if(path==='/rest/v1/expenses')data=state.cash.filter(row=>row.kind==='expense_create').map(({kind,...row})=>row);

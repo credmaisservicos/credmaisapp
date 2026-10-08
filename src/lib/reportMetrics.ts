@@ -1,3 +1,4 @@
+import {portalOutstandingAmount,type PortalAmountInput} from "./portalAmounts";
 import { isEmAberto, isEmAtraso } from "@/lib/dashboardMetrics";
 
 export type ReportInstallment = {
@@ -7,6 +8,8 @@ export type ReportInstallment = {
   paid_amount?: number | string | null;
   late_fee?: number | string | null;
   due_date?: string | null;
+  pre_settlement_snapshot?:unknown;
+  contracts?:PortalAmountInput["contracts"];
 };
 
 export type ReportContract = { id: string; status?: string | null };
@@ -17,8 +20,8 @@ const money = (value: unknown): number => {
 };
 
 /** Saldo efetivamente aberto, incluindo encargos já materializados. */
-export const installmentOutstanding = (installment: ReportInstallment): number =>
-  Math.max(0, money(installment.amount) + money(installment.late_fee) - money(installment.paid_amount));
+export const installmentOutstanding = (installment: ReportInstallment,reference=new Date()): number =>
+  portalOutstandingAmount(installment as PortalAmountInput,reference);
 
 /**
  * Contratos quitados continuam no mês em que venceram. Se fossem removidos, o
@@ -50,6 +53,6 @@ export const summarizeReportInstallments = (
     paidCount: paid.length,
     overdueCount: overdue.length,
     pendingCount: pending.length,
-    totalOverdue: overdue.reduce((total, installment) => total + installmentOutstanding(installment), 0),
+    totalOverdue: overdue.reduce((total, installment) => total + installmentOutstanding(installment,reference), 0),
   };
 };

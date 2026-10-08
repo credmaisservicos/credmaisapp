@@ -1,3 +1,4 @@
+import {emptyFinancialAnalyticsReport} from './helpers/financialAnalytics';
 import { expect, test, type Page } from "@playwright/test";
 import { mockLargeCollections } from "./helpers/large-collections";
 
@@ -17,7 +18,7 @@ async function loginWithDataset(page: Page, clients: number, perClient: number) 
       json = { access_token: `${b64({ alg: "HS256", typ: "JWT" })}.${b64({ sub: user.id, exp, role: "authenticated" })}.test`, refresh_token: "test-refresh", token_type: "bearer", expires_in: 3600, expires_at: exp, user };
     } else if (path === "/auth/v1/user") json = user;
     else if (path === "/rest/v1/profiles") json = { ...user, name: "Conta fictícia", subscription_type: "lifetime", plan_tier: "essencial", onboarding_completed_at: "2026-01-01T00:00:00Z", is_blocked: false };
-    else if (path === "/rest/v1/rpc/is_admin") json = false;
+    else if (path === "/rest/v1/rpc/is_admin") json = false; else if(path==='/rest/v1/rpc/financial_analytics_report') json=emptyFinancialAnalyticsReport();
     else if (path === "/rest/v1/platform_settings") json = { maintenance_mode: false };
     await route.fulfill({ status: 200, json });
   });

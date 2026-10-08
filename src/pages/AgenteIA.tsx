@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { fetchAll } from "@/lib/fetchAll";
 import { supabase } from "@/integrations/supabase/client";
+import { supabaseFetch } from "@/integrations/supabase/transport";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -279,12 +280,12 @@ const AgenteIA = ({embedded=false,view='chat'}:{embedded?:boolean;view?:'chat'|'
       if (!session) return;
 
       const [resSummary, resSuggest] = await Promise.all([
-        fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-ai-assist`, {
+        supabaseFetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-ai-assist`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
           body: JSON.stringify({ conversation_id: convoId, mode: "summarize" }),
         }).then(r => r.json()),
-        fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-ai-assist`, {
+        supabaseFetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-ai-assist`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
           body: JSON.stringify({ conversation_id: convoId, mode: "suggest" }),
@@ -497,7 +498,7 @@ const AgenteIA = ({embedded=false,view='chat'}:{embedded?:boolean;view?:'chat'|'
   const callEvolutionApi = useCallback(async (actionName: string, extra: Record<string, any> = {}) => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error("Sem sessão");
-    const resp = await fetch(
+    const resp = await supabaseFetch(
       `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/evolution-api`,
       {
         method: "POST",
@@ -1002,7 +1003,7 @@ const AgenteIA = ({embedded=false,view='chat'}:{embedded?:boolean;view?:'chat'|'
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Sem sessão");
-      const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/agent-chat`, {
+      const resp = await supabaseFetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/agent-chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
         body: JSON.stringify({ messages: apiMessages, context }),

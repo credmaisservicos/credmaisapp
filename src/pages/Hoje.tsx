@@ -17,6 +17,8 @@ import { computeLateFeeBreakdown } from "@/lib/lateFee";
 import { isMissingRpcError } from "@/lib/interestOnly";
 import PayModal from "@/components/cobrancas/PayModal";
 import ErrorState from "@/components/feedback/ErrorState";
+import {financialAnalyticsSchema,financialDay,financialBounds,addFinancialDays,financialDaysBetween,periodReceiptTotals} from "@/lib/financialAnalytics";
+import {useFinancialClock} from "@/hooks/useFinancialClock";
 import { portalInstallmentAmount } from "@/lib/portalAmounts";
 
 const startOfToday = () => { const d = new Date(); d.setHours(0,0,0,0); return d; };
@@ -30,18 +32,19 @@ const safeNumber = (value: unknown) => {
 };
 const fmtBRL = (v: number) => safeNumber(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtTime = (iso: string) => formatBR(iso, { day: "2-digit", month: "short" }) || "data indisponível";
-const fmtDayLabel = (iso: string) => {
-  const d = parseLocalDate(iso);
-  if (!d) return "";
-  const today = startOfToday();
-  const diff = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() - today.getTime()) / 86400000);
+const fmtDayLabel = (iso: string,reference=new Date()) => {
+  const day=financialDay(iso);
+  if (!day) return "";
+  const diff=financialDaysBetween(reference,iso);
   if (diff === 0) return "Hoje";
   if (diff === 1) return "Amanhã";
-  return formatBR(d, { weekday: "short", day: "2-digit", month: "2-digit" });
+  return new Date(day+'T12:00:00Z').toLocaleDateString('pt-BR',{timeZone:'America/Sao_Paulo',weekday:'short',day:'2-digit',month:'2-digit'});
 };
 
 const Hoje = () => {
   const { user } = useAuth();
+  const clock=useFinancialClock();
+  const financialToday=financialDay(clock)!;
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -54,80 +57,70 @@ const Hoje = () => {
   }, []);
 
   useMultiTableRealtime(
-    ["contract_installments", "todos", "notifications", "profits"],
+    ["contract_installments", "contracts", "transactions", "expenses", "todos", "notifications", "profits"],
     [["hoje", user?.id]],
   );
 
   const { data, isLoading, error: loadError, refetch } = useQuery({
-    queryKey: ["hoje", user?.id],
+    queryKey: ["hoje", user?.id,financialToday],
     queryFn: async () => {
       if (!user) return null;
-      const today = startOfToday().toISOString();
-      const eod = endOfToday().toISOString();
-      const in7 = inDays(7).toISOString();
-      const som = startOfMonth().toISOString();
-      const eom = endOfMonth().toISOString();
+      const bounds=financialBounds(financialToday,financialToday);
+      const today=bounds.startDateTime,eod=bounds.endDateTime,in7=financialBounds(addFinancialDays(financialToday,7),addFinancialDays(financialToday,7)).endDateTime;
+      const monthStart=financialToday.slice(0,7)+'-01';
+      const monthEnd=new Date(Date.parse(monthStart+'T12:00:00Z'));monthEnd.setUTCMonth(monthEnd.getUTCMonth()+1);monthEnd.setUTCDate(0);
+      const monthLast=monthEnd.toISOString().slice(0,10);
+      const monthBounds=financialBounds(monthStart,monthLast),som=monthBounds.startDateTime,eom=monthBounds.endDateTime;
 
       const [
-        dueTodayRes, overdueRes, todosRes, notifRes, profitsTodayRes, promisesRes,
-        next7Res, paidRecentRes, profitsMonthRes, pendingMonthRes, clientsRes,
-        transactionsRes, expensesRes, reconciliationRes,
+        dueTodayRes, overdueRes, todosRes, notifRes,promisesRes,
+        next7Res,pendingMonthRes, clientsRes,
+        cash, reconciliationRes,
       ] = await Promise.all([
         fetchAll((f, t) => supabase.from("contract_installments")
-          .select("*, clients:client_id(name, phone, whatsapp), contracts:contract_id(capital, total_amount, total_interest, interest_rate, num_installments, loan_mode, frequency, daily_interest_percent, max_interest_cap_percent, daily_penalty_type, daily_penalty_value)")
+          .select("*, clients:client_id(name, phone, whatsapp), contracts:contract_id(capital, total_amount, total_interest, interest_rate, num_installments, loan_mode, frequency, daily_interest_percent, max_interest_cap_percent, status, daily_penalty_type, daily_penalty_value)")
           .eq("user_id", user.id).neq("status", "paid").neq("status", "cancelled")
-          .gte("due_date", today).lte("due_date", eod)
+          .gte("due_date", today).lt("due_date", eod)
           .order("due_date", { ascending: true }).range(f, t)).then((d) => ({ data: d })),
         fetchAll((f, t) => supabase.from("contract_installments")
-          .select("*, clients:client_id(name, phone, whatsapp), contracts:contract_id(capital, total_amount, total_interest, interest_rate, num_installments, loan_mode, frequency, daily_interest_percent, max_interest_cap_percent, daily_penalty_type, daily_penalty_value)")
+          .select("*, clients:client_id(name, phone, whatsapp), contracts:contract_id(capital, total_amount, total_interest, interest_rate, num_installments, loan_mode, frequency, daily_interest_percent, max_interest_cap_percent, status, daily_penalty_type, daily_penalty_value)")
           .eq("user_id", user.id).neq("status", "paid").neq("status", "cancelled")
           .lt("due_date", today)
           .order("due_date", { ascending: true }).range(f, t)).then((d) => ({ data: d })),
         supabase.from("todos").select("id, task, is_complete").eq("user_id", user.id).eq("is_complete", false).order("created_at", { ascending: false }).limit(8),
         supabase.from("notifications").select("id, message, type, link, sent_at").eq("user_id", user.id).eq("is_read", false).order("sent_at", { ascending: false }).limit(5),
-        fetchAll((f, t) => supabase.from("profits").select("amount").eq("user_id", user.id).gte("date", today).lte("date", eod).range(f, t)).then((d) => ({ data: d })),
         supabase.from("audit_logs").select("id, details, created_at").eq("user_id", user.id).eq("action", "promise_to_pay").order("created_at", { ascending: false }).limit(5),
         // Agenda 7 dias (incluindo hoje)
         fetchAll((f, t) => supabase.from("contract_installments")
-          .select("id, amount, paid_amount, due_date, status, client_id, clients:client_id(name), contracts:contract_id(daily_interest_percent, max_interest_cap_percent)")
+          .select("id, contract_id, amount, paid_amount, late_fee, pre_settlement_snapshot, due_date, status, client_id, clients:client_id(name), contracts:contract_id(status,daily_interest_percent,daily_penalty_type,daily_penalty_value,max_interest_cap_percent)")
           .eq("user_id", user.id).neq("status", "paid").neq("status", "cancelled")
-          .gte("due_date", today).lte("due_date", in7)
+          .gte("due_date", today).lt("due_date", in7)
           .order("due_date", { ascending: true }).range(f, t)).then((d) => ({ data: d })),
-        // Últimos pagamentos
-        supabase.from("contract_installments")
-          .select("id, paid_amount, paid_at, client_id, clients:client_id(name)")
-          .eq("user_id", user.id).eq("status", "paid")
-          .not("paid_at", "is", null)
-          .order("paid_at", { ascending: false }).limit(5),
-        // Lucro do mês
-        fetchAll((f, t) => supabase.from("profits").select("amount").eq("user_id", user.id).gte("date", som).lte("date", eom).range(f, t)).then((d) => ({ data: d })),
         // A receber no mês (pendente)
-        fetchAll((f, t) => supabase.from("contract_installments").select("amount,paid_amount,due_date,status,contracts:contract_id(daily_interest_percent,max_interest_cap_percent)")
+        fetchAll((f, t) => supabase.from("contract_installments").select("amount,paid_amount,late_fee,pre_settlement_snapshot,due_date,status,contracts:contract_id(status,daily_interest_percent,daily_penalty_type,daily_penalty_value,max_interest_cap_percent)")
           .eq("user_id", user.id).neq("status", "paid").neq("status", "cancelled")
-          .gte("due_date", som).lte("due_date", eom).range(f, t)).then((d) => ({ data: d })),
+          .gte("due_date", som).lt("due_date", eom).range(f, t)).then((d) => ({ data: d })),
         // Aniversariantes (puxa só os com birth_date e filtra no client)
         fetchAll((f, t) => supabase.from("clients")
           .select("id, name, birth_date, phone, whatsapp")
           .eq("user_id", user.id)
           .not("birth_date", "is", null)
           .range(f, t)).then((d) => ({ data: d })),
-        fetchAll((f, t) => supabase.from("transactions").select("amount,type,date")
-          .eq("user_id", user.id).range(f, t)).then((d) => ({ data: d })),
-        fetchAll((f, t) => supabase.from("expenses").select("amount,date")
-          .eq("user_id", user.id).range(f, t)).then((d) => ({ data: d })),
+        (supabase as any).rpc("financial_analytics_report",{_expected_owner:user!.id}).then(({data,error}:any)=>{if(error)throw error;return financialAnalyticsSchema.parse(data);}),
         (supabase as any).rpc("financial_reconciliation"),
       ]);
 
-      const failed = [dueTodayRes, todosRes, notifRes, promisesRes, next7Res, paidRecentRes, clientsRes]
+      const failed = [dueTodayRes, todosRes, notifRes, promisesRes, next7Res, clientsRes]
         .find((result: any) => result?.error) as any;
       if (failed?.error) throw failed.error;
 
+      for(const result of [dueTodayRes,overdueRes,next7Res,pendingMonthRes])result.data=(result.data||[]).filter((i:any)=>['active','overdue'].includes(i.contracts?.status||''));
       // Top devedores: agrupa atraso por cliente
       const debtors: Record<string, { id: string; name: string; total: number; count: number; phone?: string; whatsapp?: string }> = {};
       (overdueRes.data || []).forEach((i: any) => {
         const cid = i.client_id; if (!cid) return;
         if (!debtors[cid]) debtors[cid] = { id: cid, name: i.clients?.name || "Cliente", total: 0, count: 0, phone: i.clients?.phone, whatsapp: i.clients?.whatsapp };
-        debtors[cid].total += portalInstallmentAmount(i);
+        debtors[cid].total += portalInstallmentAmount(i,clock);
         debtors[cid].count += 1;
       });
       const topDebtors = Object.values(debtors).sort((a, b) => b.total - a.total).slice(0, 5);
@@ -137,37 +130,32 @@ const Hoje = () => {
       (next7Res.data || []).forEach((i: any) => {
         const dueDate = String(i.due_date || "");
         if (!dueDate) return;
-        const key = dueDate.slice(0, 10);
+        const key = financialDay(dueDate);
+        if(!key)return;
         if (!agendaMap[key]) agendaMap[key] = { date: dueDate, items: [], total: 0 };
         agendaMap[key].items.push(i);
-        agendaMap[key].total += portalInstallmentAmount(i);
+        agendaMap[key].total += portalInstallmentAmount(i,clock);
       });
       const agenda = Object.values(agendaMap).sort((a, b) => a.date.localeCompare(b.date));
 
       // Aniversariantes de hoje
-      const now = new Date();
-      const todayMD = `${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
+      const todayMD = financialToday.slice(5,10);
       const birthdays = (clientsRes.data || []).filter((c: any) => {
         if (!c.birth_date) return false;
         const md = c.birth_date.slice(5, 10);
         return md === todayMD;
       });
 
-      const profitMonth = (profitsMonthRes.data || []).reduce((s: number, p: any) => s + safeNumber(p.amount), 0);
-      const aReceberMonth = (pendingMonthRes.data || []).reduce((s: number, p: any) => s + portalInstallmentAmount(p), 0);
-      const txs = transactionsRes.data || [];
-      const cashIn = txs.filter((t: any) => t.type === "payment" || t.type === "capital_injection")
-        .reduce((s: number, t: any) => s + safeNumber(t.amount), 0);
-      const cashOut = txs.filter((t: any) => ["loan_disbursement", "capital_withdrawal", "expense"].includes(t.type))
-        .reduce((s: number, t: any) => s + safeNumber(t.amount), 0) +
-        (expensesRes.data || []).reduce((s: number, e: any) => s + safeNumber(e.amount), 0);
+      const profitMonth=periodReceiptTotals(cash.receipts,monthStart,monthLast);
+      const todayReceipts=periodReceiptTotals(cash.receipts,financialToday,financialToday);
+      const aReceberMonth=(pendingMonthRes.data||[]).reduce((s:number,p:any)=>s+portalInstallmentAmount(p,clock),0);
       const promises = (promisesRes.data || []).map((p: any) => ({
         id: p.id, date: p.details?.promise_date, client: p.details?.client_name || "Cliente",
         msg: p.details?.message,
       }));
       const brokenPromises = promises.filter((p: any) => {
-        const date = parseLocalDate(p.date);
-        return !!date && date < startOfToday();
+        const date = financialDay(p.date);
+        return !!date && date < financialToday;
       }).length;
 
       return {
@@ -175,16 +163,17 @@ const Hoje = () => {
         overdue: overdueRes.data || [],
         todos: todosRes.data || [],
         notifications: notifRes.data || [],
-        profitToday: (profitsTodayRes.data || []).reduce((s: number, p: any) => s + safeNumber(p.amount), 0),
+        profitToday: todayReceipts.interest+todayReceipts.fees,
         promises,
         brokenPromises,
         topDebtors,
         agenda,
         birthdays,
-        paidRecent: paidRecentRes.data || [],
-        profitMonth,
+        paidRecent:cash.receipts.filter(r=>r.date).slice(0,5).map(r=>({...r,paid_at:r.date,paid_amount:r.amount,clients:{name:r.client_name||"Recebimento registrado"}})),
+        profitMonth:profitMonth.interest+profitMonth.fees,
         aReceberMonth,
-        availableCash: cashIn - cashOut,
+        availableCash:cash.wallet.totals.balance,
+        cashWarnings:cash.wallet.totals.unclassified+cash.wallet.warnings.undated_amount,
         reconciliation: reconciliationRes.error ? null : reconciliationRes.data,
       };
     },
@@ -193,11 +182,11 @@ const Hoje = () => {
   });
 
   const totals = useMemo(() => ({
-    dueToday: (data?.dueToday || []).reduce((s, i: any) => s + portalInstallmentAmount(i), 0),
-    overdue: (data?.overdue || []).reduce((s, i: any) => s + portalInstallmentAmount(i), 0),
+    dueToday: (data?.dueToday || []).reduce((s, i: any) => s + portalInstallmentAmount(i,clock), 0),
+    overdue: (data?.overdue || []).reduce((s, i: any) => s + portalInstallmentAmount(i,clock), 0),
     overdueCount: data?.overdue.length || 0,
     dueTodayCount: data?.dueToday.length || 0,
-  }), [data]);
+  }), [data,clock]);
 
   const markPaid = async (
     inst: any,
@@ -227,6 +216,9 @@ const Hoje = () => {
         await Promise.all([
           qc.invalidateQueries({ queryKey: ["hoje"] }),
           qc.invalidateQueries({ queryKey: ["dashboard-data"] }),
+        qc.invalidateQueries({queryKey:["analises-data"]}),
+        qc.invalidateQueries({queryKey:["financial-analytics"]}),
+        qc.invalidateQueries({queryKey:["carteira-cash-report"]}),
           qc.invalidateQueries({ queryKey: ["cobrancas-installments"] }),
         ]);
       } catch (error: any) {
@@ -250,6 +242,9 @@ const Hoje = () => {
         await Promise.all([
           qc.invalidateQueries({ queryKey: ["hoje"] }),
           qc.invalidateQueries({ queryKey: ["dashboard-data"] }),
+        qc.invalidateQueries({queryKey:["analises-data"]}),
+        qc.invalidateQueries({queryKey:["financial-analytics"]}),
+        qc.invalidateQueries({queryKey:["carteira-cash-report"]}),
           qc.invalidateQueries({ queryKey: ["cobrancas-installments"] }),
         ]);
       } catch (error: any) {
@@ -282,6 +277,7 @@ const Hoje = () => {
             _method: "pix",
             _receipt_url: null,
             _source_key: null,
+            _fee_discount:appliedDiscount,
           });
       if (result.error) throw result.error;
       setPendingPayment(null);
@@ -289,6 +285,9 @@ const Hoje = () => {
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["hoje"] }),
         qc.invalidateQueries({ queryKey: ["dashboard-data"] }),
+        qc.invalidateQueries({queryKey:["analises-data"]}),
+        qc.invalidateQueries({queryKey:["financial-analytics"]}),
+        qc.invalidateQueries({queryKey:["carteira-cash-report"]}),
         qc.invalidateQueries({ queryKey: ["cobrancas-installments"] }),
       ]);
     } catch (error: any) {
@@ -497,6 +496,7 @@ const Hoje = () => {
       </nav>
 
       {/* Visão operacional: contexto suficiente para decidir sem abrir relatórios. */}
+      {!!data?.cashWarnings&&<p role="status" className="rounded-xl border border-border p-3 text-sm text-muted-foreground">Há recebimentos sem composição ou data comprovada. O caixa inclui o histórico comprovado; o lucro do período usa somente recebimentos datados e classificados.</p>}
       <section aria-label="Resumo da operação" className="grid grid-cols-2 xl:grid-cols-4 gap-2.5">
         {[
           { label: "Lucro hoje", value: data?.profitToday || 0, helper: "resultado confirmado", Icon: TrendingUp, tone: "text-success bg-success/10 ring-success/20" },
@@ -548,10 +548,10 @@ const Hoje = () => {
             {[...(data?.overdue || []), ...(data?.dueToday || [])].slice(0, 30).map((inst: any) => {
               const dueLocal = parseLocalDate(inst.due_date);
               if (!dueLocal) return null;
-              const isOverdue = dueLocal < startOfToday();
-              const daysLate = isOverdue ? Math.floor((startOfToday().getTime() - dueLocal.getTime()) / 86400000) : 0;
+              const daysLate=Math.max(0,financialDaysBetween(inst.due_date,clock));
+              const isOverdue=daysLate>0;
               const clientName = inst.clients?.name || "Cliente";
-              const amount = safeNumber(inst.amount);
+              const amount = portalInstallmentAmount(inst,clock);
               return (
                 <li key={inst.id} className="px-3 sm:px-4 py-3 grid grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-3 gap-y-2 hover:bg-accent/20 transition-colors">
                   <button onClick={() => navigate(`/clientes/${inst.client_id}`)} className="flex-1 min-w-0 text-left">
@@ -665,7 +665,7 @@ const Hoje = () => {
             {(data?.agenda || []).map((day: any) => (
               <button key={day.date} onClick={() => navigate("/cobrancas")} className="w-full px-4 py-3 flex items-center justify-between gap-3 text-left hover:bg-white/[.035] transition-colors">
                 <div>
-                  <p className="text-xs font-bold text-foreground capitalize">{fmtDayLabel(day.date)}</p>
+                  <p className="text-xs font-bold text-foreground capitalize">{fmtDayLabel(day.date,clock)}</p>
                   <p className="text-[11px] text-muted-foreground">{day.items.length} parcela{day.items.length !== 1 ? "s" : ""}</p>
                 </div>
                 <p className="text-sm font-bold tabular-nums text-foreground">R$ {fmtBRL(day.total)}</p>
@@ -726,7 +726,7 @@ const Hoje = () => {
       )}
 
       {pendingPayment && (() => {
-        const fee = computeLateFeeBreakdown(pendingPayment);
+        const fee = computeLateFeeBreakdown(pendingPayment,clock);
         const alreadyPaid = safeNumber(pendingPayment.paid_amount);
         const remaining = Math.max(0, Math.round((fee.withFees - alreadyPaid) * 100) / 100);
         return (

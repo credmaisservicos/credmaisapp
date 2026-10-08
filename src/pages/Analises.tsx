@@ -1,3 +1,5 @@
+import {financialAnalyticsSchema,financialDay,financialDaysBetween,addFinancialDays,pickerDay,periodReceiptTotals,receiptsInPeriod,openFinancialInstallments,sumMoney} from "@/lib/financialAnalytics";
+import {useFinancialClock} from "@/hooks/useFinancialClock";
 import { isEmAtraso, isEmAberto } from "@/lib/dashboardMetrics";
 import { useMemo, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -47,8 +49,8 @@ const presets: { key: PresetKey; label: string }[] = [
   { key: "custom", label: "Personalizado" },
 ];
 
-function getPresetRange(key: PresetKey): { from: Date; to: Date } {
-  const now = new Date();
+function getPresetRange(key: PresetKey,reference=new Date()): { from: Date; to: Date } {
+  const now=new Date(financialDay(reference)+"T12:00:00");
   switch (key) {
     case "hoje": return { from: startOfDay(now), to: endOfDay(now) };
     case "ontem": { const y = subDays(now, 1); return { from: startOfDay(y), to: endOfDay(y) }; }
@@ -209,8 +211,10 @@ function Section({ title, subtitle, children }: { title: string; subtitle?: stri
 const Analises = () => {
   const { user } = useAuth();
   const [activePreset, setActivePreset] = useState<PresetKey>("30d");
-  const [dateFrom, setDateFrom] = useState<Date>(subDays(new Date(), 30));
-  const [dateTo, setDateTo] = useState<Date>(new Date());
+  const clock=useFinancialClock();
+  const [selectedDateFrom, setDateFrom] = useState<Date>(subDays(new Date(financialDay(new Date())+"T12:00:00"),30));
+  const [selectedDateTo, setDateTo] = useState<Date>(new Date(financialDay(new Date())+"T12:00:00"));
+  const {from:dateFrom,to:dateTo}=activePreset==='custom'?{from:selectedDateFrom,to:selectedDateTo}:getPresetRange(activePreset,clock);
   const [detail, setDetail] = useState<DetailPayload>(null);
 
   const handlePreset = (key: PresetKey) => {
@@ -228,14 +232,16 @@ const Analises = () => {
   );
 
   const { data, isLoading, isFetching, error, refetch, dataUpdatedAt } = useQuery({
-    queryKey: ["analises-data", user?.id],
+    queryKey: ["analises-data", user?.id,financialDay(clock)],
     queryFn: async () => {
-      const [contracts, installments, clients] = await Promise.all([
+      const [contracts, installments, clients,cash] = await Promise.all([
         fetchAll((f, t) => supabase.from("contracts").select("*").eq("user_id", user!.id).range(f, t)),
         fetchAll((f, t) => supabase.from("contract_installments").select("*, clients(id, name)").eq("user_id", user!.id).range(f, t)),
         fetchAll((f, t) => supabase.from("clients").select("id, name, credit_score, status, created_at").eq("user_id", user!.id).range(f, t)),
+        (supabase as any).rpc("financial_analytics_report",{_expected_owner:user!.id}).then(({data,error}:any)=>{if(error)throw error;return financialAnalyticsSchema.parse(data);}),
       ]);
       return {
+        cash,
         contracts: Array.isArray(contracts) ? contracts : [],
         installments: Array.isArray(installments) ? installments : [],
         clients: Array.isArray(clients) ? clients : [],
@@ -249,23 +255,19 @@ const Analises = () => {
 
   const m = useMemo(() => {
     if (!data) return null;
-    const { contracts, installments, clients } = data;
-    const now = new Date();
+    const { contracts, installments:originalInstallments, clients,cash } = data;
+    const installments=originalInstallments.filter(i=>i.status==="paid").concat(openFinancialInstallments(contracts,originalInstallments,clock));
+    const now = clock;
     const rangeStart = startOfDay(dateFrom);
     const rangeEnd = endOfDay(dateTo);
-    const inRange = (d: Date) => d >= rangeStart && d <= rangeEnd;
+    const inRange = (d:Date) => {const day=financialDay(d)!;return day>=pickerDay(dateFrom)&&day<=pickerDay(dateTo);};
     // Normaliza due_date (que pode vir como "YYYY-MM-DD" ou ISO) para Date local sem deslocamento de fuso
-    const parseDueLocal = (s: string) => {
-      if (!s) return null;
-      const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
-      if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-      return safeDate(s);
-    };
-    const dueDayStr = (s: string) => String(s || "").slice(0, 10);
-    const todayStr = format(now, "yyyy-MM-dd");
-    const tomorrowStr = format(subDays(now, -1), "yyyy-MM-dd");
-    const rangeStartStr = format(rangeStart, "yyyy-MM-dd");
-    const rangeEndStr = format(rangeEnd, "yyyy-MM-dd");
+    const parseDueLocal=(value:string)=>{const day=financialDay(value);return day?new Date(day+'T12:00:00Z'):null;};
+    const dueDayStr=(value:string)=>financialDay(value)||'';
+    const todayStr=financialDay(now)!,tomorrowStr=addFinancialDays(todayStr,1);
+    const rangeStartStr=pickerDay(dateFrom),rangeEndStr=pickerDay(dateTo);
+    const receiptTotals=periodReceiptTotals(cash.receipts,rangeStartStr,rangeEndStr);
+    const cashRows=receiptTotals.rows.map(r=>({...r,paid_at:r.date,paid_amount:r.amount,status:'receipt'}));
 
     const paidInRange = installments.filter((i: any) => i.status === "paid" && safeDate(i.paid_at) && inRange(safeDate(i.paid_at)!));
     const contractsInRange = contracts.filter((c: any) => safeDate(c.created_at) && inRange(safeDate(c.created_at)!));
@@ -275,31 +277,27 @@ const Analises = () => {
     });
 
     // ─── Empréstimos no período
-    const totalLent = contractsInRange.reduce((s: number, c: any) => s + safeNumber(c.capital), 0);
+    const periodDisbursements=cash.disbursements.filter(d=>d.day!=null&&d.day>=rangeStartStr&&d.day<=rangeEndStr);
+    const totalLent=sumMoney(periodDisbursements,d=>d.amount);
     const newContracts = contractsInRange.length;
-    const ticketMedio = newContracts > 0 ? totalLent / newContracts : 0;
+    const ticketMedio=periodDisbursements.length?totalLent/periodDisbursements.length:0;
     const novosClientes = clients.filter((c: any) => safeDate(c.created_at) && inRange(safeDate(c.created_at)!)).length;
     const totalProfitExpected = contractsInRange.reduce((s: number, c: any) => s + Math.max(0, safeNumber(c.total_amount) - safeNumber(c.capital)), 0);
 
     // ─── Recebimentos no período
-    const totalReceived = paidInRange.reduce((s: number, i: any) => s + safeNumber(i.paid_amount || i.amount), 0);
-    const paidCount = paidInRange.length;
-    const lucroPeriodo = paidInRange.reduce((s: number, i: any) => {
-      const c = contracts.find((c: any) => c.id === i.contract_id);
-      if (!c?.num_installments) return s;
-      const principal = safeNumber(c.capital) / safeNumber(c.num_installments);
-      return s + Math.max(0, safeNumber(i.paid_amount || i.amount) - principal);
-    }, 0);
-    const multas = paidInRange.reduce((s: number, i: any) => s + safeNumber(i.late_fee), 0);
+    const totalReceived=receiptTotals.received;
+    const paidCount=paidInRange.length;
+    const lucroPeriodo=receiptTotals.interest;
+    const multas=receiptTotals.fees;
 
     // ─── Atraso (saldo atual — não filtrado pelo período)
-    const overdueAll = installments.filter((i: any) => parseDueLocal(i.due_date) && isEmAtraso(i, new Date()));
+    const overdueAll = installments.filter((i: any) => parseDueLocal(i.due_date) && isEmAtraso(i,now));
     const overdueAmount = overdueAll.reduce((s: number, i: any) => s + safeNumber(i.amount), 0);
     const overdueClients = new Set(overdueAll.map((i: any) => i.client_id)).size;
     const ag = (min: number, max: number) => overdueAll.filter((i: any) => {
       const due = parseDueLocal(i.due_date);
       if (!due) return false;
-      const d = Math.floor((startOfDay(now).getTime() - startOfDay(due).getTime()) / 86400000);
+      const d=financialDaysBetween(i.due_date,now);
       return d >= min && d <= max;
     });
     const aging = {
@@ -309,7 +307,8 @@ const Analises = () => {
 
     // ─── Carteira (snapshot atual)
     const activeContracts = contracts.filter((c: any) => c.status === "active" || c.status === "overdue");
-    const capitalAtivo = activeContracts.reduce((s: number, c: any) => s + safeNumber(c.capital), 0);
+    const activeIds=new Set(activeContracts.map(c=>c.id));
+    const capitalAtivo=sumMoney(cash.capital.filter(c=>activeIds.has(c.contract_id)),c=>c.outstanding);
     const aReceberTotal = installments
       .filter((i: any) => isEmAberto(i))
       .reduce((s: number, i: any) => s + safeNumber(i.amount), 0);
@@ -325,19 +324,8 @@ const Analises = () => {
     }).length;
 
     // ─── Capital emprestado (histórico) — independente do período
-    const totalLentHistory = contracts.reduce((s: number, c: any) => s + safeNumber(c.capital), 0);
-    // Contratos encerrados (quitados/cancelados) devolvem 100% do capital para a carteira
-    const CLOSED_STATUSES = new Set(["completed", "paid", "closed", "finished", "quitado", "cancelled", "canceled"]);
-    const closedContractIds = new Set(contracts.filter((c: any) => CLOSED_STATUSES.has(String(c.status || "").toLowerCase())).map((c: any) => c.id));
-    const paidPrincipalAll = contracts.reduce((s: number, c: any) => {
-      const cap = safeNumber(c.capital);
-      if (closedContractIds.has(c.id)) return s + cap; // contrato encerrado → capital volta inteiro
-      if (!c.num_installments) return s;
-      const paidCount = installments.filter((i: any) => i.contract_id === c.id && i.status === "paid").length;
-      const installmentCount = safeNumber(c.num_installments);
-      return installmentCount > 0 ? s + (cap / installmentCount) * paidCount : s;
-    }, 0);
-    const outstandingCapital = Math.max(0, totalLentHistory - paidPrincipalAll);
+    const totalLentHistory=cash.wallet.totals.disbursements;
+    const outstandingCapital=Math.max(0,cash.wallet.totals.disbursements-cash.wallet.totals.principal);
     const totalProfitExpectedAll = contracts.reduce((s: number, c: any) => s + Math.max(0, safeNumber(c.total_amount) - safeNumber(c.capital)), 0);
 
     // ─── Cobrança / inadimplência
@@ -346,18 +334,18 @@ const Analises = () => {
     const pagasNoPrazo = dueAlready.filter((i: any) => {
       if (i.status !== "paid" || !i.paid_at) return false;
       const paidAt = safeDate(i.paid_at);
-      return !!paidAt && format(paidAt, "yyyy-MM-dd") <= dueDayStr(i.due_date);
+      return !!paidAt && financialDay(paidAt)! <= dueDayStr(i.due_date);
     }).length;
     const taxaCobranca = dueAlready.length > 0 ? (pagasNoPrazo / dueAlready.length) * 100 : 0;
     const inadRate = installments.length > 0 ? (overdueAll.length / installments.length) * 100 : 0;
 
     // ─── Previsão próximos 30 dias
     const upcoming = installments.filter((i: any) => {
-      if (i.status !== "pending") return false;
+      if (!isEmAberto(i)) return false;
       const d = dueDayStr(i.due_date);
-      return d >= todayStr && d <= format(subDays(now, -30), "yyyy-MM-dd");
+      return d >= todayStr && d <= addFinancialDays(todayStr,30);
     });
-    const upcoming7 = upcoming.filter((i: any) => dueDayStr(i.due_date) <= format(subDays(now, -7), "yyyy-MM-dd"));
+    const upcoming7 = upcoming.filter((i: any) => dueDayStr(i.due_date) <= addFinancialDays(todayStr,7));
     const forecastAmount = upcoming.reduce((s: number, i: any) => s + safeNumber(i.amount), 0);
     const forecast7Amount = upcoming7.reduce((s: number, i: any) => s + safeNumber(i.amount), 0);
 
@@ -369,12 +357,10 @@ const Analises = () => {
     const rangeMs = rangeEnd.getTime() - rangeStart.getTime();
     const prevStart = new Date(rangeStart.getTime() - rangeMs - 1);
     const prevEnd = new Date(rangeStart.getTime() - 1);
-    const prevLent = contracts
-      .filter((c: any) => { const d = safeDate(c.created_at); return d && d >= prevStart && d <= prevEnd; })
-      .reduce((s: number, c: any) => s + safeNumber(c.capital), 0);
-    const prevReceived = installments
-      .filter((i: any) => { const d = safeDate(i.paid_at); return i.status === "paid" && d && d >= prevStart && d <= prevEnd; })
-      .reduce((s: number, i: any) => s + safeNumber(i.paid_amount || i.amount), 0);
+    const periodDays=financialDaysBetween(rangeStartStr,rangeEndStr)+1;
+    const prevFrom=addFinancialDays(rangeStartStr,-periodDays),prevTo=addFinancialDays(rangeStartStr,-1);
+    const prevLent=sumMoney(cash.disbursements.filter(d=>d.day!=null&&d.day>=prevFrom&&d.day<=prevTo),d=>d.amount);
+    const prevReceived=periodReceiptTotals(cash.receipts,prevFrom,prevTo).received;
     const prevPaidCount = installments.filter((i: any) => { const d = safeDate(i.paid_at); return i.status === "paid" && d && d >= prevStart && d <= prevEnd; }).length;
     const prevContracts = contracts.filter((c: any) => { const d = safeDate(c.created_at); return d && d >= prevStart && d <= prevEnd; }).length;
     const prevProfit = contracts
@@ -388,7 +374,7 @@ const Analises = () => {
       const cid = i.client_id;
       const cname = i.clients?.name || clients.find((c: any) => c.id === cid)?.name || "—";
       const due = parseDueLocal(i.due_date);
-      const days = due ? Math.floor((now.getTime() - due.getTime()) / 86400000) : 0;
+      const days=due?financialDaysBetween(i.due_date,now):0;
       const cur = overdueByClient.get(cid) || { name: cname, amount: 0, count: 0, maxDays: 0 };
       cur.amount += safeNumber(i.amount);
       cur.count += 1;
@@ -410,10 +396,10 @@ const Analises = () => {
     const contractTag = (cid: string) => cid ? `#${String(cid).slice(0, 6)}` : "—";
     const daysLate = (due: string) => {
       const parsed = parseDueLocal(due);
-      return parsed ? Math.max(0, Math.floor((startOfDay(now).getTime() - startOfDay(parsed).getTime()) / 86400000)) : 0;
+      return parsed ? Math.max(0,financialDaysBetween(due,now)) : 0;
     };
 
-    const decorateInst = (i: any) => ({ ...i, _client: clientName(i.client_id), _contract: contractTag(i.contract_id), _days: daysLate(i.due_date), _paid: safeNumber(i.paid_amount || i.amount) });
+    const decorateInst = (i: any) => ({ ...i, _client: clientName(i.client_id), _contract: contractTag(i.contract_id), _days: daysLate(i.due_date), _paid: safeNumber(i.paid_amount ?? i.amount) });
     const decorateContract = (c: any) => {
       const total = safeNumber(c.total_amount);
       const cap = safeNumber(c.capital);
@@ -452,13 +438,7 @@ const Analises = () => {
       { label: "Criado", key: "created_at", format: (v) => fmtDate(v, "dd/MM/yy") },
     ];
 
-    const historyRows = contracts.map((c: any) => {
-      const paidInsts = installments.filter((i: any) => i.contract_id === c.id && i.status === "paid").length;
-      const installmentCount = safeNumber(c.num_installments);
-      const principalPer = installmentCount > 0 ? safeNumber(c.capital) / installmentCount : 0;
-      const remainingCapital = Math.max(0, safeNumber(c.capital) - paidInsts * principalPer);
-      return { ...decorateContract(c), _remainingCapital: remainingCapital };
-    }).sort((a: any, b: any) => b._remainingCapital - a._remainingCapital);
+    const historyRows=contracts.map(c=>({...decorateContract(c),_remainingCapital:cash.capital.find(k=>k.contract_id===c.id)?.outstanding||0})).sort((a,b)=>b._remainingCapital-a._remainingCapital);
 
     const overdueRows = overdueAll.map(decorateInst).sort((a: any, b: any) => b._days - a._days);
     const paidRows = paidInRange.map(decorateInst).sort((a: any, b: any) => safeDateMs(b.paid_at) - safeDateMs(a.paid_at));
@@ -487,16 +467,9 @@ const Analises = () => {
       _client: v.name, _contract: contractTag(cid), count: v.count, maxDays: v.maxDays, amount: v.amount,
     })).sort((a: any, b: any) => b.amount - a.amount);
 
-    const lucroRows = paidInRange.map((i: any) => {
-      const c = contracts.find((c: any) => c.id === i.contract_id);
-      const principal = c && safeNumber(c.num_installments) > 0 ? safeNumber(c.capital) / safeNumber(c.num_installments) : 0;
-      const lucro = Math.max(0, safeNumber(i.paid_amount || i.amount) - principal);
-      return { ...decorateInst(i), _lucro: lucro };
-    }).filter((r: any) => r._lucro > 0).sort((a: any, b: any) => b._lucro - a._lucro);
-
-    const multasRows = paidInRange.filter((i: any) => safeNumber(i.late_fee) > 0)
-      .map((i: any) => ({ ...decorateInst(i), _fee: safeNumber(i.late_fee) }))
-      .sort((a: any, b: any) => b._fee - a._fee);
+    const receiptRows=cashRows.map(decorateInst);
+    const lucroRows=cashRows.filter(r=>r.interest>0).map(r=>({...decorateInst(r),_lucro:r.interest}));
+    const multasRows=cashRows.filter(r=>r.fees>0).map(r=>({...decorateInst(r),_fee:r.fees}));
 
     const agingCols = overdueCols;
     const makeAging = (arr: any[], label: string) => ({
@@ -509,15 +482,15 @@ const Analises = () => {
     });
 
     const details: Record<string, DetailPayload> = {
-      totalLent: { title: "Total emprestado no período", criteria: `Soma do capital dos contratos criados entre ${format(dateFrom, "dd/MM/yy")} e ${format(dateTo, "dd/MM/yy")}.`, total: fmtBRL(totalLent), count: contractsRows.length, columns: contractCols, rows: contractsRows },
+      totalLent: { title: "Total emprestado no período", criteria: `Liberações com lançamento de caixa entre ${format(dateFrom, "dd/MM/yy")} e ${format(dateTo, "dd/MM/yy")}.`, total: fmtBRL(totalLent), count: periodDisbursements.length, columns:[{label:"Data da liberação",key:"date",format:v=>fmtDate(v,"dd/MM/yy")},{label:"Valor",key:"amount",format:v=>fmtBRL(v)}], rows:periodDisbursements },
       totalProfitExpected: { title: "Lucro total dos contratos no período", criteria: `Soma do lucro previsto (total do contrato − capital) dos contratos criados entre ${format(dateFrom, "dd/MM/yy")} e ${format(dateTo, "dd/MM/yy")}.`, total: fmtBRL(totalProfitExpected), count: contractsRows.length, columns: contractCols, rows: contractsRows },
       newContracts: { title: "Novos contratos no período", criteria: "Contratos cuja data de criação está dentro do período selecionado.", count: contractsRows.length, columns: contractCols, rows: contractsRows },
-      ticketMedio: { title: "Ticket médio", criteria: "Total emprestado ÷ nº de contratos no período.", total: fmtBRL(ticketMedio), count: contractsRows.length, columns: contractCols, rows: contractsRows },
+      ticketMedio: { title: "Ticket médio", criteria: "Liberações registradas ÷ número de liberações no período.", total: fmtBRL(ticketMedio), count: contractsRows.length, columns: contractCols, rows: contractsRows },
       novosClientes: { title: "Novos clientes no período", criteria: "Clientes cuja data de cadastro caiu dentro do período selecionado.", count: newClientsRows.length, columns: [{ label: "Cliente", key: "name" }, { label: "Cadastro", key: "_created", format: (v) => fmtDate(v, "dd/MM/yy") }, { label: "Status", key: "status" }], rows: newClientsRows },
-      totalReceived: { title: "Total recebido no período", criteria: "Soma do valor pago das parcelas com status \"pago\" e data de pagamento dentro do período.", total: fmtBRL(totalReceived), count: paidRows.length, columns: paidCols, rows: paidRows },
+      totalReceived: { title: "Total recebido no período", criteria: "Recebimentos registrados na data do caixa, incluindo parciais e renovação.", total: fmtBRL(totalReceived), count: receiptRows.length, columns: paidCols, rows: receiptRows },
       paidCount: { title: "Parcelas pagas no período", criteria: "Parcelas marcadas como pagas cuja data de pagamento caiu no período.", count: paidRows.length, columns: paidCols, rows: paidRows },
-      lucro: { title: "Lucro (juros) recebido", criteria: "Para cada parcela paga, calcula valor pago − (capital ÷ nº parcelas). Considera só valores positivos.", total: fmtBRL(lucroPeriodo), count: lucroRows.length, columns: [...paidCols, { label: "Juros", key: "_lucro", align: "right", format: (v) => fmtBRL(Number(v || 0)) }], rows: lucroRows },
-      multas: { title: "Multas recebidas", criteria: "Soma do campo late_fee das parcelas pagas no período.", total: fmtBRL(multas), count: multasRows.length, columns: [...paidCols, { label: "Multa", key: "_fee", align: "right", format: (v) => fmtBRL(Number(v || 0)) }], rows: multasRows },
+      lucro: { title: "Lucro (juros) recebido", criteria: "Juros comprovadamente alocados nos recebimentos do período. Valores sem composição ficam pendentes de revisão.", total: fmtBRL(lucroPeriodo), count: lucroRows.length, columns: [...paidCols, { label: "Juros", key: "_lucro", align: "right", format: (v) => fmtBRL(Number(v || 0)) }], rows: lucroRows },
+      multas: { title: "Multas recebidas", criteria: "Encargos comprovadamente alocados nos recebimentos do período.", total: fmtBRL(multas), count: multasRows.length, columns: [...paidCols, { label: "Multa", key: "_fee", align: "right", format: (v) => fmtBRL(Number(v || 0)) }], rows: multasRows },
       overdue: { title: "Parcelas em atraso (agora)", criteria: "Todas as parcelas pendentes cujo vencimento já passou — independente do período selecionado.", total: fmtBRL(overdueAmount), count: overdueRows.length, columns: overdueCols, rows: overdueRows },
       overdueClients: { title: "Clientes inadimplentes (agora)", criteria: "Clientes com pelo menos uma parcela em atraso. Total agrupado por cliente.", count: overdueByClientRows.length, columns: [{ label: "Cliente", key: "_client" }, { label: "Parcelas", key: "count", align: "right" }, { label: "Maior atraso", key: "maxDays", align: "right", format: (v) => `${v}d` }, { label: "Valor", key: "amount", align: "right", format: (v) => fmtBRL(Number(v || 0)) }], rows: overdueByClientRows },
       inadRate: { title: "Taxa de inadimplência", criteria: "Parcelas em atraso ÷ total de parcelas no sistema.", total: fmtPct(inadRate), count: overdueRows.length, columns: overdueCols, rows: overdueRows },
@@ -527,11 +500,11 @@ const Analises = () => {
       agingC: makeAging(aging.c, "16-30 dias"),
       agingD: makeAging(aging.d, "31-60 dias"),
       agingE: makeAging(aging.e, "60+ dias"),
-      capitalAtivo: { title: "Capital ativo na rua", criteria: "Soma do capital dos contratos com status \"ativo\" ou \"em atraso\".", total: fmtBRL(capitalAtivo), count: activeRows.length, columns: contractCols, rows: activeRows },
-      totalLentHistory: { title: "Total emprestado (desde sempre)", criteria: "Soma do capital de todos os contratos criados, independente do período selecionado.", total: fmtBRL(totalLentHistory), count: contracts.length, columns: contractCols, rows: contracts.map(decorateContract).sort((a: any, b: any) => safeDateMs(b.created_at) - safeDateMs(a.created_at)) },
+      capitalAtivo: { title: "Capital ativo na rua", criteria: "Liberações registradas menos principal comprovado dos contratos ativos.", total: fmtBRL(capitalAtivo), count: activeRows.length, columns: contractCols, rows: activeRows },
+      totalLentHistory: { title: "Total emprestado (desde sempre)", criteria: "Soma das liberações comprovadas, incluindo lançamentos legados, independente do período.", total: fmtBRL(totalLentHistory), count:cash.disbursements.length,columns:[{label:"Data",key:"date",format:v=>v?fmtDate(v,"dd/MM/yy"):"Sem data comprovada"},{label:"Valor",key:"amount",format:v=>fmtBRL(v)}],rows:cash.disbursements },
       totalProfitExpectedAll: { title: "Lucro total esperado (desde sempre)", criteria: "Soma do lucro previsto (total do contrato − capital) de todos os contratos, independente do período selecionado.", total: fmtBRL(totalProfitExpectedAll), count: contracts.length, columns: contractCols, rows: contracts.map(decorateContract).sort((a: any, b: any) => b._lucro - a._lucro) },
-      outstandingCapital: { title: "Saldo de capital emprestado", criteria: "Capital total já emprestado menos o principal já recuperado pelas parcelas pagas.", total: fmtBRL(outstandingCapital), count: historyRows.filter((r: any) => r._remainingCapital > 0).length, columns: [...contractCols, { label: "Capital em aberto", key: "_remainingCapital", align: "right", format: (v) => fmtBRL(Number(v || 0)) }], rows: historyRows.filter((r: any) => r._remainingCapital > 0) },
-      aReceber: { title: "A receber (total)", criteria: "Soma do valor de todas as parcelas com status \"pendente\".", total: fmtBRL(aReceberTotal), count: pendingRows.length, columns: instCols, rows: pendingRows },
+      outstandingCapital: { title: "Saldo de capital emprestado", criteria: "Capital total já emprestado menos o principal comprovadamente recuperado nos recebimentos.", total: fmtBRL(outstandingCapital), count: historyRows.filter((r: any) => r._remainingCapital > 0).length, columns: [...contractCols, { label: "Capital em aberto", key: "_remainingCapital", align: "right", format: (v) => fmtBRL(Number(v || 0)) }], rows: historyRows.filter((r: any) => r._remainingCapital > 0) },
+      aReceber: { title: "A receber (total)", criteria: "Saldo restante pela cotação atual das parcelas dos contratos ativos, após parciais.", total: fmtBRL(aReceberTotal), count: pendingRows.length, columns: instCols, rows: pendingRows },
       activeContracts: { title: "Contratos ativos", criteria: "Contratos com status \"ativo\" ou \"em atraso\".", count: activeRows.length, columns: contractCols, rows: activeRows },
       totalClients: { title: "Total de clientes", criteria: "Todos os clientes cadastrados (independente de status).", count: clients.length, columns: [{ label: "Cliente", key: "name" }, { label: "Cadastro", key: "created_at", format: (v) => fmtDate(v, "dd/MM/yy") }, { label: "Status", key: "status" }], rows: clients },
       quitados: { title: "Contratos quitados (geral)", criteria: "Contratos cujas parcelas estão todas com status \"pago\".", count: quitadosRows.length, columns: contractCols, rows: quitadosRows },
@@ -585,7 +558,7 @@ const Analises = () => {
       // detalhes
       details, freqDetails,
     };
-  }, [data, dateFrom, dateTo]);
+  }, [data,dateFrom,dateTo,clock]);
 
   const handleExport = () => {
     if (!data) return;
@@ -667,8 +640,9 @@ const Analises = () => {
         </div>
       </div>
 
+      {(data!.cash.wallet.totals.unclassified>0||data!.cash.warnings.contracts_without_disbursement>0||data!.cash.wallet.warnings.undated_amount>0)&&<p role="status" className="rounded-xl border border-border p-3 text-sm text-muted-foreground">Há valores sem composição, data ou comprovação de liberação. Os totais do período consideram eventos com data comprovada. Revise as pendências na Carteira.</p>}
       <section className="analysis-overview-grid" aria-label="Resumo executivo">
-        <button type="button" className="analysis-overview-card is-received" onClick={() => setDetail(m.details.totalReceived)}><span className="analysis-overview-icon"><Wallet size={17}/></span><span><small>Recebido no período</small><strong>{fmtBRL(m.totalReceived)}</strong><em>{m.paidCount} parcelas pagas</em></span></button>
+        <button type="button" className="analysis-overview-card is-received" onClick={() => setDetail(m.details.totalReceived)}><span className="analysis-overview-icon"><Wallet size={17}/></span><span><small>Recebido no período</small><strong>{fmtBRL(m.totalReceived)}</strong><em>inclui parciais e renovação</em></span></button>
         <button type="button" className="analysis-overview-card is-lent" onClick={() => setDetail(m.details.totalLent)}><span className="analysis-overview-icon"><HandCoins size={17}/></span><span><small>Emprestado no período</small><strong>{fmtBRL(m.totalLent)}</strong><em>{m.newContracts} novos contratos</em></span></button>
         <button type="button" className="analysis-overview-card is-risk" onClick={() => setDetail(m.details.overdue)}><span className="analysis-overview-icon"><AlertTriangle size={17}/></span><span><small>Em atraso agora</small><strong>{fmtBRL(m.overdueAmount)}</strong><em>{m.overdueClients} clientes afetados</em></span></button>
         <button type="button" className="analysis-overview-card is-active" onClick={() => setDetail(m.details.capitalAtivo)}><span className="analysis-overview-icon"><TrendingUp size={17}/></span><span><small>Capital ativo</small><strong>{fmtBRL(m.capitalAtivo)}</strong><em>{m.activeCount} contratos ativos</em></span></button>
@@ -743,7 +717,7 @@ const Analises = () => {
           <Section title="💸 Empréstimos no período" subtitle="Quanto dinheiro saiu do seu caixa e quanto ele vai render de volta">
 
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-              <StatCard onClick={() => setDetail(m.details.totalLent)} s={{ label: "Emprestado no período", value: fmtBRL(m.totalLent), tone: "info", icon: HandCoins, delta: m.deltaLent, positiveIsGood: true, hint: "capital dos contratos criados no período" }} />
+              <StatCard onClick={() => setDetail(m.details.totalLent)} s={{ label: "Emprestado no período", value: fmtBRL(m.totalLent), tone: "info", icon: HandCoins, delta: m.deltaLent, positiveIsGood: true, hint: "liberações registradas no período" }} />
               <StatCard onClick={() => setDetail(m.details.totalProfitExpected)} s={{ label: "Lucro previsto (período)", value: fmtBRL(m.totalProfitExpected), tone: "success", icon: PiggyBank, delta: m.deltaProfit, positiveIsGood: true, hint: "total − capital dos contratos do período" }} />
               <StatCard onClick={() => setDetail(m.details.newContracts)} s={{ label: "Novos contratos", value: fmtNum(m.newContracts), tone: "default", icon: FileSignature, delta: m.deltaContracts, positiveIsGood: true }} />
               <StatCard onClick={() => setDetail(m.details.ticketMedio)} s={{ label: "Ticket médio", value: fmtBRL(m.ticketMedio), tone: "default", icon: Target }} />
@@ -823,8 +797,8 @@ const Analises = () => {
           {/* ─── CAPITAL EMPRESTADO ─── */}
           <Section title="🏦 Capital emprestado" subtitle="Quanto já saiu do caixa, quanto está trabalhando na rua e quanto ainda vai render">
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-              <StatCard onClick={() => setDetail(m.details.totalLentHistory)} s={{ label: "Total emprestado (histórico)", value: fmtBRL(m.totalLentHistory), tone: "info", icon: HandCoins, hint: `${data?.contracts.length ?? 0} contrato(s) — soma do capital de TODOS os contratos` }} />
-              <StatCard onClick={() => setDetail(m.details.outstandingCapital)} s={{ label: "Capital na rua (agora)", value: fmtBRL(m.outstandingCapital), tone: "warning", icon: Wallet, hint: "capital histórico − principal já recuperado" }} />
+              <StatCard onClick={() => setDetail(m.details.totalLentHistory)} s={{ label: "Total emprestado (histórico)", value: fmtBRL(m.totalLentHistory), tone: "info", icon: HandCoins, hint: `${data?.contracts.length ?? 0} contrato(s) — liberações comprovadas` }} />
+              <StatCard onClick={() => setDetail(m.details.outstandingCapital)} s={{ label: "Capital na rua (agora)", value: fmtBRL(m.outstandingCapital), tone: "warning", icon: Wallet, hint: "liberações registradas − principal comprovado" }} />
               <StatCard onClick={() => setDetail(m.details.totalProfitExpectedAll)} s={{ label: "Lucro previsto (histórico)", value: fmtBRL(m.totalProfitExpectedAll), tone: "success", icon: PiggyBank, hint: "total dos contratos − capital, todos os contratos" }} />
             </div>
           </Section>

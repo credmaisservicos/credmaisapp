@@ -1,3 +1,4 @@
+import {emptyFinancialAnalyticsReport} from './helpers/financialAnalytics';
 import { expect, test, type Page } from "@playwright/test";
 
 test.use({ serviceWorkers: "block" });
@@ -122,7 +123,7 @@ async function mockBackend(page: Page) {
       sender_role: "user", sender_name: "Cliente de teste", message: "Preciso entender esta cobrança.",
       is_internal: false, created_at: "2026-09-15T08:00:00Z",
     }];
-    else if (path === "/rest/v1/rpc/is_admin") body = true;
+    else if (path === "/rest/v1/rpc/is_admin") body = true; else if(path==='/rest/v1/rpc/financial_analytics_report') body=emptyFinancialAnalyticsReport();
     else if (path === "/rest/v1/platform_settings") body = { maintenance_mode: false, allow_new_registrations: true };
     await route.fulfill({ status: 200, json: body, headers: { "content-range": "0-0/0" } });
   });

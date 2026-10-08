@@ -1,3 +1,4 @@
+import {emptyFinancialAnalyticsReport} from './helpers/financialAnalytics';
 import {test,expect,type Page} from '@playwright/test';
 import {emptyWalletCashReport} from './helpers/walletCash';
 test.use({serviceWorkers:'block'});
@@ -17,7 +18,7 @@ async function setup(page:Page,firstFailure=false){
    data={access_token:`${b64({alg:'HS256',typ:'JWT'})}.${b64({sub:user.id,exp,role:'authenticated'})}.test`,refresh_token:'fictional-refresh',expires_in:3600,expires_at:exp,token_type:'bearer',user};
   }else if(path==='/auth/v1/user')data=user;
   else if(path==='/rest/v1/profiles')data={...user,name:'Fictício',subscription_type:'lifetime',is_blocked:false,onboarding_completed_at:'2026-01-01T00:00:00Z'};
-  else if(path==='/rest/v1/rpc/is_admin')data=false;
+  else if(path==='/rest/v1/rpc/is_admin')data=false; else if(path==='/rest/v1/rpc/financial_analytics_report') data=emptyFinancialAnalyticsReport();
   else if(path==='/rest/v1/rpc/wallet_cash_report')data=emptyWalletCashReport();
   else if(path==='/rest/v1/platform_settings')data={maintenance_mode:false,allow_new_registrations:true};
   else if(path==='/rest/v1/rpc/payment_allocation_review'){

@@ -16,7 +16,7 @@ export function useManualCashOperation(owner:string|undefined,onApplied:()=>void
   return ()=>{alive=false;};
  },[owner]);
  const invalidate=(id:string)=>{
-  for(const key of [['carteira-cash-report',id],['gastos-data',id],['dashboard-data'],['payment-allocation-review',id]])void qc.invalidateQueries({queryKey:key});
+  for(const key of [['carteira-cash-report',id],['gastos-data',id],['dashboard-data'],['hoje',id],['analises-data',id],['financial-analytics',id],['payment-allocation-review',id]])void qc.invalidateQueries({queryKey:key});
  };
  const settle=async(draft:ManualCashDraft,result:ManualCashResult|null)=>{
   await clearManualCashDraft(draft);

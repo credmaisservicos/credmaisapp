@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, Minus, TrendingUp } from "lucide-react";
+import {financialDay,addFinancialDays} from "@/lib/financialAnalytics";
+import {useFinancialClock} from "@/hooks/useFinancialClock";
 import { parseLocalDate } from "@/lib/dateUtils";
 
 type Props = {
@@ -20,28 +22,17 @@ const safeNumber = (value: unknown) => {
 const fmt = (v: number) => safeNumber(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 
 export default function PeriodComparison({ installments }: Props) {
+  const now=useFinancialClock();
   const [period, setPeriod] = useState<Period>("30d");
   const cfg = OPTIONS.find((o) => o.v === period)!;
 
   const stats = useMemo(() => {
-    const now = new Date();
-    const windowMs = cfg.days * 86400000;
-    const currentStart = new Date(now.getTime() - windowMs);
-    const previousStart = new Date(now.getTime() - 2 * windowMs);
-
-    const sumPaid = (from: Date, to: Date) =>
-      installments
-        .filter((i) => { const date = parseLocalDate(i.paid_at); return i.status === "paid" && !!date && date >= from && date < to; })
-        .reduce((s, i) => s + safeNumber(i.paid_amount || i.amount), 0);
-
-    const countPaid = (from: Date, to: Date) =>
-      installments.filter((i) => { const date = parseLocalDate(i.paid_at); return i.status === "paid" && !!date && date >= from && date < to; }).length;
-
-    const current = sumPaid(currentStart, now);
-    const previous = sumPaid(previousStart, currentStart);
-    const currentN = countPaid(currentStart, now);
-    const previousN = countPaid(previousStart, currentStart);
-
+    const today=financialDay(now)!;
+    const currentStart=addFinancialDays(today,-cfg.days+1),previousStart=addFinancialDays(today,-cfg.days*2+1),previousEnd=addFinancialDays(today,-cfg.days);
+    const rows=(from:string,to:string)=>installments.filter(i=>{const day=financialDay(i.paid_at);return day&&day>=from&&day<=to;});
+    const currentRows=rows(currentStart,today),previousRows=rows(previousStart,previousEnd);
+    const current=currentRows.reduce((s,i)=>s+safeNumber(i.paid_amount),0),previous=previousRows.reduce((s,i)=>s+safeNumber(i.paid_amount),0);
+    const currentN=currentRows.length,previousN=previousRows.length;
     const variation = previous > 0 ? ((current - previous) / previous) * 100 : current > 0 ? 100 : 0;
     const variationN = previousN > 0 ? ((currentN - previousN) / previousN) * 100 : currentN > 0 ? 100 : 0;
     const avgTicketCurrent = currentN > 0 ? current / currentN : 0;
@@ -49,7 +40,7 @@ export default function PeriodComparison({ installments }: Props) {
     const avgVar = avgTicketPrevious > 0 ? ((avgTicketCurrent - avgTicketPrevious) / avgTicketPrevious) * 100 : 0;
 
     return { current, previous, variation, currentN, previousN, variationN, avgTicketCurrent, avgVar };
-  }, [installments, cfg]);
+  }, [installments,cfg,now]);
 
   const Trend = ({ v }: { v: number }) => {
     if (Math.abs(v) < 0.5) return <span className="inline-flex items-center gap-1 text-muted-foreground text-[10px] font-bold"><Minus size={10} /> 0%</span>;

@@ -46,3 +46,4 @@ playwright-report/
 deno.lock
 .vercel
 .wrangler
+__pycache__/

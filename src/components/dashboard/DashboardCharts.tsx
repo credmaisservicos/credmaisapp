@@ -3,6 +3,8 @@ import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, BarChart, Bar, CartesianGrid, Legend,
 } from "recharts";
+import {financialDay,addFinancialDays} from "@/lib/financialAnalytics";
+import {useFinancialClock} from "@/hooks/useFinancialClock";
 import { formatBR, toDateInputValue } from "@/lib/dateUtils";
 import { TrendingUp, PieChart as PieIcon, BarChart3 } from "lucide-react";
 import { isEmAtraso } from "@/lib/dashboardMetrics";
@@ -48,12 +50,13 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export default function DashboardCharts({ contracts, installments, profits }: Props) {
+  const now=useFinancialClock();
   const [period, setPeriod] = useState<Period>("30d");
   const cfg = PERIOD_OPTIONS.find((p) => p.value === period)!;
 
   // Time series: received vs profit
   const timeSeries = useMemo(() => {
-    const now = new Date();
+    const today=financialDay(now)!;
     const buckets = new Map<string, { received: number; profit: number; overdue: number }>();
     const keys: string[] = [];
 
@@ -61,28 +64,28 @@ export default function DashboardCharts({ contracts, installments, profits }: Pr
       for (let i = cfg.days - 1; i >= 0; i--) {
         const d = new Date(now);
         d.setDate(d.getDate() - i);
-        const k = toDateInputValue(d);
+        const k=addFinancialDays(today,-i);
         keys.push(k);
         buckets.set(k, { received: 0, profit: 0, overdue: 0 });
       }
     } else {
       for (let i = 11; i >= 0; i--) {
-        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-        const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        const d=new Date(today.slice(0,7)+"-01T12:00:00Z");d.setUTCMonth(d.getUTCMonth()-i);
+        const k=d.toISOString().slice(0,7);
         keys.push(k);
         buckets.set(k, { received: 0, profit: 0, overdue: 0 });
       }
     }
 
     const keyOf = (dateStr: string) =>
-      cfg.bucket === "day" ? dateStr.slice(0, 10) : dateStr.slice(0, 7);
+      cfg.bucket === "day" ? financialDay(dateStr) : financialDay(dateStr)?.slice(0,7);
 
     installments.forEach((i: any) => {
       if (i.status === "paid" && i.paid_at) {
         const k = keyOf(i.paid_at);
         const b = buckets.get(k);
         if (b) {
-          const amt = safeNumber(i.paid_amount || i.amount);
+          const amt = safeNumber(i.paid_amount);
           b.received += amt;
         }
       }
@@ -110,9 +113,9 @@ export default function DashboardCharts({ contracts, installments, profits }: Pr
         cfg.bucket === "day"
           ? formatBR(k + "T00:00", { day: "2-digit", month: "2-digit" })
           : formatBR(k + "-01", { month: "short" }).replace(".", "");
-      return { label, Recebido: Math.round(b.received), Lucro: Math.round(b.profit), Atraso: Math.round(b.overdue) };
+      return { label, Recebido: Number(b.received.toFixed(2)), Lucro: Number(b.profit.toFixed(2)), Atraso: Number(b.overdue.toFixed(2)) };
     });
-  }, [installments, profits, cfg]);
+  }, [installments,profits,cfg,now]);
 
   // Status distribution
   const statusData = useMemo(() => {
@@ -136,7 +139,7 @@ export default function DashboardCharts({ contracts, installments, profits }: Pr
       const c = contracts.find((c: any) => c.id === i.contract_id);
       if (!c?.clients?.name) return;
       const cur = map.get(c.clients.name) || { name: c.clients.name, total: 0 };
-      cur.total += safeNumber(i.paid_amount || i.amount);
+      cur.total += safeNumber(i.paid_amount);
       map.set(c.clients.name, cur);
     });
     return [...map.values()].sort((a, b) => b.total - a.total).slice(0, 5).reverse();
