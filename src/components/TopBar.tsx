@@ -27,6 +27,13 @@ const TopBar = ({ onSearchClick, onQuickPayment }: TopBarProps) => {
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const [financialsVisible,setFinancialsVisible]=useState(()=>typeof window!=='undefined'&&window.matchMedia('(min-width: 1280px)').matches);
+  useEffect(()=>{
+    const media=window.matchMedia('(min-width: 1280px)');
+    const update=()=>setFinancialsVisible(media.matches);
+    media.addEventListener('change',update);update();
+    return()=>media.removeEventListener('change',update);
+  },[]);
   const [quickOpen, setQuickOpen] = useState(false);
   const quickRef = useRef<HTMLDivElement>(null);
 
@@ -61,12 +68,12 @@ const TopBar = ({ onSearchClick, onQuickPayment }: TopBarProps) => {
       const overdue = overdueInstallments.length;
       return { carteira, lucro, overdue };
     },
-    enabled: !!user,
+    enabled: !!user&&financialsVisible,
     staleTime: 60_000,
   });
 
   useMultiTableRealtime(
-    ["contracts", "profits", "contract_installments"],
+    financialsVisible?["contracts", "profits", "contract_installments"]:[],
     [["topbar-financials", user?.id]],
   );
 

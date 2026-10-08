@@ -18,10 +18,13 @@ const supabaseOrigin = new URL(process.env.VITE_SUPABASE_URL || "https://supabas
 
 async function mockBackend(page: Page, failFirstProfile: boolean|'temporary'|'network' = false) {
   let profileReads = 0;
+  let topbarReads = 0;
   await page.routeWebSocket("**", socket => socket.close());
   await page.route(`${supabaseOrigin}/**`, async route => {
     const url = new URL(route.request().url());
     const path = url.pathname;
+    const selection=(url.searchParams.get('select')||'').replace(/\s/g,'');
+    if((path==='/rest/v1/contracts'&&selection==='capital,status')||(path==='/rest/v1/profits'&&selection==='amount'&&url.searchParams.get('status')==='eq.available')||(path==='/rest/v1/contract_installments'&&selection==='id'&&url.searchParams.has('due_date')))topbarReads++;
     let body: unknown = [];
     if (path === "/auth/v1/token") {
       const exp = Math.floor(Date.now() / 1000) + 3600;
@@ -43,7 +46,7 @@ async function mockBackend(page: Page, failFirstProfile: boolean|'temporary'|'ne
     else if (path === "/rest/v1/platform_settings") body = { maintenance_mode: false, allow_new_registrations: true };
     await route.fulfill({ status: 200, json: body, headers: { "content-range": "0-0/0" } });
   });
-  return () => profileReads;
+  return Object.assign(()=>profileReads,{topbarReads:()=>topbarReads});
 }
 
 async function login(page: Page) {
@@ -107,6 +110,7 @@ for(const failure of ['quota','blocked']as const)test(`login chega ao painel com
  // A reload intentionally loses an in-memory-only session; log in again in this browser.
  if(failure==='blocked'||failure==='quota'){await expect(page).toHaveURL(/\/login/);await page.getByLabel(/e-?mail/i).fill(user.email);await page.getByLabel(/senha/i).first().fill('SenhaDeTeste123!');await page.getByRole('button',{name:/entrar/i}).click();}
  await expect(page).toHaveURL(/\/clientes$/);await expect(page.getByRole('heading',{name:'Clientes',exact:true})).toBeVisible();expect(errors).toEqual([]);
+ if(page.viewportSize()!.width<1280)expect(reads.topbarReads()).toBe(0);
 });
 test('falha ao pedir recuperação de senha permite nova tentativa sem confirmar envio',async({page})=>{
  await mockBackend(page);let attempts=0;
