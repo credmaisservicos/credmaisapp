@@ -152,7 +152,12 @@ jobs:
         run: |
           node --input-type=module <<'NODE'
           import { readFileSync, existsSync } from 'node:fs';
+          import { createRequire } from 'node:module';
           import { chromium, webkit } from '@playwright/test';
+          const require = createRequire(import.meta.url);
+          console.log('Node ' + process.version + ': ' + process.platform + '/' + process.arch);
+          require('@swc/core-linux-x64-gnu');
+          require('@swc/core');
           const version = JSON.parse(readFileSync('node_modules/@playwright/test/package.json', 'utf8')).version;
           if (version !== '1.62.1') throw new Error('Atualize a imagem oficial junto com o Playwright.');
           for (const browser of [chromium, webkit]) {
