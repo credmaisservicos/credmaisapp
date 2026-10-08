@@ -1,3 +1,4 @@
+import {UploadImage} from '@/components/UploadMedia';
 import "@/components/cliente-detalhe/client-profile.css";
 import {paymentReviewDescription} from '@/lib/paymentFeedback';
 import "@/components/cliente-detalhe/client-reference.css";
@@ -1425,7 +1426,7 @@ const ClienteDetalhe = () => {
                       <div className="client-profile-avatar relative shrink-0">
               <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border border-primary/15 bg-primary/10 text-3xl font-extrabold text-primary md:h-24 md:w-24 md:text-4xl"
                    style={{ fontFamily: "'Sora','Space Grotesk',sans-serif" }}>
-                {client.avatar_url ? <img src={client.avatar_url} alt="" className="w-full h-full object-cover" /> : client.name?.charAt(0)?.toUpperCase()}
+                {client.avatar_url ? <UploadImage src={client.avatar_url} alt="" className="w-full h-full object-cover" /> : client.name?.charAt(0)?.toUpperCase()}
               </div>
               <label className="absolute -bottom-1 -right-1 flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg bg-primary text-primary-foreground ring-2 ring-card" title="Trocar foto">
                 <Camera size={12} className="text-primary-foreground" />

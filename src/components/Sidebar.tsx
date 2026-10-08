@@ -1,3 +1,4 @@
+import {UploadImage} from '@/components/UploadMedia';
 import { useState, useMemo } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import defaultLogo from "@/assets/credmais-mark.svg";
@@ -193,7 +194,7 @@ const Sidebar = ({ collapsed = false, onToggleCollapse }: SidebarProps) => {
       {/* Logo */}
       <div className={`flex items-center h-[72px] border-b border-white/8 shrink-0 ${collapsed ? "justify-center px-2" : "px-5 gap-3"}`}>
         <div className="relative shrink-0">
-          <img src={logoSrc} alt={brandName} width={30} height={30} className="rounded-lg ring-1 ring-primary/20" />
+          <UploadImage access={{kind:'brand'}} src={logoSrc} alt={brandName} width={30} height={30} className="rounded-lg ring-1 ring-primary/20" />
           <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-card" />
         </div>
         {!collapsed && (
@@ -285,7 +286,7 @@ const Sidebar = ({ collapsed = false, onToggleCollapse }: SidebarProps) => {
               onClick={() => navigate("/perfil")}
             >
               {profile?.avatar_url ? (
-                <img src={profile.avatar_url} alt="" className="w-8 h-8 rounded-lg object-cover" />
+                <UploadImage src={profile.avatar_url} alt="" className="w-8 h-8 rounded-lg object-cover" />
               ) : (
                 <User size={15} className="text-primary" />
               )}
@@ -315,7 +316,7 @@ const Sidebar = ({ collapsed = false, onToggleCollapse }: SidebarProps) => {
               title={profile?.name || "Perfil"}
             >
               {profile?.avatar_url ? (
-                <img src={profile.avatar_url} alt="" className="w-9 h-9 rounded-lg object-cover" />
+                <UploadImage src={profile.avatar_url} alt="" className="w-9 h-9 rounded-lg object-cover" />
               ) : (
                 <User aria-hidden="true" size={15} className="text-primary" />
               )}

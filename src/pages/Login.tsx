@@ -1,3 +1,4 @@
+import {UploadImage} from '@/components/UploadMedia';
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { isClientPortalActive } from "@/lib/portalSession";
@@ -302,7 +303,7 @@ const Login = () => {
       <div className="relative z-10 w-full max-w-[500px] mx-auto animate-scale-in">
         <div className="rounded-[26px] overflow-hidden border border-amber-200/20 bg-[#101010]/90 shadow-[0_0_0_1px_rgba(245,189,89,.08),0_30px_90px_rgba(0,0,0,.55),0_0_35px_rgba(245,189,89,.22)] backdrop-blur-2xl">
           <div className="flex flex-col items-center px-6 pt-7 sm:pt-8">
-            <img src={logoSrc} alt={brandTitle} width={64} height={64} className="h-16 w-16 rounded-2xl object-cover ring-1 ring-amber-400/60 shadow-[0_0_28px_rgba(245,189,89,.35)]" />
+            <UploadImage access={{kind:'brand'}} src={logoSrc} alt={brandTitle} width={64} height={64} className="h-16 w-16 rounded-2xl object-cover ring-1 ring-amber-400/60 shadow-[0_0_28px_rgba(245,189,89,.35)]" />
             <p className="mt-3 text-xl font-bold tracking-tight text-white">CREDMAIS <span className="text-amber-400">APP</span></p>
             <p className="mt-1 text-[9px] tracking-[0.18em] text-white/40">{brandSubtitle}</p>
           </div>

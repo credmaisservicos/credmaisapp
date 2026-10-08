@@ -14,6 +14,7 @@ globalThis.fetch=async(input,init)=>{
   if(url.pathname==='/rest/v1/settings')return json({whatsapp_api_url:'https://recipient-provider.test.invalid',whatsapp_api_key:'isolated-provider-key',whatsapp_instance:'isolated-instance'});
   if(url.pathname==='/rest/v1/whatsapp_instances')return json(null);
   if(url.pathname==='/rest/v1/clients')return json([{id:'fictional-client',user_id:caller,name:'Fictício',phone:recipient,birth_date:new Date().toISOString().slice(0,10)}]);
+  if(url.pathname==='/rest/v1/rpc/enqueue_birthday_greeting')return providerStatus===503?json({message:'queue unavailable'},503):json(body._allow_message?{queued:true,duplicate:false}:{queued:false,reason:'test_recipient_blocked'});
   if(url.pathname==='/rest/v1/notifications')return json(null,201);
  }
  if(url.origin==='https://recipient-provider.test.invalid')return json({key:{id:'fictional-message'}},providerStatus);
@@ -31,6 +32,6 @@ for(const invalid of ['5511999999999','5533984123591@g.us','']){
 Deno.test('direct Evolution permits only the selected test number',async()=>{reset();assertEquals((await send()).status,200);assertEquals(providers().length,1);assertEquals(providers()[0].body.number,allowed);});
 Deno.test('ordinary account remains unaffected by the selected test account restriction',async()=>{reset();caller=other;recipient='5511999999999';assertEquals((await send()).status,200);assertEquals(providers().length,1);});
 Deno.test('birthday job skips the test account recipient outside its scope',async()=>{reset();recipient='5511999999999';const result=await birth();assertEquals(result.status,200);assertEquals((await result.json()).sent,0);assertEquals(providers().length,0);});
-Deno.test('birthday job sends to the authorized test number',async()=>{reset();const result=await birth();assertEquals((await result.json()).sent,1);assertEquals(providers().length,1);assertEquals(providers()[0].body.number,allowed);});
-Deno.test('birthday job does not count a provider refusal as a sent message',async()=>{reset();providerStatus=503;const result=await birth();assertEquals((await result.json()).sent,0);assertEquals(providers().length,1);});
+Deno.test('birthday cron queues the authorized number without contacting provider',async()=>{reset();const result=await birth();const body=await result.json();assertEquals(body.queued,1);assertEquals(body.sent,0);assertEquals(providers().length,0);assertEquals(calls.find(c=>c.url.pathname.endsWith('/enqueue_birthday_greeting'))?.body._allow_message,true);});
+Deno.test('birthday cron does not acknowledge a failed durable queue',async()=>{reset();providerStatus=503;const result=await birth();assertEquals(result.status,503);assertEquals(providers().length,0);});
 Deno.test('unsigned birthday cron cannot reach any recipient',async()=>{reset();assertEquals((await birthday(new Request('https://function.test.invalid',{method:'POST'}))).status,401);assertEquals(calls.length,0);assert(providers().length===0);});

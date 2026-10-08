@@ -1,3 +1,4 @@
+import {UploadImage} from '@/components/UploadMedia';
 import { useState, useEffect, useMemo } from "react";
 import {
   Users, Ban, CheckCircle, Search, Shield, Crown, MessageCircle,
@@ -631,7 +632,7 @@ const Admin = () => {
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 rounded-full bg-linear-to-br from-primary/30 to-primary/10 flex items-center justify-center text-sm font-semibold text-foreground overflow-hidden shrink-0">
                             {u.avatar_url ? (
-                              <img src={u.avatar_url} alt="" className="w-full h-full object-cover" />
+                              <UploadImage src={u.avatar_url} alt="" className="w-full h-full object-cover" />
                             ) : (
                               u.name?.charAt(0)?.toUpperCase() || "U"
                             )}
@@ -786,7 +787,7 @@ const Admin = () => {
             <DialogTitle className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-linear-to-br from-primary/30 to-primary/10 flex items-center justify-center text-foreground font-semibold overflow-hidden">
                 {detailUser?.avatar_url ? (
-                  <img src={detailUser.avatar_url} alt="" className="w-full h-full object-cover" />
+                  <UploadImage src={detailUser.avatar_url} alt="" className="w-full h-full object-cover" />
                 ) : (
                   detailUser?.name?.charAt(0)?.toUpperCase()
                 )}

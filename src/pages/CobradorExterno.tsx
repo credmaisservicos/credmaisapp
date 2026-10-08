@@ -1,3 +1,4 @@
+import {UploadImage,UploadLink} from '@/components/UploadMedia';
 import { Credinho } from "@/components/brand/Credinho";
 import {paymentReviewDescription} from '@/lib/paymentFeedback';
 import { isPortalInstallmentOpen as isEmAberto, isPortalInstallmentOverdue as isEmAtraso, portalReceivedAmount } from "@/lib/portalAmounts";
@@ -270,7 +271,7 @@ const CobradorExterno = () => {
         <form onSubmit={handleAccess} className="w-full max-w-sm space-y-5 rounded-3xl border border-border/60 bg-card/80 backdrop-blur-xl p-8 shadow-2xl relative animate-fade-in">
           <div className="text-center">
             <div className="relative w-20 h-20 mx-auto rounded-2xl border border-primary/25 flex items-center justify-center mb-5 shadow-lg overflow-hidden">
-              <img src={defaultLogo} alt="CredMais App" width={80} height={80} className="h-full w-full object-cover" />
+              <UploadImage access={{kind:'brand'}} src={defaultLogo} alt="CredMais App" width={80} height={80} className="h-full w-full object-cover" />
               <div className="absolute inset-0 rounded-2xl bg-primary/10 blur-xl -z-10" />
             </div>
             <Credinho pose="organize" className="mx-auto w-[100px]" />
@@ -305,7 +306,7 @@ const CobradorExterno = () => {
       <div className="sticky top-0 z-10 border-b border-border bg-card/95 backdrop-blur-md px-4 md:px-8 py-3">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src={portalLogo} alt="Logotipo" width={40} height={40} className="h-10 w-10 rounded-xl object-cover border border-primary/25" />
+            <UploadImage access={{kind:'brand'}} src={portalLogo} alt="Logotipo" width={40} height={40} className="h-10 w-10 rounded-xl object-cover border border-primary/25" />
             <div>
               <p className="font-semibold text-foreground text-sm">{collectorData.name}</p>
               <p className="text-[11px] text-muted-foreground">{collectorData.city}/{collectorData.state}</p>
@@ -593,9 +594,9 @@ const CobradorExterno = () => {
                                   </p>
                                 )}
                                 {isPaid && inst.receipt_url && (
-                                  <a href={inst.receipt_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-primary hover:underline">
+                                  <UploadLink access={{kind:'collector',token:token||undefined}} href={inst.receipt_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-primary hover:underline">
                                     Ver comprovante →
-                                  </a>
+                                  </UploadLink>
                                 )}
                               </div>
                               {!isPaid ? (

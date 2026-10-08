@@ -1,3 +1,4 @@
+import {UploadImage} from '@/components/UploadMedia';
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {readLocalPreference,writeLocalPreference} from '@/lib/browserStorage';
@@ -631,7 +632,7 @@ const Clientes = () => {
                 <button key={c.id} onClick={() => navigate(`/clientes/${c.id}`)}
                   className="flex w-full items-center gap-3 rounded-2xl border border-border/20 bg-card/45 p-3.5 text-left transition-colors hover:border-primary/20 hover:bg-card/65 sm:p-4">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/10 bg-primary/10 text-sm font-bold text-primary sm:h-11 sm:w-11">
-                    {c.avatar_url ? <img src={c.avatar_url} alt="" className="h-full w-full rounded-xl object-cover" /> : c.name?.charAt(0)?.toUpperCase()}
+                    {c.avatar_url ? <UploadImage src={c.avatar_url} alt="" className="h-full w-full rounded-xl object-cover" /> : c.name?.charAt(0)?.toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">

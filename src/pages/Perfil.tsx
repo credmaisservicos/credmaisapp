@@ -1,3 +1,4 @@
+import {UploadImage} from '@/components/UploadMedia';
 import { useState, useEffect } from "react";
 import { User, Camera, Save, Key, Mail, Shield, Check, MessageSquare, LogOut, CreditCard, Clock, ExternalLink, Infinity as InfinityIcon, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -139,7 +140,7 @@ const Perfil = () => {
         <div className="flex items-center gap-5">
           <div className="relative group">
             <div className="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center text-2xl font-bold text-primary overflow-hidden ring-2 ring-primary/20 transition-all group-hover:ring-primary/40">
-              {avatarPreview ? <img src={avatarPreview} alt="" className="w-20 h-20 rounded-2xl object-cover" /> : profile?.name?.charAt(0)?.toUpperCase() || "U"}
+              {avatarPreview ? <UploadImage src={avatarPreview} alt="" className="w-20 h-20 rounded-2xl object-cover" /> : profile?.name?.charAt(0)?.toUpperCase() || "U"}
             </div>
             <label className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full flex items-center justify-center cursor-pointer hover:scale-110 transition-transform" style={{ background: "var(--gradient-button)" }}>
               <Camera size={13} className="text-white" />

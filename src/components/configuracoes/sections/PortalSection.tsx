@@ -1,3 +1,4 @@
+import {UploadImage} from '@/components/UploadMedia';
 import {
   Settings, Building, Percent, MessageSquare, Webhook, Bell, Save, Plus, Trash2, Check, AlertTriangle, Palette, Upload, Image, Key, CreditCard, Bot, Clock, Shield, Zap, ToggleLeft, Send, Volume2, Sun, Moon, Monitor, Eye, LayoutDashboard, Users, Receipt, Info, Copy, ExternalLink, FileText, RotateCcw, Sparkles, Package,
 } from "lucide-react";
@@ -123,9 +124,9 @@ const PortalSection = ({ ctx }: SectionProps) => {
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
                 <div className="w-16 h-16 rounded-xl bg-muted/30 border-2 border-dashed border-border flex items-center justify-center overflow-hidden shrink-0">
                   {form.portal_logo_url ? (
-                    <img src={form.portal_logo_url} alt="Logo Portal" className="w-full h-full object-cover" />
+                    <UploadImage access={{kind:'brand'}} src={form.portal_logo_url} alt="Logo Portal" className="w-full h-full object-cover" />
                   ) : form.company_logo_url ? (
-                    <img src={form.company_logo_url} alt="Logo padrão" className="w-full h-full object-cover opacity-50" />
+                    <UploadImage access={{kind:'brand'}} src={form.company_logo_url} alt="Logo padrão" className="w-full h-full object-cover opacity-50" />
                   ) : (
                     <Image size={20} className="text-muted-foreground/30" />
                   )}

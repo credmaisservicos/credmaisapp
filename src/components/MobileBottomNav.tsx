@@ -1,3 +1,4 @@
+import {UploadImage} from '@/components/UploadMedia';
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import {
   LayoutDashboard, Users, Receipt, MoreHorizontal, ClipboardList, Settings,
@@ -176,7 +177,7 @@ const MobileBottomNav = ({ onQuickPayment }: MobileBottomNavProps) => {
                   >
                     <span className="w-10 h-10 rounded-full bg-linear-to-br from-primary/25 to-primary/5 ring-1 ring-primary/25 flex items-center justify-center shrink-0 overflow-hidden">
                       {profile?.avatar_url ? (
-                        <img src={profile.avatar_url} alt="" className="w-10 h-10 object-cover" />
+                        <UploadImage src={profile.avatar_url} alt="" className="w-10 h-10 object-cover" />
                       ) : (
                         <User size={17} className="text-primary" />
                       )}

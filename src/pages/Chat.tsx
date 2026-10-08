@@ -1,3 +1,4 @@
+import {UploadImage,UploadLink,UploadAudio} from '@/components/UploadMedia';
 import { Credinho } from "@/components/brand/Credinho";
 import { useEffect, useMemo, useRef, useState, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -758,7 +759,7 @@ const Chat = () => {
                     >
                       <div className="relative shrink-0">
                         <div className="w-9 h-9 rounded-full bg-primary/15 flex items-center justify-center text-xs font-bold text-primary overflow-hidden">
-                          {other.avatar_url ? <img src={other.avatar_url} alt="" className="w-9 h-9 object-cover" /> : (other.name || "?").charAt(0).toUpperCase()}
+                          {other.avatar_url ? <UploadImage src={other.avatar_url} alt="" className="w-9 h-9 object-cover" /> : (other.name || "?").charAt(0).toUpperCase()}
                         </div>
                         {online && <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-success ring-2 ring-card" />}
                       </div>
@@ -793,7 +794,7 @@ const Chat = () => {
                     <div key={p.id} className="group flex items-center gap-2.5 px-2.5 py-2 rounded-xl hover:bg-accent/40 transition">
                       <div className="relative shrink-0">
                         <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center text-xs font-bold text-primary overflow-hidden">
-                          {p.avatar_url ? <img src={p.avatar_url} alt="" className="w-8 h-8 object-cover" /> : (p.name || "?").charAt(0).toUpperCase()}
+                          {p.avatar_url ? <UploadImage src={p.avatar_url} alt="" className="w-8 h-8 object-cover" /> : (p.name || "?").charAt(0).toUpperCase()}
                         </div>
                         {online && <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-success ring-2 ring-card" />}
                       </div>
@@ -872,7 +873,7 @@ const Chat = () => {
                   <>
                     <div className="relative">
                       <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center text-xs font-bold text-primary overflow-hidden">
-                        {dmOther.avatar_url ? <img src={dmOther.avatar_url} alt="" className="w-8 h-8 object-cover" /> : (dmOther.name || "?").charAt(0).toUpperCase()}
+                        {dmOther.avatar_url ? <UploadImage src={dmOther.avatar_url} alt="" className="w-8 h-8 object-cover" /> : (dmOther.name || "?").charAt(0).toUpperCase()}
                       </div>
                       {onlineUsers.has(dmOther.id) && <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-success ring-2 ring-card" />}
                     </div>
@@ -989,7 +990,7 @@ const Chat = () => {
                           <div className="w-8 shrink-0">
                             {!sameAuthor && (
                               <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center text-xs font-bold text-primary overflow-hidden">
-                                {m.user_avatar ? <img src={m.user_avatar} alt="" className="w-8 h-8 object-cover" /> : (m.user_name || "?").charAt(0).toUpperCase()}
+                                {m.user_avatar ? <UploadImage src={m.user_avatar} alt="" className="w-8 h-8 object-cover" /> : (m.user_name || "?").charAt(0).toUpperCase()}
                               </div>
                             )}
                           </div>
@@ -1017,16 +1018,16 @@ const Chat = () => {
                               {m.is_deleted ? (
                                 <p className="text-xs italic text-muted-foreground/60 px-2 py-1">[mensagem removida]</p>
                               ) : m.type === "image" && m.file_url ? (
-                                <a href={m.file_url} target="_blank" rel="noreferrer">
-                                  <img src={m.file_url} alt={m.file_name || ""} className="rounded-xl max-h-64 max-w-xs object-cover border border-border" />
-                                </a>
+                                <UploadLink href={m.file_url} target="_blank" rel="noreferrer">
+                                  <UploadImage src={m.file_url} alt={m.file_name || ""} className="rounded-xl max-h-64 max-w-xs object-cover border border-border" />
+                                </UploadLink>
                               ) : m.type === "audio" && m.file_url ? (
-                                <audio controls src={m.file_url} className="max-w-[260px] h-10" />
+                                <UploadAudio controls src={m.file_url} className="max-w-[260px] h-10" />
                               ) : m.type === "file" && m.file_url ? (
-                                <a href={m.file_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-muted/40 border border-border hover:bg-muted/60 transition">
+                                <UploadLink href={m.file_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-muted/40 border border-border hover:bg-muted/60 transition">
                                   <Paperclip size={14} className="text-primary" />
                                   <span className="text-xs font-medium text-foreground truncate max-w-[200px]">{m.file_name}</span>
-                                </a>
+                                </UploadLink>
                               ) : (
                                 <>
                                   <p className={`text-sm whitespace-pre-wrap wrap-break-word leading-relaxed ${mine ? "text-primary-foreground" : "text-foreground"}`}>

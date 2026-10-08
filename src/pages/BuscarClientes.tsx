@@ -1,3 +1,4 @@
+import {UploadImage} from '@/components/UploadMedia';
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
@@ -301,7 +302,7 @@ const ResultRow = ({ c }: { c: ResultClient }) => {
   return (
     <Link to={`/clientes/${c.id}`} className="flex flex-wrap items-center gap-3 p-4 transition-colors hover:bg-muted/30 sm:flex-nowrap">
       {c.avatar_url ? (
-        <img src={c.avatar_url} alt={c.name} className="w-10 h-10 rounded-full object-cover" />
+        <UploadImage src={c.avatar_url} alt={c.name} className="w-10 h-10 rounded-full object-cover" />
       ) : (
         <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
           <UserIcon size={18} className="text-primary" />

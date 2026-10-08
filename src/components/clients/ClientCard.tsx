@@ -1,3 +1,4 @@
+import {UploadImage} from '@/components/UploadMedia';
 import { memo } from "react";
 import { Trash2, Phone, Mail, FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -53,7 +54,7 @@ function ClientCardImpl({ client: c, summary, isSel, onToggle, onOpen, onDelete 
       <div className="flex flex-col items-center text-center mb-3 mt-2">
         <div className="relative w-16 h-16 mb-2">
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-primary/15 bg-primary/10 text-xl font-bold text-primary">
-            {c.avatar_url ? <img src={c.avatar_url} alt="" className="h-16 w-16 rounded-2xl object-cover" /> : c.name?.charAt(0)?.toUpperCase()}
+            {c.avatar_url ? <UploadImage src={c.avatar_url} alt="" className="h-16 w-16 rounded-2xl object-cover" /> : c.name?.charAt(0)?.toUpperCase()}
           </div>
           <span className={`absolute -bottom-1 -right-1 text-[10px] font-bold px-1.5 py-0.5 rounded-md ring-2 ring-card ${scoreColor(sc)}`}>{sc}</span>
         </div>

@@ -1,3 +1,4 @@
+import {UploadImage} from '@/components/UploadMedia';
 import { useState, useEffect, useRef } from "react";
 import { TrendingUp, LogOut, Sun, Moon, Search, Wallet, User, Settings, Plus, Users, Receipt, Landmark, UserPlus, ListTodo, Calculator, ChevronDown, AlertTriangle } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -98,7 +99,7 @@ const TopBar = ({ onSearchClick, onQuickPayment }: TopBarProps) => {
         >
           <div className="relative w-9 h-9 rounded-full bg-linear-to-br from-primary/25 to-primary/5 flex items-center justify-center ring-1 ring-primary/25 shrink-0 shadow-xs">
             {profile?.avatar_url ? (
-              <img src={profile.avatar_url} alt="" className="w-9 h-9 rounded-full object-cover" />
+              <UploadImage src={profile.avatar_url} alt="" className="w-9 h-9 rounded-full object-cover" />
             ) : (
               <User size={16} className="text-primary" />
             )}
@@ -341,7 +342,7 @@ const UserMenu = ({ profile, theme, toggleTheme, onSignOut, navigate, isAdmin }:
         className="relative w-9 h-9 rounded-full bg-linear-to-br from-primary/20 to-primary/5 flex items-center justify-center text-sm font-bold text-primary ring-1 ring-primary/20 hover:ring-2 hover:ring-primary/40 transition-all duration-200 micro-bounce"
       >
         {profile?.avatar_url ? (
-          <img src={profile.avatar_url} alt="" className="w-9 h-9 rounded-full object-cover" />
+          <UploadImage src={profile.avatar_url} alt="" className="w-9 h-9 rounded-full object-cover" />
         ) : (
           profile?.name?.charAt(0)?.toUpperCase() || "U"
         )}
@@ -353,7 +354,7 @@ const UserMenu = ({ profile, theme, toggleTheme, onSignOut, navigate, isAdmin }:
           <div className="px-3 py-3 border-b border-border/40 flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center ring-1 ring-primary/20 shrink-0">
               {profile?.avatar_url ? (
-                <img src={profile.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover" />
+                <UploadImage src={profile.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover" />
               ) : (
                 <User size={18} className="text-primary" />
               )}

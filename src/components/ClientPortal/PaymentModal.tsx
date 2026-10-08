@@ -1,3 +1,4 @@
+import {UploadLink} from '@/components/UploadMedia';
 import { useState, useMemo, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
@@ -317,7 +318,7 @@ export const PaymentModal = ({ isOpen, onOpenChange, installment, ownerProfile, 
                       <Check size={16} className="text-success shrink-0" />
                       <span className="text-xs text-success font-semibold truncate">Comprovante enviado</span>
                     </div>
-                    <a href={uploadedUrl} target="_blank" rel="noreferrer" className="text-[10px] font-bold uppercase text-success underline shrink-0">Ver</a>
+                    <UploadLink access={{kind:'portal',token:sessionToken||undefined}} href={uploadedUrl} target="_blank" rel="noreferrer" className="text-[10px] font-bold uppercase text-success underline shrink-0">Ver</UploadLink>
                   </div>
                 ) : (
                   <>

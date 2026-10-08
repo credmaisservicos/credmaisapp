@@ -1,3 +1,4 @@
+import {UploadImage} from '@/components/UploadMedia';
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -967,7 +968,7 @@ const NovoCliente = () => {
             <div className="flex items-start gap-5">
               <div className="relative shrink-0">
                 <div className="w-16 h-16 rounded-2xl border-2 border-dashed border-border flex items-center justify-center text-muted-foreground bg-muted/30 overflow-hidden">
-                  {avatarPreview ? <img src={avatarPreview} alt="" className="w-16 h-16 object-cover" /> : <User size={24} />}
+                  {avatarPreview ? <UploadImage src={avatarPreview} alt="" className="w-16 h-16 object-cover" /> : <User size={24} />}
                 </div>
                 <label className="absolute -bottom-1 -right-1 flex h-6 w-6 cursor-pointer items-center justify-center rounded-lg bg-primary">
                   <Camera size={12} className="text-primary-foreground" />
@@ -1886,7 +1887,7 @@ const NovoCliente = () => {
             {/* Client info */}
             <div className="bg-muted/30 rounded-xl p-4 flex items-center gap-3">
               <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg">
-                {avatarPreview ? <img src={avatarPreview} className="w-12 h-12 rounded-full object-cover" alt="" /> : nome.charAt(0).toUpperCase()}
+                {avatarPreview ? <UploadImage src={avatarPreview} className="w-12 h-12 rounded-full object-cover" alt="" /> : nome.charAt(0).toUpperCase()}
               </div>
               <div>
                 <p className="font-semibold text-foreground">{nome}</p>

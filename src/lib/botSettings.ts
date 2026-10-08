@@ -1,6 +1,6 @@
 export const BOT_DEFAULTS = {
   bot_enabled:false, bot_auto_send:false, bot_use_ai:false, bot_tone:'formal',
-  bot_process_audio:true, bot_process_receipts:true, bot_send_pix:true, bot_send_receipt:false,
+  bot_process_audio:true, bot_process_receipts:true, bot_send_pix:true, bot_send_receipt:false, bot_send_birthday:false,
   bot_notify_owner:true, bot_stop_on_payment:true, bot_max_messages_per_day:50,
   bot_retry_interval_hours:24, bot_send_hour:9, bot_send_minute:0,
   bot_work_days:['mon','tue','wed','thu','fri'],

@@ -1,3 +1,4 @@
+import {UploadImage} from '@/components/UploadMedia';
 import { memo } from "react";
 import { Eye, Trash2, FileText } from "lucide-react";
 import RiskBadge from "./RiskBadge";
@@ -50,7 +51,7 @@ function ClientRowImpl({ client: c, summary, isSel, striped, onToggle, onOpen, o
       <td className="w-[27%] px-5 py-3">
         <div className="flex items-center gap-3">
           <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${pal} ring-1 text-[13px] font-bold`}>
-            {c.avatar_url ? <img src={c.avatar_url} alt="" className="h-10 w-10 rounded-xl object-cover" /> : initial}
+            {c.avatar_url ? <UploadImage src={c.avatar_url} alt="" className="h-10 w-10 rounded-xl object-cover" /> : initial}
           </div>
           <div className="min-w-0">
             <p className="font-semibold text-foreground truncate text-[13.5px] leading-tight">{c.name}</p>

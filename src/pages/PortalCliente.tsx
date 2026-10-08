@@ -1,3 +1,4 @@
+import {UploadImage} from '@/components/UploadMedia';
 import { useEffect, useLayoutEffect, useMemo, useState,useRef } from "react";
 import { formatBR, isOverdue as isDateOverdue, parseLocalDate } from "@/lib/dateUtils";
 import {financialDaysBetween} from '../../supabase/functions/_shared/financial_calendar';
@@ -500,7 +501,7 @@ const PortalCliente = () => {
               <div className="space-y-6">
                 <div className="flex flex-col items-center text-center">
                   {logoUrl ? (
-                    <img src={logoUrl} alt="Logotipo" width={64} height={64} className="h-16 w-16 rounded-2xl object-cover shadow-lg ring-1 ring-primary/35" />
+                    <UploadImage access={{kind:'brand'}} src={logoUrl} alt="Logotipo" width={64} height={64} className="h-16 w-16 rounded-2xl object-cover shadow-lg ring-1 ring-primary/35" />
                   ) : (
                     <div className="relative flex h-20 w-20 items-center justify-center rounded-3xl bg-muted ">
                       <Shield size={38} className="text-foreground" strokeWidth={2.2} />
@@ -616,7 +617,7 @@ const PortalCliente = () => {
             <header className="portal-toolbar flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div className="flex items-center gap-4">
                 {logoUrl ? (
-                  <img src={logoUrl} alt="Logotipo" width={56} height={56} className="h-14 w-14 shrink-0 rounded-2xl border border-primary/25 object-cover" />
+                  <UploadImage access={{kind:'brand'}} src={logoUrl} alt="Logotipo" width={56} height={56} className="h-14 w-14 shrink-0 rounded-2xl border border-primary/25 object-cover" />
                 ) : (
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-muted border border-border">
                     <User className="text-foreground" size={26} />

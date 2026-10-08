@@ -1,3 +1,4 @@
+import {UploadImage,UploadLink} from '@/components/UploadMedia';
 import { Credinho, CredinhoAvatar } from "@/components/brand/Credinho";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -856,12 +857,12 @@ export default function WhatsAppInbox() {
                           </div>
                         )}
                         {m.media_url && m.message_type === "image" && (
-                          <img src={m.media_url} alt="" className="rounded mb-1 max-h-60" />
+                          <UploadImage src={m.media_url} alt="" className="rounded mb-1 max-h-60" />
                         )}
                         {m.media_url && m.message_type !== "image" && (
-                          <a href={m.media_url} target="_blank" rel="noreferrer" className="text-xs underline mb-1 block">
+                          <UploadLink href={m.media_url} target="_blank" rel="noreferrer" className="text-xs underline mb-1 block">
                             📎 {m.message_type}
-                          </a>
+                          </UploadLink>
                         )}
                         <div>{m.content || <em className="opacity-60">[{m.message_type}]</em>}</div>
                         <div className="text-[9px] opacity-60 mt-0.5 text-right">

@@ -1,3 +1,4 @@
+import {UploadImage} from '@/components/UploadMedia';
 import { renderContractTemplate } from "@/utils/contractTemplate";
 import { formatBR } from "@/lib/dateUtils";
 import { sanitizeClientContractText } from "@/lib/clientContract";
@@ -70,7 +71,7 @@ const ContractTemplate = ({ data }: { data: ContractData }) => {
       >
         {data.companyLogoUrl && (
           <div className="flex justify-center mb-6 print:mb-8">
-            <img src={data.companyLogoUrl} alt={data.companyName} className="h-16 object-contain" crossOrigin="anonymous" />
+            <UploadImage access={{kind:'brand'}} src={data.companyLogoUrl} alt={data.companyName} className="h-16 object-contain" crossOrigin="anonymous" />
           </div>
         )}
         <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground print:text-black">
@@ -90,7 +91,7 @@ const ContractTemplate = ({ data }: { data: ContractData }) => {
       <div className="flex items-center justify-between gap-6 border-b-2 border-primary/30 pb-6 print:border-gray-300">
         <div className="flex items-center gap-4">
           {data.companyLogoUrl && (
-            <img
+            <UploadImage access={{kind:'brand'}}
               src={data.companyLogoUrl}
               alt={data.companyName}
               className="w-16 h-16 rounded-xl object-cover ring-1 ring-border"

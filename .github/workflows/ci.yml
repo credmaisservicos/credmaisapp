@@ -70,8 +70,33 @@ jobs:
       - name: Build de produção
         run: npx vite build
 
+  saas:
+    name: Duas empresas em homologação isolada
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Preparar a função para o runtime sem acesso externo
+        run: deno bundle --platform deno --output test-results/saas/runtime/main/index.js supabase/functions/upload-urls/index.ts
+      - name: PostgreSQL, login Auth, permissões, caixa, portais e Storage reais
+        run: |
+          mkdir -p test-results/saas
+          python3 scripts/testar-saas-staging.py > test-results/saas/matrix.log 2>&1
+          cat test-results/saas/matrix.log
+      - name: Guardar matriz ou diagnóstico de homologação
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: homologacao-saas-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/saas/
+          retention-days: 7
+          if-no-files-found: error
+
   contratos:
-    name: Garantias em homologação (E2E)
+    name: Sondagens opcionais na interface de homologação
     runs-on: ubuntu-latest
     timeout-minutes: 10
     if: ${{ vars.E2E_SECURITY_BASE_URL != '' && vars.E2E_SECURITY_SUPABASE_URL != '' }}

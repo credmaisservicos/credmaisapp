@@ -1,3 +1,4 @@
+import {UploadImage} from '@/components/UploadMedia';
 import { Credinho, CredinhoLoader } from "@/components/brand/Credinho";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
@@ -140,7 +141,7 @@ export default function PortalInvestidor() {
         <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             {logo ? (
-              <img src={logo} alt={company} width={40} height={40} className="h-10 w-10 rounded-xl object-cover ring-1 ring-primary/35" />
+              <UploadImage access={{kind:'brand'}} src={logo} alt={company} width={40} height={40} className="h-10 w-10 rounded-xl object-cover ring-1 ring-primary/35" />
             ) : (
               <div className="grid h-10 w-10 place-items-center rounded-xl bg-primary/20 text-primary">
                 <Landmark className="h-5 w-5" />

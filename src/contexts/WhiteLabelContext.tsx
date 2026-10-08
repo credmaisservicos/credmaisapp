@@ -1,7 +1,8 @@
-import { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
 import {readLocalPreference,writeLocalPreference} from '@/lib/browserStorage';
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import {privateUploadPath,resolveUploadUrl} from '@/lib/uploadUrls';
 
 export type ModuleKey =
   | "analises" | "relatorios" | "inadimplencia" | "cobradores" | "portais"
@@ -129,7 +130,9 @@ const FONT_MAP: Record<string, string> = {
   nunito: "'Nunito', system-ui, sans-serif",
 };
 
+let faviconGeneration=0;
 function applyConfig(config: WhiteLabelConfig) {
+  const generation=++faviconGeneration;
   const root = document.documentElement;
   const { primaryColor: primary, accentColor: accent } = config;
 
@@ -158,16 +161,19 @@ function applyConfig(config: WhiteLabelConfig) {
   }
 
   // Favicon
-  if (typeof document !== "undefined" && config.faviconUrl) {
+  if (typeof document !== "undefined") {
+    const faviconUrl = config.faviconUrl || "/favicon.ico";
+    const applyFavicon=(url:string)=>{
+    if(generation!==faviconGeneration)return;
     let link = document.querySelector<HTMLLinkElement>("link[rel~='icon']");
     if (!link) {
       link = document.createElement("link");
       link.rel = "icon";
       document.head.appendChild(link);
     }
-    link.href = config.faviconUrl;
+    link.href = url;
     document.querySelectorAll<HTMLLinkElement>("link[rel~='icon']").forEach(icon => {
-      icon.href = config.faviconUrl!;
+      icon.href = url;
       icon.removeAttribute("type");
       icon.removeAttribute("sizes");
     });
@@ -177,7 +183,10 @@ function applyConfig(config: WhiteLabelConfig) {
       apple.rel = "apple-touch-icon";
       document.head.appendChild(apple);
     }
-    apple.href = config.faviconUrl;
+    apple.href = url;
+    };
+    if(privateUploadPath(faviconUrl))void resolveUploadUrl(faviconUrl,{kind:'brand'}).then(url=>{if(url)applyFavicon(url);}).catch(()=>{});
+    else if(!faviconUrl.startsWith('storage://'))applyFavicon(faviconUrl);
   }
 }
 
@@ -203,6 +212,11 @@ export const WhiteLabelProvider = ({ children }: { children: React.ReactNode }) 
   const [config, setConfig] = useState<WhiteLabelConfig>(defaults);
   const [isLoaded, setIsLoaded] = useState(false);
   const [effectiveTheme, setEffectiveTheme] = useState<"light" | "dark">("dark");
+  const ownerId = user?.id ?? null;
+  const currentOwner = useRef(ownerId);
+  currentOwner.current = ownerId;
+  const loadGeneration = useRef(0);
+  const loadedOwner = useRef<string | null | undefined>(undefined);
 
   const resolveTheme = useCallback((mode: "light" | "dark" | "system"): "light" | "dark" => {
     if (mode === "system") return getSystemTheme();
@@ -210,7 +224,10 @@ export const WhiteLabelProvider = ({ children }: { children: React.ReactNode }) 
   }, []);
 
   const loadConfig = useCallback(async () => {
-    if (!user) {
+    const generation = ++loadGeneration.current;
+    const ownerChanged = loadedOwner.current !== ownerId;
+    loadedOwner.current = ownerId;
+    if (!ownerId) {
       let publicBrand = defaults;
       try {
         const cached = JSON.parse(localStorage.getItem("credmais-public-brand") || "null");
@@ -226,11 +243,22 @@ export const WhiteLabelProvider = ({ children }: { children: React.ReactNode }) 
       return;
     }
 
-      const { data } = await supabase
+    if (ownerChanged) {
+      setIsLoaded(false);
+      setConfig(defaults);
+      applyConfig(defaults);
+      setEffectiveTheme("dark");
+      applyThemeMode("dark");
+    }
+
+      const { data } = await Promise.resolve(supabase
       .from("settings_safe")
       .select("company_name, company_logo_url, favicon_url, primary_color, accent_color, theme_mode, sidebar_style, login_title, login_subtitle, footer_text, border_radius, font_family, modules_enabled")
-      .eq("user_id", user.id)
-      .maybeSingle();
+      .eq("user_id", ownerId)
+      .maybeSingle())
+      .catch(() => ({ data: null }));
+
+    if (generation !== loadGeneration.current || currentOwner.current !== ownerId) return;
 
     if (data) {
       const s = data as any;
@@ -266,10 +294,11 @@ export const WhiteLabelProvider = ({ children }: { children: React.ReactNode }) 
       applyThemeMode("dark");
     }
     setIsLoaded(true);
-  }, [user, resolveTheme]);
+  }, [ownerId, resolveTheme]);
 
   useEffect(() => {
     loadConfig();
+    return () => { loadGeneration.current++; };
   }, [loadConfig]);
 
   useEffect(() => {

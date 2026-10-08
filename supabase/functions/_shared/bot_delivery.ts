@@ -33,6 +33,20 @@ export async function deliverBotJob(supabase: any, job: any) {
     const { data: settings,error:se } = await supabase.from('settings').select('*').eq('user_id',job.user_id).single();
     const { data: profile,error:pe } = await supabase.from('profiles').select('is_admin,is_blocked,plan_tier,subscription_type,subscription_expires_at,trial_ends_at').eq('id',job.user_id).single();
     if (ce || se || pe) throw new Error('delivery_context_unavailable');
+    if (job.purpose === 'birthday') {
+      const day=String(job.source_key || '').split(':')[2];
+      const {data: context,error}=await supabase.rpc('birthday_message_context',{
+        _client_id:job.client_id,_user_id:job.user_id,_day:day || null,
+      });
+      if(error)throw Error('birthday_context_unavailable');
+      if(!context?.valid || context.user_id!==job.user_id || context.client_id!==job.client_id
+        || job.source_key!==`birthday:${job.client_id}:${day}` || (convo.client_id && convo.client_id!==job.client_id)
+        || /@(?:g\.us|broadcast|lid)$/.test(convo.jid || '')
+        || !samePhoneBR(convo.jid || convo.phone || '',context.phone || '') || !context.text || job.media_url) {
+        await update({status:'cancelled',error:context?.reason || 'birthday_context_changed'});return 'cancelled';
+      }
+      job={...job,text:context.text};
+    }
     if (job.purpose === 'payment_receipt') {
       const {data:receipt,error}=await supabase.rpc('payment_receipt_context',{
         _transaction_id:job.payment_transaction_id,_user_id:job.user_id,

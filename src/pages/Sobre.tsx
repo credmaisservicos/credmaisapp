@@ -1,3 +1,4 @@
+import {UploadImage} from '@/components/UploadMedia';
 import { Shield, Code, Users, Zap, Star, Globe, Sparkles, Rocket, Heart } from "lucide-react";
 import { useWhiteLabel } from "@/contexts/WhiteLabelContext";
 import defaultLogo from "@/assets/credmais-mark.svg";
@@ -29,7 +30,7 @@ const Sobre = () => {
       <div className="page-hero text-center animate-fade-in">
         <div className="relative inline-block mb-5">
           <div className="absolute inset-0 rounded-full bg-primary/20 blur-2xl animate-pulse" />
-          <img src={logoSrc} onError={(event) => { event.currentTarget.src = defaultLogo; }} alt={brandName} width={104} height={104} className="relative rounded-2xl ring-2 ring-primary/30 shadow-[0_0_40px_hsl(var(--primary)/0.3)]" />
+          <UploadImage access={{kind:'brand'}} src={logoSrc} onError={(event) => { event.currentTarget.src = defaultLogo; }} alt={brandName} width={104} height={104} className="relative rounded-2xl ring-2 ring-primary/30 shadow-[0_0_40px_hsl(var(--primary)/0.3)]" />
         </div>
         <h1 className="font-display text-3xl md:text-4xl tracking-[0.25em] text-shimmer mb-2">{brandName}</h1>
         <p className="text-muted-foreground text-xs md:text-sm tracking-[0.2em] uppercase font-semibold">Sistema completo de gestão financeira</p>

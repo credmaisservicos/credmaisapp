@@ -1701,6 +1701,7 @@ export type Database = {
           bot_send_hour: number | null
           bot_send_minute: number | null
           bot_send_pix: boolean | null
+          bot_send_birthday: boolean | null
           bot_send_receipt: boolean | null
           bot_stop_on_payment: boolean | null
           bot_tone: string | null
@@ -1769,6 +1770,7 @@ export type Database = {
           bot_send_hour?: number | null
           bot_send_minute?: number | null
           bot_send_pix?: boolean | null
+          bot_send_birthday?: boolean | null
           bot_send_receipt?: boolean | null
           bot_stop_on_payment?: boolean | null
           bot_tone?: string | null
@@ -1837,6 +1839,7 @@ export type Database = {
           bot_send_hour?: number | null
           bot_send_minute?: number | null
           bot_send_pix?: boolean | null
+          bot_send_birthday?: boolean | null
           bot_send_receipt?: boolean | null
           bot_stop_on_payment?: boolean | null
           bot_tone?: string | null
@@ -2533,6 +2536,7 @@ export type Database = {
           bot_send_hour: number | null
           bot_send_minute: number | null
           bot_send_pix: boolean | null
+          bot_send_birthday: boolean | null
           bot_send_receipt: boolean | null
           bot_stop_on_payment: boolean | null
           bot_tone: string | null
@@ -2600,6 +2604,7 @@ export type Database = {
           bot_send_hour?: number | null
           bot_send_minute?: number | null
           bot_send_pix?: boolean | null
+          bot_send_birthday?: boolean | null
           bot_send_receipt?: boolean | null
           bot_stop_on_payment?: boolean | null
           bot_tone?: string | null
@@ -2667,6 +2672,7 @@ export type Database = {
           bot_send_hour?: number | null
           bot_send_minute?: number | null
           bot_send_pix?: boolean | null
+          bot_send_birthday?: boolean | null
           bot_send_receipt?: boolean | null
           bot_stop_on_payment?: boolean | null
           bot_tone?: string | null

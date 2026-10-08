@@ -1,3 +1,4 @@
+import {UploadImage} from '@/components/UploadMedia';
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -287,7 +288,7 @@ const SupportInbox = () => {
                 <div className="flex items-center gap-2 mt-2 text-sm">
                   <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center">
                     {u?.avatar_url ? (
-                      <img src={u.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover" />
+                      <UploadImage src={u.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover" />
                     ) : (
                       <UserIcon size={12} className="text-muted-foreground" />
                     )}
@@ -513,7 +514,7 @@ const SupportInbox = () => {
               >
                 <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center shrink-0">
                   {u?.avatar_url ? (
-                    <img src={u.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover" />
+                    <UploadImage src={u.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover" />
                   ) : (
                     <UserIcon size={14} className="text-muted-foreground" />
                   )}

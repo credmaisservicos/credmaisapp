@@ -1,3 +1,4 @@
+import {UploadImage} from '@/components/UploadMedia';
 import { Credinho } from "@/components/brand/Credinho";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -337,7 +338,7 @@ const ResetPassword = () => {
 
       <div className="relative z-10 flex flex-col items-center mb-8 mt-20 animate-fade-in">
         <Credinho pose="thinking" className="w-[60px]" />
-        <img src={logoSrc} alt={brandTitle} width={72} height={72} className="rounded-2xl object-cover ring-2 ring-primary/35 shadow-[0_0_34px_hsl(var(--primary)/.28)]" />
+        <UploadImage access={{kind:'brand'}} src={logoSrc} alt={brandTitle} width={72} height={72} className="rounded-2xl object-cover ring-2 ring-primary/35 shadow-[0_0_34px_hsl(var(--primary)/.28)]" />
         <h1 className="font-display text-xl tracking-[0.35em] mt-4 text-gradient-gold">{brandTitle} — Redefinir Senha</h1>
       </div>
 
