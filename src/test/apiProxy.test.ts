@@ -4,6 +4,22 @@ import proxy from '../../public/_worker.js';
 const base='https://credmaisapp.com.br/api/supabase';
 const assets=vi.fn(async()=>new Response('static asset'));
 afterEach(()=>{vi.unstubAllGlobals();vi.clearAllMocks();});
+it.each(['text/html','image/svg+xml'])('isolates uploaded %s even with a permissive upstream sandbox',async type=>{
+ const body='<document>fictional</document>';
+ vi.stubGlobal('fetch',vi.fn(async()=>new Response(body,{headers:{'Content-Type':type,'Content-Security-Policy':'sandbox allow-scripts allow-same-origin'}})));
+ const response=await proxy.fetch(new Request(base+'/storage/v1/object/sign/uploads/test/file?token=fictional'),{ASSETS:{fetch:assets}});
+ expect(response.headers.get('Content-Security-Policy')).toBe('sandbox allow-scripts allow-same-origin, sandbox');
+ expect(await response.text()).toBe(body);
+});
+it('preserves binary file ranges and leaves Auth responses outside the document sandbox',async()=>{
+ vi.stubGlobal('fetch',vi.fn(async()=>new Response(new Uint8Array([1,2,3]),{status:206,headers:{'Content-Type':'image/png','Content-Range':'bytes 0-2/3'}})));
+ const response=await proxy.fetch(new Request(base+'/storage/v1/object/sign/uploads/test/file?token=fictional'),{ASSETS:{fetch:assets}});
+ expect(response.status).toBe(206);expect(response.headers.get('Content-Range')).toBe('bytes 0-2/3');
+ expect(response.headers.get('Content-Type')).toBe('image/png');expect(response.headers.get('Content-Security-Policy')).toBe('sandbox');
+ expect(new Uint8Array(await response.arrayBuffer())).toEqual(new Uint8Array([1,2,3]));
+ const auth=await proxy.fetch(new Request(base+'/auth/v1/user'),{ASSETS:{fetch:assets}});
+ expect(auth.headers.has('Content-Security-Policy')).toBe(false);
+});
 it('forwards exactly one operation with the same authorization, body and query to a fixed server',async()=>{
  const upstream=vi.fn(async()=>new Response('{"data":"test"}',{status:201,headers:{'Set-Cookie':'private','Content-Range':'0-0/1','Cache-Control':'public,max-age=3600'}}));vi.stubGlobal('fetch',upstream);
  const result=await proxy.fetch(new Request(base+'/rest/v1/clients?select=id',{method:'POST',body:'{"name":"Fictional"}',headers:{authorization:'Bearer isolated-test',apikey:'isolated-public',Cookie:'private','Origin':'https://credmaisapp.com.br'}}),{ASSETS:{fetch:assets}});

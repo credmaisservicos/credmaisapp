@@ -44,6 +44,9 @@ export default {
    const resultHeaders=new Headers(response.headers);
    for(const name of ['set-cookie','access-control-allow-origin','access-control-allow-credentials'])resultHeaders.delete(name);
    for(const [name,value] of headers)resultHeaders.set(name,value);
+   // Uploaded documents must not acquire the application's origin when opened.
+   // A separate CSP policy also constrains permissive upstream policies.
+   if(['GET','HEAD'].includes(request.method)&&path.startsWith('/storage/v1/object/'))resultHeaders.append('Content-Security-Policy','sandbox');
    return new Response(response.body,{status:response.status,statusText:response.statusText,headers:resultHeaders});
   }catch{
    headers.set('Content-Type','application/json');
