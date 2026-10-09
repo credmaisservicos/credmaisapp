@@ -11,7 +11,7 @@ beforeAll(async()=>{
  await db.exec(readFileSync('src/test/fixtures/paymentReceiptDatabase.sql','utf8'));
  await db.exec(readFileSync('src/test/fixtures/walletCashDatabase.sql','utf8'));
  for(const name of ['20260922130000_dynamic_late_fee_tracks_settlement.sql','20260922100000_reverse_percentage_settlement.sql',
-  '20261007210000_incremental_payment_ledger.sql','20261007220000_financial_calendar_atomic_charges.sql','20261008000000_wallet_cash_report.sql'])await db.exec(migration(name));
+  '20261007210000_incremental_payment_ledger.sql','20261007220000_financial_calendar_atomic_charges.sql','20261008000000_wallet_cash_report.sql','20261009010000_wallet_commercial_cash.sql'])await db.exec(migration(name));
 },30_000);
 beforeEach(async()=>{
  await db.exec(`RESET ROLE;SET TimeZone='UTC';SET test.owner='${owner}';TRUNCATE contracts,contract_installments,transactions,profits,expenses;
