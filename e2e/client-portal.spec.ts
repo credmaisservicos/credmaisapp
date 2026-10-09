@@ -13,7 +13,7 @@ for(const allowed of [true,false])test(`comprovante por caminho exige autorizaç
   const request=route.request(),url=new URL(request.url());let data:unknown=[];
   if(url.pathname.endsWith('/portal_login_by_token'))data={...portal,client:{...client,id:clientId},contracts:[{...portal.contracts[0],installments:[{...portal.contracts[0].installments[0],receipt_url:path}]}]};
   else if(url.pathname.endsWith('/functions/v1/upload-urls')){requests.push(request.postDataJSON());data={expires_in:300,urls:[allowed?signed:null]};}
-  else if(url.pathname.includes('/storage/v1/object/')){files.push(request.url());await route.fulfill({status:200,contentType:'text/plain',body:'Comprovante fictício'});return;}
+  else if(url.pathname.includes('/storage/v1/object/')){files.push(request.url());await route.fulfill({status:200,contentType:'text/plain; charset=utf-8',body:'Comprovante fictício'});return;}
   if(['POST','PATCH','DELETE'].includes(request.method())&&/\/rest\/v1\/(transactions|contract_installments)$/.test(url.pathname))writes.push(url.pathname);
   await route.fulfill({status:200,json:data});
  });
