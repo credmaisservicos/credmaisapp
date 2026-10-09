@@ -1,5 +1,9 @@
 # Correções dirigidas da auditoria de uso real — 08/10/2026
 
+Valida??o final de 09/10: ajuste de cache publicado em `b78576c`; venda quitada, aluguel pago, cau??o devolvida uma vez e saldo R$ 10,80 verificados na conta fict?cia. Chromium confirmou recarga e navega??o na mesma sess?o; WebKit m?vel confirmou saldo e loca??o conclu?da. [Evid?ncias e limites da rodada](correcoes-caixa-comercial-2026-10-09.md).
+
+Atualização de 09/10: **QA-03 e QA-04 corrigidos e publicados** em `a6d7512`; [migrações, testes e preservação dos dados](correcoes-caixa-comercial-2026-10-09.md). Os resultados abaixo descrevem a versão anterior e permanecem preservados.
+
 Esta fase trata dos dois defeitos confirmados na [auditoria independente anterior](qa-usuario-real-2026-10-08.md). Os resultados e as limitações da rodada anterior permanecem preservados; esta validação não equivale a uma nova auditoria integral do aplicativo.
 
 ## Versão publicada e verificação técnica
