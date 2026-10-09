@@ -3,9 +3,19 @@ import {test,expect,type Page} from '@playwright/test';
 import {emptyWalletCashReport} from './helpers/walletCash';
 test.use({serviceWorkers:'block'});
 const user={id:'11111111-1111-4111-8111-111111111111',email:'wallet@example.test',aud:'authenticated',role:'authenticated',app_metadata:{},user_metadata:{},created_at:'2026-01-01T00:00:00Z'};
-async function setup(page:Page,options:{fail?:boolean;paging?:boolean}={}){
- const requests:any[]=[],writes:string[]=[],errors:string[]=[];let failed=options.fail;
- page.on('pageerror',error=>errors.push(error.message));await page.routeWebSocket('**',socket=>socket.close());
+async function setup(page:Page,options:{fail?:boolean;paging?:boolean;healthyRealtime?:boolean}={}){
+ const requests:any[]=[],writes:string[]=[],errors:string[]=[];let failed=options.fail,balance=110,healthySubscriptions=0;
+ page.on('pageerror',error=>errors.push(error.message));await page.routeWebSocket('**',socket=>{
+  if(!options.healthyRealtime){socket.close();return;}
+  socket.onMessage(message=>{
+   const wire=JSON.parse(message.toString());
+   const request=Array.isArray(wire)?{join_ref:wire[0],ref:wire[1],topic:wire[2],event:wire[3],payload:wire[4]}:wire;
+   if(request.event==='phx_join')healthySubscriptions++;
+   const response=request.event==='phx_join'?{postgres_changes:(request.payload?.config?.postgres_changes||[]).map((binding:any,index:number)=>({...binding,id:index+1}))}:{};
+   const reply={...request,event:'phx_reply',payload:{status:'ok',response}};
+   socket.send(JSON.stringify(Array.isArray(wire)?[reply.join_ref,reply.ref,reply.topic,reply.event,reply.payload]:reply));
+  });
+ });
  const origin=new URL(process.env.VITE_SUPABASE_URL||'https://supabase-not-configured.invalid').origin;
  const handle=async(route:import('@playwright/test').Route)=>{
   const req=route.request(),path=new URL(req.url()).pathname.replace(/^\/api\/supabase/,'');let data:unknown=[];
@@ -29,6 +39,7 @@ async function setup(page:Page,options:{fail?:boolean;paging?:boolean}={}){
     {id:'legacy:a',type:'in' as const,desc:'Recebimento histórico sem lançamento completo',amount:10,date:null,source:'Recebimento legado',removable:false,remove_id:null}];
    if(options.paging){report.timeline_count=101;report.timeline=Array.from({length:Math.min(50,101-input._offset)},(_,i)=>({...items[1],id:`t:${input._offset+i}`,desc:`Movimento ${input._offset+i+1}`}));}
    else {report.timeline=input._days===7?[items[1]]:items;report.timeline=report.timeline.filter(item=>item.desc.toLowerCase().includes(input._search.toLowerCase()));report.timeline_count=report.timeline.length;}
+   report.totals.inflows=balance;report.totals.balance=balance;report.period.closing_balance=balance;
    data=report;
   }else if(['POST','PATCH','DELETE'].includes(req.method()) && /transactions|expenses|pay_installment|contract_installments/.test(path))writes.push(path);
   await route.fulfill({json:data});
@@ -36,8 +47,31 @@ async function setup(page:Page,options:{fail?:boolean;paging?:boolean}={}){
  await page.route(`${origin}/**`,handle);await page.route('**/api/supabase/**',handle);
  await page.goto('/login');await page.getByLabel(/e-?mail/i).fill(user.email);await page.getByLabel(/senha/i).first().fill('SenhaFicticia123!');
  await page.getByRole('button',{name:/entrar/i}).click();await expect(page).toHaveURL(/dashboard$/);await page.goto('/carteira');
- return {requests,writes,errors,recover(){failed=false;}};
+ return {requests,writes,errors,recover(){failed=false;},setBalance(value:number){balance=value;},subscriptions(){return healthySubscriptions;}};
 }
+
+test('saldo persistido fresco é atualizado ao voltar e recarregar sem repetir lançamento',async({page})=>{
+ const state=await setup(page,{healthyRealtime:true});
+ const closing=page.getByRole('region',{name:'Fechamento financeiro do período'});
+ await expect(closing.getByText('R$ 110,00',{exact:true}).first()).toBeVisible();
+ await expect.poll(()=>state.subscriptions()).toBeGreaterThan(0);
+ // Prove the old, still-fresh snapshot was persisted before the server changes.
+ await expect.poll(()=>page.evaluate(()=>new Promise<number|undefined>((resolve,reject)=>{
+  const open=indexedDB.open('keyval-store');open.onerror=()=>reject(open.error);
+  open.onsuccess=()=>{const db=open.result;const transaction=db.transaction('keyval','readonly');const request=transaction.objectStore('keyval').get('sj-query-cache');
+   request.onsuccess=()=>{const query=request.result?.clientState?.queries?.find((q:any)=>q.queryKey[0]==='carteira-cash-report');resolve(query?.state?.data?.totals?.balance);db.close();};request.onerror=()=>reject(request.error);};
+ }))).toBe(110);
+ const before=state.requests.length;state.setBalance(111);
+ await page.locator('a[href="/dashboard"]').first().click();
+ await expect(page).toHaveURL(/dashboard$/);
+ await page.locator('a[href="/carteira"]').first().click();
+ await expect(closing.getByText('R$ 111,00',{exact:true}).first()).toBeVisible();
+ expect(state.requests.length).toBeGreaterThan(before);
+ const afterNavigation=state.requests.length;state.setBalance(112);await page.reload();
+ await expect(closing.getByText('R$ 112,00',{exact:true}).first()).toBeVisible();
+ expect(state.requests.length).toBeGreaterThan(afterNavigation);
+ expect(state.writes).toEqual([]);
+});
 for(const width of [320,390,1366])test(`carteira mostra caixa parcial e data desconhecida sem inventar recebimento em ${width}px`,async({page},testInfo)=>{
  await page.setViewportSize({width,height:900});const state=await setup(page);
  const closing=page.getByRole('region',{name:'Fechamento financeiro do período'});

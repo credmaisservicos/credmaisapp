@@ -68,6 +68,7 @@ const Carteira = () => {
     [["carteira-cash-report",user?.id||""],["payment-allocation-review",user?.id||""]]);
   const cashQuery=useQuery({
     queryKey:["carteira-cash-report",user?.id,period,searchTerm,historyPage],enabled:!!user,
+    staleTime:0,refetchOnMount:'always',
     queryFn:async({signal})=>{
       const controller=new AbortController();const cancel=()=>controller.abort();
       if(signal.aborted)cancel();else signal.addEventListener('abort',cancel,{once:true});
