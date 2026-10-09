@@ -1,6 +1,17 @@
 import {expect,it} from 'vitest';
 import {publicSignedUploadUrl,uploadPath,uploadReference,validUploadPath} from '../../supabase/functions/_shared/upload_reference';
 const origin='https://uploads.test.invalid';
+const owner='11111111-1111-4111-8111-111111111111';
+it.each([
+ `${owner}/comprovantes/receipt.pdf`,
+ `portal-receipts/${owner}/receipt.pdf`,
+ `client-docs/${owner}/documento março.pdf`,
+])('renova identificador legado sem esquema: %s',path=>{
+ expect(uploadPath(path,[origin])).toBe(path);
+});
+it.each(['portal-receipts/not-a-client/receipt.pdf',`${owner}/../other/file.pdf`,`${owner}/file?token=old`,`${owner}/%2e%2e/file.pdf`,'dashboard/receipt.pdf','//foreign.invalid/file.pdf'])('não confunde rota relativa ou caminho inseguro com anexo: %s',path=>{
+ expect(uploadPath(path,[origin])).toBeNull();
+});
 it('persiste identificador sem token e preserva espaço e acentos do arquivo',()=>{
  const path='owner/documentos/comprovante março.pdf';const ref=uploadReference(path);
  expect(ref).toBe('storage://uploads/owner/documentos/comprovante%20mar%C3%A7o.pdf');

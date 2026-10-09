@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import {DailyInterestNotice} from '@/components/DailyInterestNotice';
 import { X, Shield, CalendarCog, Plus, Trash2, UploadCloud, FileText, FileSignature } from "lucide-react";
 import VoiceRecorder from "@/components/VoiceRecorder";
 import { INPUT, FREQ, LOAN_MODES, DAILY_MODES, fmt } from "../constants";
@@ -203,7 +204,8 @@ export default function NovoEmprestimoModal(p: Props) {
           </div>
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">Juros de atraso (% ao dia)</label>
-            <input type="number" name="loan_daily_fee" aria-label="Juros de atraso ao dia" min="0" step="0.01" value={p.loanDailyFee} onChange={e => p.setLoanDailyFee(e.target.value)} className={INPUT} />
+            <input type="number" name="loan_daily_fee" aria-label="Juros de atraso ao dia" aria-describedby="loan-daily-interest-note" min="0" step="0.01" value={p.loanDailyFee} onChange={e => p.setLoanDailyFee(e.target.value)} className={INPUT} />
+            <DailyInterestNotice id="loan-daily-interest-note" value={p.loanDailyFee}/>
           </div>
           <div className="col-span-2">
             <label className="text-xs font-medium text-muted-foreground mb-1 block">Observações</label>

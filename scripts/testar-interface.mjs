@@ -1,7 +1,8 @@
 import { spawn } from "node:child_process";
 import { join } from "node:path";
 import { setTimeout } from "node:timers/promises";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statfsSync, writeFileSync } from "node:fs";
+import { freemem, totalmem, cpus, platform, release } from "node:os";
 import { chromium, webkit } from "@playwright/test";
 
 // Artefato e backend exclusivos de teste: nunca usa a configuração de produção.
@@ -16,17 +17,42 @@ const env = {
 const vite = join(process.cwd(), "node_modules/vite/bin/vite.js");
 const playwright = join(process.cwd(), "node_modules/@playwright/test/cli.js");
 
-function start(cli, args, stdio = "inherit") {
-  return spawn(process.execPath, [cli, ...args], { env, stdio, windowsHide: true });
+function start(cli, args, stdio = "inherit", runEnv = env) {
+  return spawn(process.execPath, [cli, ...args], { env: runEnv, stdio, windowsHide: true });
+}
+
+function browserRuntime() {
+  const readLimit = (path) => { try { return readFileSync(path, 'utf8').trim(); } catch { return null; } };
+  let sharedMemory = null;
+  try { const stat = statfsSync('/dev/shm'); sharedMemory = {total: stat.blocks * stat.bsize, available: stat.bavail * stat.bsize}; } catch { /* Not available on Windows. */ }
+  return {at: new Date().toISOString(), node: process.version, platform: platform(), release: release(), cpuCount: cpus().length,
+    memory: {total: totalmem(), available: freemem(), process: process.memoryUsage(), cgroupLimit: readLimit('/sys/fs/cgroup/memory.max'), cgroupUsage: readLimit('/sys/fs/cgroup/memory.current')},
+    sharedMemory, browsers: {chromium: chromium.executablePath(), webkit: webkit.executablePath()}};
 }
 
 async function run(cli, args) {
-  const child = start(cli, args);
-  const code = await new Promise((resolve, reject) => {
-    child.once("error", reject);
-    child.once("exit", resolve);
-  });
-  if (code !== 0) throw new Error(`Comando falhou com código ${code}: ${args.join(" ")}`);
+  const diagnostic = cli === playwright && args[0] === 'test';
+  const before = diagnostic ? browserRuntime() : null;
+  const child = start(cli, args, diagnostic ? ['ignore', 'pipe', 'pipe'] : 'inherit', diagnostic ? {...env, DEBUG: 'pw:browser'} : env);
+  let tail = '';
+  if (diagnostic) for (const [stream, output] of [[child.stdout, process.stdout], [child.stderr, process.stderr]]) {
+    stream.on('data', data => {output.write(data); tail = (tail + data.toString()).slice(-1024 * 1024);});
+  }
+  let result;
+  try {
+    result = await new Promise((resolve, reject) => {
+      child.once('error', reject);
+      child.once('close', (code, signal) => resolve({code, signal}));
+    });
+  } finally {
+    if (diagnostic) {
+      const directory = 'test-results/browser-diagnostics'; mkdirSync(directory, {recursive: true});
+      const label = (args.find(arg => arg.startsWith('--output='))?.split('/').at(-1) || 'interface').replace(/[^a-z\d_-]/gi, '_');
+      writeFileSync(`${directory}/${label}.json`, JSON.stringify({before, after: browserRuntime(), result: result || {spawnFailed: true}}, null, 2));
+      writeFileSync(`${directory}/${label}.log`, tail);
+    }
+  }
+  if (result.code !== 0) throw new Error(`Comando falhou com código ${result.code}, sinal ${result.signal}: ${args.join(" ")}`);
 }
 
 if (!existsSync(chromium.executablePath())) await run(playwright, ["install", "chromium"]);

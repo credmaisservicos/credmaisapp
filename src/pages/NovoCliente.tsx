@@ -16,6 +16,7 @@ import ContractTemplate from "@/components/ContractTemplate";
 import LoanPreviewPanel from "@/components/loan/LoanPreviewPanel";
 import { buildAmortization, calculateLoan, generateInstallmentSchedule, type LoanMode } from "@/lib/loanMath";
 import { getSignedUploadUrl } from "@/lib/storage";
+import {DailyInterestNotice} from '@/components/DailyInterestNotice';
 import { todayLocalISO, toDateInputValue, formatBR, localNoonISO, parseLocalDate } from "@/lib/dateUtils";
 import InvestorAllocationSelect from "@/components/InvestorAllocationSelect";
 import { DEFAULT_DAILY_LATE_RATE } from "@/lib/lateFee";
@@ -664,8 +665,8 @@ const NovoCliente = () => {
         late_fee_percent: parseFloat(lateFeePercent),
         daily_penalty_type: dailyPenaltyType,
         daily_penalty_value: Math.max(0, parseFloat(lateFeePercent) || 0),
-        // A multa diária é a única cobrança por atraso escolhida neste formulário.
-        // Não combinamos percentual/fixo com juros diários automaticamente.
+        // Keep the stored legacy value until the zero-interest policy is
+        // decided; the conditions section describes its effective fallback.
         daily_interest_percent: 0,
         total_amount: calc.totalAmount,
         total_interest: calc.totalInterest,
@@ -1681,6 +1682,7 @@ const NovoCliente = () => {
                   <p className="text-xs text-muted-foreground mt-1">% se pagar antes do vencimento</p>
                 </div>
                 <section className="rounded-2xl border border-border/70 bg-muted/20 p-4 sm:col-span-2 xl:col-span-3">
+                  <DailyInterestNotice value={0}/>
                   <div className="mb-3 flex items-start justify-between gap-3">
                     <div>
                       <h3 className="text-sm font-semibold text-foreground">Multa por atraso</h3>

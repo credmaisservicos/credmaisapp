@@ -11,6 +11,17 @@ const signed=(suffix='current')=>'https://credmaisapp-supabase.fcoipz.easypanel.
 const rendered=(suffix='current')=>signed(suffix).replace('https://credmaisapp-supabase.fcoipz.easypanel.host',import.meta.env.VITE_SUPABASE_URL);
 beforeEach(()=>{cleanup();clearUploadUrlCache();state.owner='company-a';vi.clearAllMocks();state.invoke.mockImplementation(async(_name,options)=>({data:{expires_in:300,urls:options.body.references.map(()=>signed())},error:null}));});
 afterEach(cleanup);
+it('comprovante legado por caminho recebe autorização nova e não vira rota relativa',async()=>{
+ const path='portal-receipts/11111111-1111-4111-8111-111111111111/receipt.pdf';
+ const url=await resolveUploadUrl(path,{kind:'portal',token:'session-a'});
+ expect(state.invoke).toHaveBeenCalledTimes(1);
+ expect(state.invoke.mock.calls[0][1].body).toEqual({references:[path],access:{kind:'portal',token:'session-a'}});
+ expect(url).toBe(rendered());
+});
+it('comprovante legado sem autorização não devolve o caminho como link navegável',async()=>{
+ state.invoke.mockResolvedValueOnce({data:{expires_in:300,urls:[null]},error:null});
+ expect(await resolveUploadUrl('portal-receipts/11111111-1111-4111-8111-111111111111/receipt.pdf',{kind:'portal',token:'foreign-session'})).toBeNull();
+});
 it('agrupa a leitura dos arquivos e compartilha somente cache do mesmo titular',async()=>{
  const first=resolveUploadUrl(ref,{kind:'owner'},'company-a');
  const repeated=resolveUploadUrl(ref,{kind:'owner'},'company-a');

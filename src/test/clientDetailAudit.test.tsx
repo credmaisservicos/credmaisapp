@@ -46,6 +46,16 @@ beforeEach(()=>{
 });
 afterEach(()=>{cleanup();cache.clear();});
 
+it('editar juros zero informa a taxa efetiva e acompanha a alteração sem salvar',async()=>{
+ render(ui());await screen.findByRole('heading',{name:'Cliente owner-a'});
+ fireEvent.click(screen.getAllByTitle('Editar empréstimo')[0]);
+ const dialog=screen.getByRole('dialog',{name:'Editar Empréstimo'});
+ expect(within(dialog).getByText(/0 ou vazio usa 4% de juros ao dia/)).toBeInTheDocument();
+ fireEvent.change(within(dialog).getByRole('spinbutton',{name:'Juros de atraso ao dia'}),{target:{value:'0.5'}});
+ expect(within(dialog).queryByText(/0 ou vazio usa/)).not.toBeInTheDocument();
+ expect(within(dialog).getByText(/0,5% ao dia/)).toBeInTheDocument();
+});
+
 it('não mostra o cliente da conta anterior enquanto a nova conta carrega o mesmo endereço',async()=>{
  cache.setQueryData(['client-detail',clientId],{id:clientId,name:'Dado privado da conta anterior',created_at:'2026-01-01',status:'Ativo'});
  state.owner='owner-b';state.deferred=()=>{};render(ui());

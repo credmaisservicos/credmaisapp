@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import {DailyInterestNotice} from '@/components/DailyInterestNotice';
 import { X, Repeat, AlertTriangle } from "lucide-react";
 import { INPUT, FREQ, fmt } from "../constants";
 import { calculateLoan, type Frequency } from "@/lib/loanMath";
@@ -185,7 +186,8 @@ export default function RenegociarModal({ contract, installments, clientName, on
           </div>
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">Juros de atraso (% ao dia)</label>
-            <input type="number" name="renegotiation_daily_fee" aria-label="Juros de atraso ao dia" value={dailyFee} onChange={e => setDailyFee(e.target.value)} className={INPUT} step="0.01" />
+            <input type="number" name="renegotiation_daily_fee" aria-label="Juros de atraso ao dia" aria-describedby="renegotiation-daily-interest-note" value={dailyFee} onChange={e => setDailyFee(e.target.value)} className={INPUT} step="0.01" />
+            <DailyInterestNotice id="renegotiation-daily-interest-note" value={dailyFee}/>
           </div>
 
         </div>

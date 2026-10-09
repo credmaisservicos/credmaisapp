@@ -1,4 +1,5 @@
 import { X } from "lucide-react";
+import {DailyInterestNotice} from '@/components/DailyInterestNotice';
 import { INPUT, FREQ } from "../constants";
 import { ModalPortal } from "@/components/ui/modal-portal";
 
@@ -78,7 +79,8 @@ export default function EditContratoModal({ form, setForm, regen, setRegen, savi
           </div>
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">Juros de atraso (% ao dia)</label>
-            <input type="number" name="contract_daily_interest" aria-label="Juros de atraso ao dia" step="0.01" value={form.daily_interest_percent} onChange={e => setForm({ ...form, daily_interest_percent: e.target.value })} className={INPUT} />
+            <input type="number" name="contract_daily_interest" aria-label="Juros de atraso ao dia" aria-describedby="contract-daily-interest-note" step="0.01" value={form.daily_interest_percent} onChange={e => setForm({ ...form, daily_interest_percent: e.target.value })} className={INPUT} />
+            <DailyInterestNotice id="contract-daily-interest-note" value={form.daily_interest_percent}/>
           </div>
           <div className="col-span-2">
             <label className="text-xs font-medium text-muted-foreground mb-1 block">Observações</label>

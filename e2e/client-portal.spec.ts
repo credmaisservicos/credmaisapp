@@ -2,6 +2,30 @@ import {expect,test} from '@playwright/test';
 test.use({serviceWorkers:'block',timezoneId:'America/Sao_Paulo'});
 
 const client={id:'client-test',name:'Maria Teste'};
+for(const allowed of [true,false])test(`comprovante por caminho exige autorização renovada (${allowed?'permitido':'recusado'})`,async({page})=>{
+ test.skip(!process.env.E2E_BASE_URL?.startsWith('http://127.0.0.1'),'Only isolated backend');
+ const clientId='11111111-1111-4111-8111-111111111111';
+ const path=`portal-receipts/${clientId}/receipt.pdf`,origin='https://credmais-e2e.supabase.co';
+ const signed=origin+'/storage/v1/object/sign/uploads/'+path+'?token=fresh-test-signature';
+ const requests:any[]=[],files:string[]=[],writes:string[]=[];
+ await page.routeWebSocket('**',socket=>socket.close());
+ await page.context().route(origin+'/**',async route=>{
+  const request=route.request(),url=new URL(request.url());let data:unknown=[];
+  if(url.pathname.endsWith('/portal_login_by_token'))data={...portal,client:{...client,id:clientId},contracts:[{...portal.contracts[0],installments:[{...portal.contracts[0].installments[0],receipt_url:path}]}]};
+  else if(url.pathname.endsWith('/functions/v1/upload-urls')){requests.push(request.postDataJSON());data={expires_in:300,urls:[allowed?signed:null]};}
+  else if(url.pathname.includes('/storage/v1/object/')){files.push(request.url());await route.fulfill({status:200,contentType:'text/plain',body:'Comprovante fictício'});return;}
+  if(['POST','PATCH','DELETE'].includes(request.method())&&/\/rest\/v1\/(transactions|contract_installments)$/.test(url.pathname))writes.push(url.pathname);
+  await route.fulfill({status:200,json:data});
+ });
+ await page.goto('/portal-cliente?t='+portal.session_token);
+ await page.getByRole('button',{name:/Abrir detalhes e pagar a parcela 2/}).click();
+ const popupPromise=page.waitForEvent('popup');await page.getByRole('dialog').getByRole('link',{name:'Ver',exact:true}).click();const popup=await popupPromise;
+ await expect.poll(()=>requests.length).toBe(1);
+ expect(requests[0]).toEqual({references:[path],access:{kind:'portal',token:portal.session_token}});
+ if(allowed){await expect(popup).toHaveURL(signed);await expect(popup.locator('body')).toContainText('Comprovante fictício');expect(files).toEqual([signed]);await popup.close();}
+ else{await expect(page.getByText('Não foi possível abrir o arquivo',{exact:true})).toBeVisible();await expect.poll(()=>popup.isClosed()).toBe(true);expect(files).toEqual([]);}
+ expect(writes).toEqual([]);
+});
 for(const [owner,label]of [['11111111-1111-4111-8111-111111111111','Empresa A'],['22222222-2222-4222-8222-222222222222','Empresa B']]){
  test(`portal preserva a empresa após sair e entrar novamente: ${label}`,async({page})=>{
   let scopedLogins=0,genericLogins=0;

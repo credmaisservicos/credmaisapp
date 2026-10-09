@@ -364,6 +364,20 @@ def main():
             check(label + ': assigned collector signs receipt', status==200 and bool(result['urls'][0]))
             status, result=http(uploads,'/',anon,'POST',access('collector',other['collector_token']))
             check(label + ': foreign collector cannot sign receipt', status==200 and result['urls']==[None])
+            # Old clients may have persisted the raw Storage path if signing
+            # failed. Both forms require the same tenant/session authorization.
+            sql(f"UPDATE contract_installments SET receipt_url='{path}' WHERE id='{own['installments'][0]}';")
+            raw_access={'references':[path], 'access':{'kind':'portal','token':own['portal']}}
+            status, result=http(uploads,'/',anon,'POST',raw_access)
+            check(label + ': raw legacy receipt authorizes its customer portal',status==200 and bool(result['urls'][0]))
+            status, content=http('',result['urls'][0])
+            check(label + ': raw legacy receipt downloads exact private bytes',status==200 and content==b'synthetic private file')
+            raw_access['access']['token']=other['portal']
+            status, result=http(uploads,'/',anon,'POST',raw_access)
+            check(label + ': raw legacy receipt rejects foreign portal',status==200 and result['urls']==[None])
+            status, result=http(uploads,'/',other['jwt'],'POST',{'references':[path],'access':{'kind':'owner'}})
+            check(label + ': raw legacy receipt rejects foreign owner',status==200 and result['urls']==[None])
+            sql(f"UPDATE contract_installments SET receipt_url='{reference}' WHERE id='{own['installments'][0]}';")
             # A readable database row is not proof that the file belongs to
             # that row's owner. Simulate a poisoned URL, without moving files.
             foreign_reference='storage://uploads/'+other['id']+'/fixture.txt'

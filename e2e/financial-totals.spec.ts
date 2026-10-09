@@ -5,14 +5,14 @@ const owner='11111111-1111-4111-8111-111111111111',contractId='33333333-3333-433
 const user={id:owner,email:'financial@example.test',aud:'authenticated',role:'authenticated',app_metadata:{},user_metadata:{},created_at:'2026-01-01T00:00:00Z'};
 const b64=(value:unknown)=>Buffer.from(JSON.stringify(value)).toString('base64url');
 async function backend(page:Page){
- const state={status:'active',requests:[] as any[]};
+ const state={status:'active',dailyRate:4,requests:[] as any[],writes:[] as string[]};
  await page.clock.setFixedTime(new Date('2026-08-31T22:00:00-03:00'));
  // Financial fixtures do not depend on the public font CDN. Its unavailable
  // response is exercised separately in boot-resilience in both browsers.
  await page.route('https://fonts.googleapis.com/**',route=>route.fulfill({contentType:'text/css',body:''}));
  await page.routeWebSocket('**',socket=>socket.close());
  const origin=new URL(process.env.VITE_SUPABASE_URL||'https://supabase-not-configured.invalid').origin;
- const contract=()=>({id:contractId,user_id:owner,client_id:owner,capital:1000,total_amount:1200,total_interest:200,num_installments:10,status:state.status,daily_interest_percent:4,max_interest_cap_percent:0,daily_penalty_type:'percentage',daily_penalty_value:0,loan_mode:'fixed',created_at:'2026-07-01T12:00:00Z',clients:{id:owner,name:'Cliente fictício'}});
+ const contract=()=>({id:contractId,user_id:owner,client_id:owner,capital:1000,total_amount:1200,total_interest:200,num_installments:10,status:state.status,daily_interest_percent:state.dailyRate,max_interest_cap_percent:0,daily_penalty_type:'percentage',daily_penalty_value:0,loan_mode:'fixed',created_at:'2026-07-01T12:00:00Z',clients:{id:owner,name:'Cliente fictício'}});
  const installment=()=>({id:'44444444-4444-4444-8444-444444444444',user_id:owner,client_id:owner,contract_id:contractId,installment_number:1,amount:100,paid_amount:40,paid_principal:30,paid_interest:10,paid_fees:0,late_fee:0,pre_settlement_snapshot:null,status:'overdue',due_date:'2026-08-30T12:00:00-03:00',contracts:contract(),clients:{id:owner,name:'Cliente fictício',phone:'11999999999',whatsapp:'11999999999'}});
  const report=()=>{
   const r=emptyFinancialAnalyticsReport();r.wallet.as_of='2026-09-01T01:00:00Z';r.wallet.financial_day='2026-08-31';
@@ -23,6 +23,7 @@ async function backend(page:Page){
  };
  await page.route(`${origin}/**`,async route=>{
   const url=new URL(route.request().url()),path=url.pathname;let data:unknown=[];
+  if(['POST','PATCH','DELETE'].includes(route.request().method())&&/^\/rest\/v1\/(contracts|contract_installments|transactions|clients)$/.test(path))state.writes.push(path);
   if(path==='/auth/v1/token'){const exp=Math.floor(Date.now()/1000)+3600;data={access_token:`${b64({alg:'HS256',typ:'JWT'})}.${b64({sub:owner,role:'authenticated',exp})}.test`,refresh_token:'test-refresh',token_type:'bearer',expires_in:3600,expires_at:exp,user};}
   else if(path==='/auth/v1/user')data=user;
   else if(path==='/rest/v1/profiles')data={...user,name:'Conta fictícia',subscription_type:'lifetime',plan_tier:'essencial',is_blocked:false,onboarding_completed_at:user.created_at};
@@ -44,6 +45,19 @@ async function backend(page:Page){
  await page.goto('/login',{waitUntil:'domcontentloaded'});await page.getByLabel(/e-?mail/i).fill(user.email);await page.getByLabel(/senha/i).first().fill('SenhaDeTeste123!');await page.getByRole('button',{name:/entrar/i}).click();await expect(page).toHaveURL(/dashboard$/);
  return state;
 }
+
+for(const width of [390,1366])test(`juros zero informa o cálculo efetivo sem alterar a dívida em ${width}px`,async({page})=>{
+ await page.setViewportSize({width,height:900});const state=await backend(page);state.dailyRate=0;
+ await page.goto(`/clientes/${owner}`);await page.getByTitle('Editar empréstimo',{exact:true}).first().click();
+ const dialog=page.getByRole('dialog',{name:'Editar Empréstimo'});
+ await expect(dialog.getByRole('note')).toContainText('0 ou vazio usa 4% de juros ao dia');
+ await dialog.getByRole('spinbutton',{name:'Juros de atraso ao dia'}).fill('0.5');
+ await expect(dialog.getByRole('note')).toContainText('0,5% ao dia');
+ await expect(dialog.getByRole('note')).not.toContainText('0 ou vazio');
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
+ await dialog.getByRole('button',{name:'Cancelar',exact:true}).click();
+ await expect(dialog).not.toBeVisible();expect(state.writes).toEqual([]);
+});
 test('painel mantém recebido, lucro e principal comprovados depois da conclusão',async({page})=>{
  const state=await backend(page);
  const total=page.getByRole('button').filter({has:page.getByText('Total Recebido',{exact:true})});await expect(total).toContainText('100,00');

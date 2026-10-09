@@ -4,6 +4,7 @@ import {
 import { CONTRACT_PLACEHOLDERS, DEFAULT_CONTRACT_TEMPLATE } from "@/utils/contractTemplate";
 import type { ModuleKey } from "@/contexts/WhiteLabelContext";
 import InstallAppCard from "@/components/InstallAppCard";
+import {DailyInterestNotice} from '@/components/DailyInterestNotice';
 import { COLOR_PRESETS } from "../constants";
 import type { SectionProps } from "../types";
 
@@ -52,8 +53,8 @@ const PadroesSection = ({ ctx }: SectionProps) => {
 
               <div>
                 <label htmlFor="default-daily-interest" className="text-label mb-1.5 block">Juros de atraso (% ao dia)</label>
-                <input id="default-daily-interest" name="default_daily_interest" aria-label="Juros de atraso ao dia" type="number" step="0.01" value={form.default_daily_interest} onChange={(e) => setForm({ ...form, default_daily_interest: e.target.value })} className={inputCls} />
-                <p className="text-[10px] text-muted-foreground mt-1">Composto sobre o valor acumulado. Padrão: 4% ao dia.</p>
+                <input id="default-daily-interest" name="default_daily_interest" aria-label="Juros de atraso ao dia" aria-describedby="default-daily-interest-note" type="number" step="0.01" value={form.default_daily_interest} onChange={(e) => setForm({ ...form, default_daily_interest: e.target.value })} className={inputCls} />
+                <DailyInterestNotice id="default-daily-interest-note" value={form.default_daily_interest}/>
               </div>
               <div>
                 <label htmlFor="default-fixed-fine" className="text-label mb-1.5 block">Multa fixa</label>

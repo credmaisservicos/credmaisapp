@@ -1,6 +1,8 @@
 /** Storage identifiers contain no bearer token. This module is also used by
  * the web app; keep it independent from Deno and the Supabase client. */
 const PREFIX='storage://uploads/';
+const UUID='[\\da-f]{8}-[\\da-f]{4}-[\\da-f]{4}-[\\da-f]{4}-[\\da-f]{12}';
+const LEGACY_PATH=new RegExp(`^(?:${UUID}/|(?:portal-receipts|client-docs)/${UUID}/)`, 'i');
 export const UPLOAD_URL_SECONDS=300;
 export function validUploadPath(value:unknown):value is string {
  return typeof value==='string' && value.length>0 && value.length<=1024
@@ -13,6 +15,10 @@ export function uploadReference(path:string):string {
 }
 export function uploadPath(reference:unknown,origins:readonly string[]):string|null {
  if(typeof reference!=='string' || reference.length>8192)return null;
+ // Earlier portal uploads stored a raw path when signing was unavailable.
+ // Accept only existing, namespaced folders; authorization still happens
+ // through upload-urls before any bearer URL is issued.
+ if(LEGACY_PATH.test(reference))return validUploadPath(reference)?reference:null;
  let encoded:string;
  if(reference.startsWith(PREFIX))encoded=reference.slice(PREFIX.length);
  else {
