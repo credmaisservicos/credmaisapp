@@ -1,6 +1,8 @@
 # Lista única de entrega e validação
 
-Valida??o final de 09/10: ajuste de cache publicado em `b78576c`; venda quitada, aluguel pago, cau??o devolvida uma vez e saldo R$ 10,80 verificados na conta fict?cia. Chromium confirmou recarga e navega??o na mesma sess?o; WebKit m?vel confirmou saldo e loca??o conclu?da. [Evid?ncias e limites da rodada](correcoes-caixa-comercial-2026-10-09.md).
+Avanço técnico de 09/10: leitor de comprovantes por caminho, informação do padrão de juros zero e diagnósticos de navegadores publicados em `0ca45be`. 983 unitários, 204 verificações reais isoladas e CI aprovados; dois cenários publicados de aviso/cancelamento e anexo fictício com acesso renovado conferidos sem escrita financeira. Um caso de recuperação WebKit passou após retry, com evidências preservadas e causa aberta. S05/C02/O02/Q01 continuam parcialmente abertos, e credenciais/aparelhos/documentos externos continuam necessários. [Relatório desta rodada](ajustes-disponiveis-2026-10-09.md).
+
+Validação final de 09/10: ajuste de cache publicado em `b78576c`; venda quitada, aluguel pago, caução devolvida uma vez e saldo R$ 10,80 verificados na conta fictícia. Chromium confirmou recarga e navegação na mesma sessão; WebKit móvel confirmou saldo e locação concluída. [Evidências e limites da rodada](correcoes-caixa-comercial-2026-10-09.md).
 
 Atualização de 09/10: **QA-03 e QA-04 corrigidos e publicados** em `a6d7512`: baixa comercial com referência de parcela sem ambiguidade e caixa incluindo receitas, cauções e estornos comerciais. [Relatório da correção](correcoes-caixa-comercial-2026-10-09.md). Backup e comparação consistente de 20 tabelas preservaram registros/titulares/permissões; 971 testes unitários e regressões em PostgreSQL isolado passaram. Os resultados das rodadas anteriores abaixo permanecem históricos.
 
