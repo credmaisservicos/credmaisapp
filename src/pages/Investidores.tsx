@@ -20,13 +20,8 @@ import {
 import { buildInvestorLoanUpdate, validateInvestorLoanTerms } from "@/lib/investorLoan";
 import { fetchAll } from "@/lib/fetchAll";
 import { formatBR, parseLocalDate, todayLocalISO, toDateInputValue } from "@/lib/dateUtils";
+import { formatBRL as brl } from "@/lib/currency";
 
-
-
-const brl = (n: number) => {
-  const value = Number(n ?? 0);
-  return (Number.isFinite(value) ? value : 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-};
 const safeNumber = (value: unknown) => {
   const number = Number(value ?? 0);
   return Number.isFinite(number) ? number : 0;

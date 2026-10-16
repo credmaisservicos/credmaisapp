@@ -2,6 +2,7 @@ import {UploadImage} from '@/components/UploadMedia';
 import {clientPortalLogoutPath} from '@/lib/publicAppLinks';
 import { useEffect, useLayoutEffect, useMemo, useState,useRef } from "react";
 import { formatBR, isOverdue as isDateOverdue, parseLocalDate } from "@/lib/dateUtils";
+import { formatBRL as money } from "@/lib/currency";
 import {financialDaysBetween} from '../../supabase/functions/_shared/financial_calendar';
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -108,8 +109,6 @@ function normalizePortalData(payload: unknown): PortalData | null {
   };
 }
 
-const money = (value: number | string | null | undefined) =>
-  (Number.isFinite(Number(value ?? 0)) ? Number(value ?? 0) : 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const safeNumber = (value: unknown) => {
   const number = Number(value ?? 0);
   return Number.isFinite(number) ? number : 0;

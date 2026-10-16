@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import ErrorState from "@/components/feedback/ErrorState";
 import { formatBR, formatBRDateTime } from "@/lib/dateUtils";
+import { formatBRL } from "@/lib/currency";
 
 type CountResult = { count: number | null; error: unknown };
 
@@ -149,8 +150,8 @@ export const AdminFinancePanel = () => {
         <Metric icon={CheckCircle2} label="Ativas" value={summary.active} tone="success" />
         <Metric icon={Clock3} label="Pendentes" value={summary.pending} tone="warning" />
         <Metric icon={AlertTriangle} label="Falhas/canceladas" value={summary.failed} tone={summary.failed ? "danger" : "success"} />
-        <Metric icon={CircleDollarSign} label="Pagamentos registrados" value={summary.paid.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} />
-        <Metric icon={Landmark} label="Movimentação recente" value={summary.volume.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} tone="info" />
+        <Metric icon={CircleDollarSign} label="Pagamentos registrados" value={formatBRL(summary.paid)} />
+        <Metric icon={Landmark} label="Movimentação recente" value={formatBRL(summary.volume)} tone="info" />
       </div>
       <div className="rounded-2xl border border-border bg-card overflow-hidden">
         <div className="p-4 border-b border-border"><h3 className="text-sm font-semibold">Assinaturas recentes</h3></div>
@@ -158,7 +159,7 @@ export const AdminFinancePanel = () => {
           <table className="w-full min-w-[760px] text-xs text-left">
             <thead className="bg-accent/30 text-muted-foreground"><tr><th className="p-3">Cliente</th><th className="p-3">Plano</th><th className="p-3">Provedor</th><th className="p-3">Valor</th><th className="p-3">Status</th><th className="p-3">Período</th></tr></thead>
             <tbody className="divide-y divide-border/60">
-              {(query.data?.subscriptions || []).map((s) => <tr key={s.id}><td className="p-3">{s.email || "—"}</td><td className="p-3">{s.plan_name || s.plan_tier || "—"}</td><td className="p-3">{s.provider || "—"}</td><td className="p-3">{safeAdminNumber(s.amount_paid).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td><td className="p-3"><Badge variant={s.status === "active" ? "default" : "outline"}>{s.status || "—"}</Badge></td><td className="p-3 text-muted-foreground">{safeAdminDate(s.current_period_end)}</td></tr>)}
+              {(query.data?.subscriptions || []).map((s) => <tr key={s.id}><td className="p-3">{s.email || "—"}</td><td className="p-3">{s.plan_name || s.plan_tier || "—"}</td><td className="p-3">{s.provider || "—"}</td><td className="p-3">{formatBRL(s.amount_paid)}</td><td className="p-3"><Badge variant={s.status === "active" ? "default" : "outline"}>{s.status || "—"}</Badge></td><td className="p-3 text-muted-foreground">{safeAdminDate(s.current_period_end)}</td></tr>)}
           {!query.isLoading && !(query.data?.subscriptions || []).length && <tr><td colSpan={6} className="p-8 text-center text-muted-foreground">Nenhuma assinatura registrada.</td></tr>}
             </tbody>
           </table>

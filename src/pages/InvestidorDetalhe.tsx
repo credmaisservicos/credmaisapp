@@ -10,6 +10,7 @@ import ErrorState from "@/components/feedback/ErrorState";
 import { friendlyError } from "@/lib/friendlyError";
 import { fetchAll } from "@/lib/fetchAll";
 import { formatBR, parseLocalDate } from "@/lib/dateUtils";
+import { formatBRL as brl } from "@/lib/currency";
 import {
   ArrowLeft, Landmark, Plus, RefreshCw, Wallet, TrendingUp, CheckCircle2,
   ExternalLink, Trash2, Copy, DollarSign, CalendarDays, Pencil, Undo2,
@@ -19,10 +20,6 @@ import {
   type Investor, type Loan,
 } from "./Investidores";
 
-const brl = (n: number) => {
-  const value = Number(n ?? 0);
-  return (Number.isFinite(value) ? value : 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-};
 const safeNumber = (value: unknown) => {
   const number = Number(value ?? 0);
   return Number.isFinite(number) ? number : 0;

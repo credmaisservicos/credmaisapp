@@ -8,13 +8,13 @@ import { fetchAll } from "@/lib/fetchAll";
 import { useMultiTableRealtime } from "@/hooks/useRealtimeSubscription";
 import { ArrowLeft, Wallet, TrendingUp, AlertCircle, Users, FileSignature, Activity } from "lucide-react";
 import { todayLocalISO } from "@/lib/dateUtils";
+import { formatBRLCompact as fmt } from "@/lib/currency";
 import ErrorState from "@/components/feedback/ErrorState";
 
 const safeNumber = (value: unknown) => {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;
 };
-const fmt = (v: number) => safeNumber(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 
 export default function TvMode() {
   const { user } = useAuth();

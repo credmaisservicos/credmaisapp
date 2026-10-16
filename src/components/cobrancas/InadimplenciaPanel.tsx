@@ -13,6 +13,7 @@ import { differenceInDays } from "date-fns";
 import { computeLateFee } from "@/lib/lateFee";
 import ErrorState from "@/components/feedback/ErrorState";
 import { parseLocalDate } from "@/lib/dateUtils";
+import { formatBRL as fmtBRL } from "@/lib/currency";
 
 interface Installment {
   id: string;
@@ -51,9 +52,6 @@ interface OverdueRow {
   installments: number;
   bucket: "0-30" | "31-60" | "61-90" | "90+";
 }
-
-const fmtBRL = (v: number) =>
-  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
 const InadimplenciaPanel = () => {
   const { user } = useAuth();

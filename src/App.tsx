@@ -35,7 +35,6 @@ import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const PortalCliente = lazy(() => import("./pages/PortalCliente"));
-// ... keep existing code
 const NovoCliente = lazy(() => import("./pages/NovoCliente"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Analises = lazy(() => import("./pages/Analises"));

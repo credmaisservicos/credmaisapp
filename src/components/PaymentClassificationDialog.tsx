@@ -6,9 +6,9 @@ import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
 import {Label} from '@/components/ui/label';
 import {classificationDetailSchema,classificationInputSchema,parseClassificationAmount} from '@/lib/paymentClassification';
+import {formatBRL as money} from '@/lib/currency';
 import type {usePaymentClassification} from '@/hooks/usePaymentClassification';
 type Operation=ReturnType<typeof usePaymentClassification>;
-const money=(value:number)=>value.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const number=(value:number)=>value.toFixed(2).replace('.',',');
 export default function PaymentClassificationDialog({owner,installmentId,operation,onClose}:{owner:string;installmentId:string;operation:Operation;onClose:()=>void}){
  const query=useQuery({queryKey:['payment-classification',owner,installmentId],retry:false,queryFn:async({signal})=>{

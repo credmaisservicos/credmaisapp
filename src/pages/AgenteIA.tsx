@@ -16,6 +16,7 @@ import {
   Image as ImageIcon, Mic, Video, File as FileIcon, MapPin, Sticker, Check, CheckCheck
 } from "lucide-react";
 import { formatBR, formatBRDateTime, parseLocalDate, todayLocalISO } from "@/lib/dateUtils";
+import { formatBRL, formatBRLCompact as fmt } from "@/lib/currency";
 import { SafeMessageContent } from "@/components/agent/SafeMessageContent";
 import { parsePaymentAmount } from '@/lib/paymentInput';
 import { useNavigate } from "react-router-dom";
@@ -1070,9 +1071,6 @@ const AgenteIA = ({embedded=false,view='chat'}:{embedded?:boolean;view?:'chat'|'
   const totalProfit = dashData?.profits.reduce((s: number, p: any) => s + safeAgentNumber(p.amount), 0) || 0;
   const unreadCount = whatsappChats.reduce((s, c) => s + (c.unreadCount || 0), 0);
 
-  const fmt = (n: number) =>
-    safeAgentNumber(n).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
-
   const filteredChats = whatsappChats.filter((c) => {
     if (chatFilter === "human" && !c.needsHuman) return false;
     if (chatFilter === "unread" && !c.unreadCount) return false;
@@ -1454,7 +1452,7 @@ const AgenteIA = ({embedded=false,view='chat'}:{embedded?:boolean;view?:'chat'|'
                     <div>
                       <p className="font-semibold text-foreground">{item.clients?.name || "Cliente"}</p>
                       <p className="text-sm text-muted-foreground">
-                        Parcela #{item.contract_installments?.installment_number || "não identificada"} · {safeAgentNumber(item.amount).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                        Parcela #{item.contract_installments?.installment_number || "não identificada"} · {formatBRL(item.amount)}
                       </p>
                       <p className="mt-1 text-xs text-muted-foreground">Confira o favorecido e o recebimento no banco antes de aprovar.</p>
                       <p className="mt-1 text-xs text-muted-foreground">O pagamento será aplicado à parcela indicada; eventual sobra será aplicada às demais parcelas abertas deste cliente.</p>

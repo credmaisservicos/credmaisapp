@@ -3,6 +3,7 @@ import { ArrowDown, ArrowUp, Minus, TrendingUp } from "lucide-react";
 import {financialDay,addFinancialDays} from "@/lib/financialAnalytics";
 import {useFinancialClock} from "@/hooks/useFinancialClock";
 import { parseLocalDate } from "@/lib/dateUtils";
+import { formatBRLCompact as fmt } from "@/lib/currency";
 
 type Props = {
   installments: any[];
@@ -19,7 +20,6 @@ const safeNumber = (value: unknown) => {
   const number = Number(value ?? 0);
   return Number.isFinite(number) ? number : 0;
 };
-const fmt = (v: number) => safeNumber(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 
 export default function PeriodComparison({ installments }: Props) {
   const now=useFinancialClock();

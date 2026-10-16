@@ -8,6 +8,7 @@ import {useFinancialClock} from "@/hooks/useFinancialClock";
 import { formatBR, toDateInputValue } from "@/lib/dateUtils";
 import { TrendingUp, PieChart as PieIcon, BarChart3 } from "lucide-react";
 import { isEmAtraso } from "@/lib/dashboardMetrics";
+import { formatBRLCompact as fmtBRL } from "@/lib/currency";
 
 type Props = {
   contracts: any[];
@@ -28,9 +29,6 @@ const safeNumber = (value: unknown) => {
   const number = Number(value ?? 0);
   return Number.isFinite(number) ? number : 0;
 };
-const fmtBRL = (v: number) =>
-  safeNumber(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
-
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
   return (

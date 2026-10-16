@@ -1,8 +1,8 @@
 import { loadPdfLib } from "@/utils/pdfLib";
 import { formatBR, formatBRDateTime, parseLocalDate } from "@/lib/dateUtils";
+import { formatBRL as brl } from "@/lib/currency";
 
 const safeNumber = (value: unknown) => Number.isFinite(Number(value ?? 0)) ? Number(value ?? 0) : 0;
-const brl = (n: number) => safeNumber(n).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const dt = (s?: string | null) => formatBR(s) || "-";
 
 export async function generateInvestorStatementPdf(payload: {

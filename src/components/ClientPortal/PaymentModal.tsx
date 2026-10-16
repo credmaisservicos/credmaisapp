@@ -14,6 +14,7 @@ import { generatePortalReceiptPdf } from "@/utils/portalPdf";
 import { QRCodeSVG } from "qrcode.react";
 import { generatePixPayload } from "@/utils/pixGenerator";
 import { formatBR } from "@/lib/dateUtils";
+import { formatBRL } from "@/lib/currency";
 import { computeLateFee } from "@/lib/lateFee";
 import { portalInstallmentAmount, portalReceivedAmount, isPortalInstallmentOpen, isPortalInstallmentOverdue } from "@/lib/portalAmounts";
 
@@ -109,7 +110,7 @@ export const PaymentModal = ({ isOpen, onOpenChange, installment, ownerProfile, 
     // totalDue já reflete multa/juros vigentes e desconta qualquer pagamento
     // parcial já registrado — installment.amount sozinho é só o valor bruto
     // original e mandaria o credor um número desatualizado.
-    const valor = (Number.isFinite(totalDue) ? totalDue : 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    const valor = formatBRL(totalDue);
     const venc = formatBR(installment.due_date) || "data indisponível";
     const nome = clientData?.name || "Cliente";
     const msg = `Olá! Sou *${nome}* e acabei de efetuar o pagamento da parcela #${installment.installment_number} no valor de *${valor}* (venc. ${venc}). Segue o comprovante a seguir 👇`;

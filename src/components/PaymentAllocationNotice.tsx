@@ -5,6 +5,7 @@ import {z} from 'zod';
 import {supabase} from '@/integrations/supabase/client';
 import {useAuth} from '@/contexts/AuthContext';
 import {usePaymentClassification} from '@/hooks/usePaymentClassification';
+import {formatBRL as money} from '@/lib/currency';
 const PaymentClassificationDialog=lazy(()=>import('@/components/PaymentClassificationDialog'));
 
 const reviewSchema=z.object({
@@ -13,7 +14,6 @@ const reviewSchema=z.object({
  overallocated_received_total:z.number().finite().nonnegative(),
  installments:z.array(z.object({id:z.string(),client_id:z.string().nullable(),installment_number:z.number().nullable(),received:z.number().finite(),allocated:z.number().finite(),classified_profit:z.number().finite().optional(),recorded_profit:z.number().finite().optional()})),
 });
-const money=(amount:number)=>amount.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 export function PaymentAllocationNotice(){
  const {user}=useAuth();
  return user?<OwnedPaymentAllocationNotice key={user.id} owner={user.id}/>:null;

@@ -79,6 +79,7 @@ const Dashboard = () => {
   // O cálculo mora em lib/dashboardMetrics para poder ser testado. Ficando aqui
   // dentro, o filtro errado de inadimplência passou meses sem ninguém notar.
   const metrics = useMemo(() => (data ? computeDashboardMetrics(data as any,currentTime) : null), [data,currentTime]);
+  const recentPaymentsContractsById = useMemo(() => new Map((metrics?.contracts || []).map((c: any) => [c.id, c] as const)), [metrics]);
 
   // ⚠️ IMPORTANTE: todos os hooks antes de qualquer early return
   const deltaReceived = useMemo(() => {
@@ -497,7 +498,7 @@ const Dashboard = () => {
               ) : (
                 <div className="divide-y divide-border/20">
                   {metrics.recentPayments.map((item: any) => {
-                    const contract = metrics.contracts.find((c: any) => c.id === item.contract_id);
+                    const contract = recentPaymentsContractsById.get(item.contract_id);
                     return (
                       <div key={item.id} className="flex items-center gap-3 px-5 py-3.5 hover:bg-success/5 transition-colors">
                         <div className="w-9 h-9 rounded-xl bg-success/10 flex items-center justify-center shrink-0">

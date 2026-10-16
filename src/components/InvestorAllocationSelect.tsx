@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Landmark } from "lucide-react";
 import { fetchAll } from "@/lib/fetchAll";
+import { formatBRL } from "@/lib/currency";
 
 type Option = {
   id: string;
@@ -80,8 +81,8 @@ export default function InvestorAllocationSelect({
           const saldo = Math.max(0, (Number.isFinite(o.total_due) ? o.total_due : 0) - (Number.isFinite(o.paid_amount) ? o.paid_amount : 0));
           return (
             <option key={o.id} value={o.id}>
-              {o.investor_name} — {o.principal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
-              {" "}(dívida restante {saldo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })})
+              {o.investor_name} — {formatBRL(o.principal)}
+              {" "}(dívida restante {formatBRL(saldo)})
             </option>
           );
         })}

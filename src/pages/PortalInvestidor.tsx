@@ -11,12 +11,12 @@ import { toast } from "@/hooks/use-toast";
 import { generateInvestorStatementPdf } from "@/utils/investorPdf";
 import defaultLogo from "@/assets/credmais-mark.svg";
 import { formatBR, parseLocalDate } from "@/lib/dateUtils";
+import { formatBRL as brl } from "@/lib/currency";
 
 const safeNumber = (value: unknown) => {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;
 };
-const brl = (n: number) => safeNumber(n).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const fmtDate = (d?: string | null) => d ? formatBR(d) || "-" : "-";
 
 type PortalPayload = {
