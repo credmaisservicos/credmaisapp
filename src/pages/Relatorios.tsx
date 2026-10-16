@@ -60,7 +60,8 @@ const Relatorios = () => {
         fetchAll((f,t)=>supabase.from('contract_installments').select('*').eq('user_id',user!.id).gte('due_date',bounds.startDateTime).lt('due_date',bounds.endDateTime).range(f,t)),
         fetchAll((f,t)=>supabase.from('contracts').select('*').eq('user_id',user!.id).range(f,t)),
       ]);
-      const installmentData=reportableInstallments(installmentDataRaw,contractsRaw).map(i=>({...i,contracts:contractsRaw.find(c=>c.id===i.contract_id)}));
+      const contractsById = new Map(contractsRaw.map((contract) => [contract.id, contract] as const));
+      const installmentData=reportableInstallments(installmentDataRaw,contractsRaw).map(i=>({...i,contracts:i.contract_id?contractsById.get(i.contract_id):undefined}));
       const profitData=cash.receipts.filter(r=>r.interest+r.fees>0).map(r=>({...r,amount:r.interest+r.fees}));
       const expenseData=cash.expenses;
       const totalProfit=sumMoney(profitData,p=>p.amount),totalExpense=sumMoney(expenseData,e=>e.amount);

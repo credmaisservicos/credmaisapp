@@ -5,7 +5,7 @@ import {beforeAll,beforeEach,afterAll,it,expect} from 'vitest';
 const owner='11111111-1111-4111-8111-111111111111',other='22222222-2222-4222-8222-222222222222',contract='33333333-3333-4333-8333-333333333333',inst='44444444-4444-4444-8444-444444444444';
 let db:PGlite;
 beforeAll(async()=>{db=new PGlite();for(const file of ['financialDatabase','paymentReceiptDatabase','walletCashDatabase'])await db.exec(readFileSync(`src/test/fixtures/${file}.sql`,'utf8'));
- for(const file of ['20260922130000_dynamic_late_fee_tracks_settlement.sql','20260922100000_reverse_percentage_settlement.sql','20261007210000_incremental_payment_ledger.sql','20261007220000_financial_calendar_atomic_charges.sql','20261008000000_wallet_cash_report.sql','20261008020000_financial_analytics_report.sql'])await db.exec(readFileSync(`supabase/migrations/${file}`,'utf8'));
+ for(const file of ['20260922130000_dynamic_late_fee_tracks_settlement.sql','20260922100000_reverse_percentage_settlement.sql','20261007210000_incremental_payment_ledger.sql','20261007220000_financial_calendar_atomic_charges.sql','20261008000000_wallet_cash_report.sql','20261008020000_financial_analytics_report.sql','20261014090000_bounded_financial_analytics_report.sql'])await db.exec(readFileSync(`supabase/migrations/${file}`,'utf8'));
 },30000);
 beforeEach(async()=>{await db.exec(`RESET ROLE;SET test.owner='${owner}';TRUNCATE contracts,contract_installments,transactions,profits,expenses;
  INSERT INTO contracts(id,user_id,client_id,status,capital)VALUES('${contract}','${owner}','${owner}','active',1000);
@@ -67,8 +67,20 @@ it('rejeita intervalo parcial, invertido, infinito e excessivo sem alterar finan
 it('sessão trocada entre preparação e envio não retorna caixa de outro proprietário',async()=>{
  await db.exec(`SET test.owner='${other}'`);await expect(db.query('SELECT financial_analytics_report(NULL,NULL,$1::uuid)',[owner])).rejects.toThrow('financial_owner_changed');
 });
-it('limite de eventos falha explicitamente sem truncar totais',async()=>{
+it('transaÃ§Ãµes que nÃ£o entram no relatÃ³rio nÃ£o acionam o limite de eventos',async()=>{
  await db.exec(`INSERT INTO transactions(user_id,type,amount) SELECT '${owner}','capital_injection',1 FROM generate_series(1,50001)`);
- await expect(report()).rejects.toThrow('financial_event_limit');
+ await expect(report('2026-08-01','2026-08-31')).resolves.toMatchObject({receipts:[],disbursements:[],expenses:[]});
  expect(Number((await db.query<{n:number}>('SELECT count(*) n FROM transactions')).rows[0].n)).toBe(50001);
+});
+it('eventos antigos fora do perÃ­odo nÃ£o acionam o limite',async()=>{
+ await db.exec(`INSERT INTO transactions(user_id,type,amount,date) SELECT '${owner}','payment',1,'2020-01-01' FROM generate_series(1,50001)`);
+ await expect(report('2026-08-01','2026-08-31')).resolves.toMatchObject({receipts:[]});
+});
+it('despesas com data invÃ¡lida nÃ£o acionam o limite do relatÃ³rio detalhado',async()=>{
+ await db.exec(`INSERT INTO transactions(user_id,type,amount,date) SELECT '${owner}','expense',1,'infinity' FROM generate_series(1,50001)`);
+ await expect(report()).resolves.toMatchObject({expenses:[]});
+});
+it('limite continua explÃ­cito para mais de 50 mil eventos dentro do perÃ­odo',async()=>{
+ await db.exec(`INSERT INTO transactions(user_id,type,amount,date) SELECT '${owner}','payment',1,'2026-08-02' FROM generate_series(1,50001)`);
+ await expect(report('2026-08-01','2026-08-31')).rejects.toThrow('financial_event_limit');
 });

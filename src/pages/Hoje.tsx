@@ -106,7 +106,7 @@ const Hoje = () => {
           .eq("user_id", user.id)
           .not("birth_date", "is", null)
           .range(f, t)).then((d) => ({ data: d })),
-        (supabase as any).rpc("financial_analytics_report",{_expected_owner:user!.id}).then(({data,error}:any)=>{if(error)throw error;return financialAnalyticsSchema.parse(data);}),
+        (supabase as any).rpc("financial_analytics_report",{_from:addFinancialDays(financialToday,-90),_to:financialToday,_expected_owner:user!.id}).then(({data,error}:any)=>{if(error)throw error;return financialAnalyticsSchema.parse(data);}),
       ]);
 
       const failed = [dueTodayRes, todosRes, notifRes, promisesRes, next7Res, clientsRes]

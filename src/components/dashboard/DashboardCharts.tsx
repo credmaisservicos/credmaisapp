@@ -133,10 +133,11 @@ export default function DashboardCharts({ contracts, installments, profits }: Pr
 
   // Top clients by received
   const topClients = useMemo(() => {
+    const contractsById = new Map(contracts.map((contract: any) => [contract.id, contract] as const));
     const map = new Map<string, { name: string; total: number }>();
     installments.forEach((i: any) => {
       if (i.status !== "paid") return;
-      const c = contracts.find((c: any) => c.id === i.contract_id);
+      const c = contractsById.get(i.contract_id);
       if (!c?.clients?.name) return;
       const cur = map.get(c.clients.name) || { name: c.clients.name, total: 0 };
       cur.total += safeNumber(i.paid_amount);
@@ -253,12 +254,12 @@ export default function DashboardCharts({ contracts, installments, profits }: Pr
             <div className="w-8 h-8 rounded-2xl bg-success/10 flex items-center justify-center">
               <BarChart3 size={14} className="text-success" />
             </div>
-            <h3 className="text-headline text-sm text-foreground">Top 5 Clientes (Recebido)</h3>
+            <h3 className="text-headline text-sm text-foreground">Top 5 Clientes (Recebido · 12 meses)</h3>
           </div>
           <div className="h-56">
             {topClients.length === 0 ? (
               <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
-                Sem pagamentos registrados
+                Sem recebimentos nos últimos 12 meses
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">

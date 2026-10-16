@@ -11,8 +11,21 @@ export const financialAnalyticsSchema=z.object({wallet:walletCashReportSchema,
  warnings:z.object({contracts_without_disbursement:z.number().int().nonnegative(),unlinked_principal:money})});
 export type FinancialAnalytics=z.infer<typeof financialAnalyticsSchema>;
 export type CashReceipt=FinancialAnalytics['receipts'][number];
+export const FINANCIAL_QUERY_STALE_TIME=30_000;
+export function financialAnalyticsReportSet(reports:FinancialAnalytics[]){
+ const [cash,previousCash]=reports;
+ if(!cash)throw Error('missing_financial_report');
+ return previousCash?{cash,previousCash}:{cash};
+}
 export const sumMoney=(rows:unknown[],value:(row:any)=>unknown)=>Math.round(rows.reduce<number>((sum,row)=>sum+(Number(value(row))||0),0)*100)/100;
 export function addFinancialDays(day:string,days:number){return new Date(Date.parse(day+'T12:00:00Z')+days*86400000).toISOString().slice(0,10);}
+export function financialAnalyticsWindows(from:string,to:string){
+ if(financialDay(from)!==from||financialDay(to)!==to||from>to)throw Error('invalid_financial_period');
+ const days=financialDaysBetween(from,to);
+ if(days>3660)throw Error('invalid_financial_period');
+ const previous={from:addFinancialDays(from,-days-1),to:addFinancialDays(from,-1)};
+ return days*2+1<=3660?[{from:previous.from,to}]:[{from,to},previous];
+}
 /** Picker dates are civil choices; persisted timestamps use the financial zone. */
 export const pickerDay=(date:Date)=>`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
 export function financialStart(day:string){

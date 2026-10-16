@@ -31,6 +31,7 @@ import { useMultiTableRealtime } from "@/hooks/useRealtimeSubscription";
 import { formatBR } from "@/lib/dateUtils";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { walletCashReportSchema } from "@/lib/walletCashReport";
+import { FINANCIAL_QUERY_STALE_TIME } from "@/lib/financialAnalytics";
 import { parseFinancialAmount } from "@/lib/financialEntry";
 import {PaymentAllocationNotice} from '@/components/PaymentAllocationNotice';
 import {useManualCashOperation} from '@/hooks/useManualCashOperation';
@@ -68,7 +69,7 @@ const Carteira = () => {
     [["carteira-cash-report",user?.id||""],["payment-allocation-review",user?.id||""]]);
   const cashQuery=useQuery({
     queryKey:["carteira-cash-report",user?.id,period,searchTerm,historyPage],enabled:!!user,
-    staleTime:0,refetchOnMount:'always',
+    staleTime:FINANCIAL_QUERY_STALE_TIME,
     queryFn:async({signal})=>{
       const controller=new AbortController();const cancel=()=>controller.abort();
       if(signal.aborted)cancel();else signal.addEventListener('abort',cancel,{once:true});

@@ -42,7 +42,9 @@ export default function RenegociarModal({ contract, installments, clientName, on
 
   const principalOpen = useMemo(
     () => pending.reduce((s, i: any) => {
-      if (i.scheduled_principal != null) return s + safeNumber(i.scheduled_principal);
+      if (i.scheduled_principal != null && safeNumber(i.scheduled_principal) > 0) {
+        return s + safeNumber(i.scheduled_principal);
+      }
       // Compatibilidade antes da migração: distribui somente o capital original,
       // sem transformar juros futuros em novo principal.
       return s + safeNumber(contract.capital) / (safeNumber(contract.num_installments) || 1);

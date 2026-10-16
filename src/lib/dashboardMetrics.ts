@@ -73,6 +73,7 @@ export function diasEmAtraso(i:{status?:string|null;due_date?:string|null},now=n
 
 export function computeDashboardMetrics(data: DashboardInput, agora: Date = new Date()) {
   const { contracts, installments, clients, goals, cash } = data;
+  const contractsById = new Map(contracts.map((contract) => [contract.id, contract] as const));
 
   // O painel fala do dinheiro que está NA RUA: contratos encerrados vivem no
   // histórico financeiro.
@@ -114,7 +115,7 @@ export function computeDashboardMetrics(data: DashboardInput, agora: Date = new 
   const recentPayments = receipts.filter(r=>r.day).slice(0,6).map(r=>({...r,paid_at:r.date,paid_amount:r.amount}));
   const overdueList = overdueInstallments
     .map((i) => {
-      const contract = contracts.find((c) => c.id === i.contract_id);
+      const contract = contractsById.get(i.contract_id);
       const due = parseLocalDate(i.due_date);
       const daysOverdue = due ? Math.max(0,financialDaysBetween(i.due_date,agora)) : 0;
       return { ...i, clientName: contract?.clients?.name || "—", daysOverdue, contractId: i.contract_id };

@@ -20,5 +20,10 @@ export async function fetchAll<T = any>(
     if (data.length < pageSize) break;
     from += pageSize;
   }
+  if (from >= 100 * pageSize) {
+    const { data, error } = await withTimeout<{ data: T[] | null; error: unknown }>(build(from, from), 20_000);
+    if (error) throw error;
+    if (data?.length) throw new Error("fetch_all_limit_exceeded");
+  }
   return out;
 }

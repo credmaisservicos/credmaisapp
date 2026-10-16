@@ -52,6 +52,7 @@ const Dashboard = () => {
   const { data, isLoading, isPending, isFetching, dataUpdatedAt, error: dashError, refetch: refetchDash } = useQuery({
     queryKey: ["dashboard-data", user?.id,financialDay(currentTime)],
     queryFn: async () => {
+      const reportTo=financialDay(currentTime)!;
       // Só as colunas que as métricas usam. Antes vinha `select("*")` das ~1.700
       // parcelas e de todos os contratos, com anexos e observações que a tela nem
       // abre — payload grande à toa, e no celular isso pesa.
@@ -64,7 +65,7 @@ const Dashboard = () => {
           .eq("user_id", user!.id).range(f, t)),
         fetchAll((f, t) => supabase.from("clients").select("id, name, credit_score, status").eq("user_id", user!.id).range(f, t)),
         fetchAll((f, t) => supabase.from("goals").select("*").eq("user_id", user!.id).range(f, t)),
-        (supabase as any).rpc("financial_analytics_report",{_expected_owner:user!.id}).then(({data,error}:any)=>{if(error)throw error;return financialAnalyticsSchema.parse(data);}),
+        (supabase as any).rpc("financial_analytics_report",{_from:addFinancialDays(reportTo,-365),_to:reportTo,_expected_owner:user!.id}).then(({data,error}:any)=>{if(error)throw error;return financialAnalyticsSchema.parse(data);}),
       ]);
       return {
         contracts, installments, clients, goals,

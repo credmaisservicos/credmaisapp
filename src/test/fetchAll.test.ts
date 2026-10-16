@@ -20,4 +20,15 @@ describe("carregamento paginado", () => {
     await check;
     expect(vi.getTimerCount()).toBe(0);
   });
+  it("aceita 100 páginas completas quando a sonda não encontra outra linha", async () => {
+    const build = vi.fn((from: number) => Promise.resolve({ data: from < 100 ? [from] : [], error: null }));
+    expect(await fetchAll(build, 1)).toHaveLength(100);
+    expect(build).toHaveBeenCalledTimes(101);
+    expect(build).toHaveBeenLastCalledWith(100, 100);
+  });
+  it("falha explicitamente se houver uma linha além do limite", async () => {
+    const build = vi.fn((from: number) => Promise.resolve({ data: [from], error: null }));
+    await expect(fetchAll(build, 1)).rejects.toThrow("fetch_all_limit_exceeded");
+    expect(build).toHaveBeenCalledTimes(101);
+  });
 });

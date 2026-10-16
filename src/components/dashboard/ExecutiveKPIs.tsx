@@ -24,6 +24,7 @@ const ExecutiveKPIs = ({ contracts, installments }: Props) => {
   const now=useFinancialClock();
   const kpis = useMemo(() => {
     const today=financialDay(now)!;
+    const contractsById = new Map(contracts.map((contract) => [contract.id, contract] as const));
     const paid = installments.filter((i) => i.status === "paid" && i.paid_at);
     // Atraso e "em aberto" pelas mesmas regras do painel: um filtro por status
     // específico deixava de fora as parcelas que o check-overdue já marcou.
@@ -49,7 +50,7 @@ const ExecutiveKPIs = ({ contracts, installments }: Props) => {
 
     // PMR — prazo médio dos contratos ativos (dias até liquidação prevista)
     const activePending = pending.filter((i) => {
-      const c = contracts.find((c) => c.id === i.contract_id);
+      const c = contractsById.get(i.contract_id);
       return c && (c.status === "active" || c.status === "overdue") && !!safeDate(i.due_date);
     });
     let pmr = 0;

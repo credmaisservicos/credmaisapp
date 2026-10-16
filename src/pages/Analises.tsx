@@ -1,4 +1,4 @@
-import {financialAnalyticsSchema,financialDay,financialDaysBetween,addFinancialDays,pickerDay,periodReceiptTotals,receiptsInPeriod,openFinancialInstallments,sumMoney} from "@/lib/financialAnalytics";
+import {financialAnalyticsSchema,financialAnalyticsWindows,financialAnalyticsReportSet,financialDay,financialDaysBetween,addFinancialDays,pickerDay,periodReceiptTotals,receiptsInPeriod,openFinancialInstallments,sumMoney,FINANCIAL_QUERY_STALE_TIME,type FinancialAnalytics} from "@/lib/financialAnalytics";
 import {useFinancialClock} from "@/hooks/useFinancialClock";
 import { isEmAtraso, isEmAberto } from "@/lib/dashboardMetrics";
 import { useMemo, useState } from "react";
@@ -232,31 +232,39 @@ const Analises = () => {
   );
 
   const { data, isLoading, isFetching, error, refetch, dataUpdatedAt } = useQuery({
-    queryKey: ["analises-data", user?.id,financialDay(clock)],
+    queryKey: ["analises-data", user?.id,financialDay(clock),pickerDay(dateFrom),pickerDay(dateTo)],
     queryFn: async () => {
-      const [contracts, installments, clients,cash] = await Promise.all([
+      const windows=financialAnalyticsWindows(pickerDay(dateFrom),pickerDay(dateTo));
+      const [contracts, installments, clients,cashReports] = await Promise.all([
         fetchAll((f, t) => supabase.from("contracts").select("*").eq("user_id", user!.id).range(f, t)),
         fetchAll((f, t) => supabase.from("contract_installments").select("*, clients(id, name)").eq("user_id", user!.id).range(f, t)),
         fetchAll((f, t) => supabase.from("clients").select("id, name, credit_score, status, created_at").eq("user_id", user!.id).range(f, t)),
-        (supabase as any).rpc("financial_analytics_report",{_expected_owner:user!.id}).then(({data,error}:any)=>{if(error)throw error;return financialAnalyticsSchema.parse(data);}),
+        Promise.all(windows.map(({from,to})=>(supabase as any).rpc("financial_analytics_report",{_from:from,_to:to,_expected_owner:user!.id}).then(({data,error}:any)=>{if(error)throw error;return financialAnalyticsSchema.parse(data);}))),
       ]);
       return {
-        cash,
+        ...financialAnalyticsReportSet(cashReports),
         contracts: Array.isArray(contracts) ? contracts : [],
         installments: Array.isArray(installments) ? installments : [],
         clients: Array.isArray(clients) ? clients : [],
       };
     },
     enabled: !!user,
-    staleTime: 0,
-    refetchOnWindowFocus: true,
-    refetchOnMount: "always",
+    staleTime: FINANCIAL_QUERY_STALE_TIME,
   });
 
   const m = useMemo(() => {
     if (!data) return null;
     const { contracts, installments:originalInstallments, clients,cash } = data;
+    const previousCash=data.previousCash??cash;
+    const clientsById = new Map(clients.map((client: any) => [client.id, client] as const));
+    const cashCapitalByContract = new Map(cash.capital.map((capital) => [capital.contract_id, capital] as const));
     const installments=originalInstallments.filter(i=>i.status==="paid").concat(openFinancialInstallments(contracts,originalInstallments,clock));
+    const installmentsByContract = new Map<string, any[]>();
+    installments.forEach((installment: any) => {
+      const rows = installmentsByContract.get(installment.contract_id) || [];
+      rows.push(installment);
+      installmentsByContract.set(installment.contract_id, rows);
+    });
     const now = clock;
     const rangeStart = startOfDay(dateFrom);
     const rangeEnd = endOfDay(dateTo);
@@ -313,11 +321,11 @@ const Analises = () => {
       .filter((i: any) => isEmAberto(i))
       .reduce((s: number, i: any) => s + safeNumber(i.amount), 0);
     const quitados = contracts.filter((c: any) => {
-      const insts = installments.filter((i: any) => i.contract_id === c.id);
+      const insts = installmentsByContract.get(c.id) || [];
       return insts.length > 0 && insts.every((i: any) => i.status === "paid");
     }).length;
     const quitadosNoPeriodo = contracts.filter((c: any) => {
-      const insts = installments.filter((i: any) => i.contract_id === c.id);
+      const insts = installmentsByContract.get(c.id) || [];
       if (insts.length === 0 || insts.some((i: any) => i.status !== "paid")) return false;
       const last = insts.map((i: any) => safeDate(i.paid_at)?.getTime() || 0).reduce((a, b) => Math.max(a, b), 0);
       return last >= rangeStart.getTime() && last <= rangeEnd.getTime();
@@ -325,6 +333,7 @@ const Analises = () => {
 
     // ─── Capital emprestado (histórico) — independente do período
     const totalLentHistory=cash.wallet.totals.disbursements;
+    const historyDisbursements=data.previousCash?cash.disbursements.concat(data.previousCash.disbursements):cash.disbursements;
     const outstandingCapital=Math.max(0,cash.wallet.totals.disbursements-cash.wallet.totals.principal);
     const totalProfitExpectedAll = contracts.reduce((s: number, c: any) => s + Math.max(0, safeNumber(c.total_amount) - safeNumber(c.capital)), 0);
 
@@ -359,8 +368,8 @@ const Analises = () => {
     const prevEnd = new Date(rangeStart.getTime() - 1);
     const periodDays=financialDaysBetween(rangeStartStr,rangeEndStr)+1;
     const prevFrom=addFinancialDays(rangeStartStr,-periodDays),prevTo=addFinancialDays(rangeStartStr,-1);
-    const prevLent=sumMoney(cash.disbursements.filter(d=>d.day!=null&&d.day>=prevFrom&&d.day<=prevTo),d=>d.amount);
-    const prevReceived=periodReceiptTotals(cash.receipts,prevFrom,prevTo).received;
+    const prevLent=sumMoney(previousCash.disbursements.filter(d=>d.day!=null&&d.day>=prevFrom&&d.day<=prevTo),d=>d.amount);
+    const prevReceived=periodReceiptTotals(previousCash.receipts,prevFrom,prevTo).received;
     const prevPaidCount = installments.filter((i: any) => { const d = safeDate(i.paid_at); return i.status === "paid" && d && d >= prevStart && d <= prevEnd; }).length;
     const prevContracts = contracts.filter((c: any) => { const d = safeDate(c.created_at); return d && d >= prevStart && d <= prevEnd; }).length;
     const prevProfit = contracts
@@ -372,7 +381,7 @@ const Analises = () => {
     const overdueByClient = new Map<string, { name: string; amount: number; count: number; maxDays: number }>();
     overdueAll.forEach((i: any) => {
       const cid = i.client_id;
-      const cname = i.clients?.name || clients.find((c: any) => c.id === cid)?.name || "—";
+      const cname = i.clients?.name || clientsById.get(cid)?.name || "—";
       const due = parseDueLocal(i.due_date);
       const days=due?financialDaysBetween(i.due_date,now):0;
       const cur = overdueByClient.get(cid) || { name: cname, amount: 0, count: 0, maxDays: 0 };
@@ -392,7 +401,7 @@ const Analises = () => {
     });
 
     // ─── Helpers para construir detalhes
-    const clientName = (cid: string) => clients.find((c: any) => c.id === cid)?.name || "—";
+    const clientName = (cid: string) => clientsById.get(cid)?.name || "—";
     const contractTag = (cid: string) => cid ? `#${String(cid).slice(0, 6)}` : "—";
     const daysLate = (due: string) => {
       const parsed = parseDueLocal(due);
@@ -438,7 +447,7 @@ const Analises = () => {
       { label: "Criado", key: "created_at", format: (v) => fmtDate(v, "dd/MM/yy") },
     ];
 
-    const historyRows=contracts.map(c=>({...decorateContract(c),_remainingCapital:cash.capital.find(k=>k.contract_id===c.id)?.outstanding||0})).sort((a,b)=>b._remainingCapital-a._remainingCapital);
+    const historyRows=contracts.map(c=>({...decorateContract(c),_remainingCapital:cashCapitalByContract.get(c.id)?.outstanding||0})).sort((a,b)=>b._remainingCapital-a._remainingCapital);
 
     const overdueRows = overdueAll.map(decorateInst).sort((a: any, b: any) => b._days - a._days);
     const paidRows = paidInRange.map(decorateInst).sort((a: any, b: any) => safeDateMs(b.paid_at) - safeDateMs(a.paid_at));
@@ -453,11 +462,11 @@ const Analises = () => {
       .map((c: any) => ({ ...c, _created: c.created_at }))
       .sort((a: any, b: any) => safeDateMs(b.created_at) - safeDateMs(a.created_at));
     const quitadosRows = contracts.filter((c: any) => {
-      const insts = installments.filter((i: any) => i.contract_id === c.id);
+      const insts = installmentsByContract.get(c.id) || [];
       return insts.length > 0 && insts.every((i: any) => i.status === "paid");
     }).map(decorateContract);
     const quitadosPeriodoRows = contracts.filter((c: any) => {
-      const insts = installments.filter((i: any) => i.contract_id === c.id);
+      const insts = installmentsByContract.get(c.id) || [];
       if (insts.length === 0 || insts.some((i: any) => i.status !== "paid")) return false;
       const last = insts.map((i: any) => safeDateMs(i.paid_at)).reduce((a, b) => Math.max(a, b), 0);
       return last >= rangeStart.getTime() && last <= rangeEnd.getTime();
@@ -501,7 +510,7 @@ const Analises = () => {
       agingD: makeAging(aging.d, "31-60 dias"),
       agingE: makeAging(aging.e, "60+ dias"),
       capitalAtivo: { title: "Capital ativo na rua", criteria: "Liberações registradas menos principal comprovado dos contratos ativos.", total: fmtBRL(capitalAtivo), count: activeRows.length, columns: contractCols, rows: activeRows },
-      totalLentHistory: { title: "Total emprestado (desde sempre)", criteria: "Soma das liberações comprovadas, incluindo lançamentos legados, independente do período.", total: fmtBRL(totalLentHistory), count:cash.disbursements.length,columns:[{label:"Data",key:"date",format:v=>v?fmtDate(v,"dd/MM/yy"):"Sem data comprovada"},{label:"Valor",key:"amount",format:v=>fmtBRL(v)}],rows:cash.disbursements },
+      totalLentHistory: { title: "Total emprestado (desde sempre)", criteria: "Total histórico exato; a lista detalha apenas o período selecionado e a comparação anterior.", total: fmtBRL(totalLentHistory), count:historyDisbursements.length,columns:[{label:"Data",key:"date",format:v=>v?fmtDate(v,"dd/MM/yy"):"Sem data comprovada"},{label:"Valor",key:"amount",format:v=>fmtBRL(v)}],rows:historyDisbursements },
       totalProfitExpectedAll: { title: "Lucro total esperado (desde sempre)", criteria: "Soma do lucro previsto (total do contrato − capital) de todos os contratos, independente do período selecionado.", total: fmtBRL(totalProfitExpectedAll), count: contracts.length, columns: contractCols, rows: contracts.map(decorateContract).sort((a: any, b: any) => b._lucro - a._lucro) },
       outstandingCapital: { title: "Saldo de capital emprestado", criteria: "Capital total já emprestado menos o principal comprovadamente recuperado nos recebimentos.", total: fmtBRL(outstandingCapital), count: historyRows.filter((r: any) => r._remainingCapital > 0).length, columns: [...contractCols, { label: "Capital em aberto", key: "_remainingCapital", align: "right", format: (v) => fmtBRL(Number(v || 0)) }], rows: historyRows.filter((r: any) => r._remainingCapital > 0) },
       aReceber: { title: "A receber (total)", criteria: "Saldo restante pela cotação atual das parcelas dos contratos ativos, após parciais.", total: fmtBRL(aReceberTotal), count: pendingRows.length, columns: instCols, rows: pendingRows },
@@ -562,8 +571,9 @@ const Analises = () => {
 
   const handleExport = () => {
     if (!data) return;
+    const contractsById = new Map(data.contracts.map((contract: any) => [contract.id, contract] as const));
     const rows = data.installments.map((i: any) => {
-      const c = data.contracts.find((c: any) => c.id === i.contract_id);
+      const c = contractsById.get(i.contract_id);
       return `${i.installment_number},${i.amount},${i.due_date},${i.status},${i.paid_at || ""},${c?.capital || ""}`;
     });
     const csv = "Parcela,Valor,Vencimento,Status,Pago em,Capital\n" + rows.join("\n");

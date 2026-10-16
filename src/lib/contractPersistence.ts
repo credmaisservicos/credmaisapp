@@ -51,6 +51,8 @@ type PendingScheduleInput = {
   dueDates: string[];
   paidInstallmentNumbers: Iterable<number>;
   amount: number;
+  /** Principal total to distribute across the complete schedule, when known. */
+  capital?: number;
   userId: string;
   contractId: string;
   clientId: string;
@@ -62,6 +64,14 @@ export function buildPendingSchedule(input: PendingScheduleInput) {
   return input.dueDates.flatMap((dueDate, index) => {
     const installmentNumber = index + 1;
     if (paid.has(installmentNumber)) return [];
+    const principalBase = input.capital == null
+      ? undefined
+      : Math.round((input.capital / input.dueDates.length) * 100) / 100;
+    const principal = principalBase == null
+      ? undefined
+      : installmentNumber === input.dueDates.length
+        ? Math.round((input.capital! - principalBase * (input.dueDates.length - 1)) * 100) / 100
+        : principalBase;
     return [{
       user_id: input.userId,
       contract_id: input.contractId,
@@ -70,6 +80,10 @@ export function buildPendingSchedule(input: PendingScheduleInput) {
       amount: input.amount,
       due_date: dueDate,
       status: "pending" as const,
+      ...(principal == null ? {} : {
+        scheduled_principal: principal,
+        scheduled_interest: Math.round((input.amount - principal) * 100) / 100,
+      }),
     }];
   });
 }

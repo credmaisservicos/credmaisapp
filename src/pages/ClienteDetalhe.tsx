@@ -523,11 +523,20 @@ const ClienteDetalhe = () => {
       const { error } = await (supabase as any).rpc("renegotiate_contract_atomically", {
         _old_contract_id: old.id,
         _contract: contractPayload,
-        _installments: dueDates.map((dd, i) => ({
-          installment_number: i + 1,
-          amount: payload.schedule[i] ?? payload.installmentAmount,
-          due_date: dd,
-        })),
+        _installments: dueDates.map((dd, i) => {
+          const amount = payload.schedule[i] ?? payload.installmentAmount;
+          const principalBase = Math.round((payload.totalCapital / payload.numInstallments) * 100) / 100;
+          const scheduledPrincipal = i === payload.numInstallments - 1
+            ? Math.round((payload.totalCapital - principalBase * (payload.numInstallments - 1)) * 100) / 100
+            : principalBase;
+          return {
+            installment_number: i + 1,
+            amount,
+            due_date: dd,
+            scheduled_principal: scheduledPrincipal,
+            scheduled_interest: Math.round((amount - scheduledPrincipal) * 100) / 100,
+          };
+        }),
         _new_cash_disbursed: payload.addCapital,
         _reason: payload.notes || null,
       });
@@ -628,6 +637,7 @@ const ClienteDetalhe = () => {
           dueDates,
           paidInstallmentNumbers: paidNumbers,
           amount: instAmt,
+          capital: cap,
           userId: user.id,
           contractId: editContract.id,
           clientId: id!,
