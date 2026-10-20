@@ -9,9 +9,8 @@
   backdrop-filter:blur(22px) saturate(135%);
 }
 .app-content :where(.glass-card,.surface-card,.premium-card,[class*="bg-card"][class*="rounded"])::before{content:"";position:absolute;inset:0 0 auto;height:1px;background:linear-gradient(90deg,transparent,hsl(0 0% 100%/.24),transparent);pointer-events:none}
-.app-content :where(.glass-card,.surface-card,.premium-card,[class*="bg-card"][class*="rounded"]):hover{border-color:hsl(var(--primary)/.32)!important;box-shadow:inset 0 1px 0 hsl(0 0% 100%/.14),0 22px 54px -30px hsl(0 0% 0%/.98)!important}
+.app-content :where(.glass-card,.surface-card,.premium-card,[class*="bg-card"][class*="rounded"]):hover{border-color:hsl(0 0% 100%/.18)!important;box-shadow:inset 0 1px 0 hsl(0 0% 100%/.14),0 22px 54px -30px hsl(0 0% 0%/.98)!important}
 .client-profile{position:relative}
-.client-profile::before{content:"";position:absolute;z-index:-1;pointer-events:none;width:520px;height:420px;right:-180px;top:-160px;background:radial-gradient(circle,hsl(var(--primary)/.12),transparent 68%);filter:blur(10px)}
 .client-profile-panel,.client-profile-metrics,.client-profile-followup,.client-profile-contract{background:linear-gradient(145deg,hsl(0 0% 100%/.075),hsl(var(--card)/.56) 44%,hsl(0 0% 0%/.14));border-color:hsl(0 0% 100%/.13);box-shadow:inset 0 1px 0 hsl(0 0% 100%/.11),0 18px 46px -30px hsl(0 0% 0%/.9);-webkit-backdrop-filter:blur(22px) saturate(135%);backdrop-filter:blur(22px) saturate(135%)}
 .client-profile-panel,.client-profile-followup{position:relative;overflow:hidden}
 .client-profile-panel::before,.client-profile-followup::before,.client-profile-metrics::before,.client-profile-contract::before{content:"";position:absolute;inset:0 0 auto;height:1px;background:linear-gradient(90deg,transparent,hsl(0 0% 100%/.25),transparent);pointer-events:none}
@@ -23,36 +22,20 @@
 .client-profile-button:hover{background:linear-gradient(145deg,hsl(0 0% 100%/.12),hsl(var(--card)/.65))}
 @media (prefers-reduced-motion: no-preference){.client-profile-panel,.client-profile-contract,.glass-card{transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease}.client-profile-panel:hover,.client-profile-contract:hover{transform:translateY(-2px)}}
 
-/* Color glass surfaces across the workspace. The tint is deliberately soft so
-   a card reads as a material first and a status second. Semantic descendants
-   select the accent automatically, which keeps legacy cards consistent. */
+/* Neutral glass surfaces: status color lives in text and icons, not in the card. */
 .dark .app-content :where(.glass-card,.surface-card,.premium-card,[class*="bg-card"][class*="rounded"]){
-  --glass-hue:214 86% 62%;
   position:relative;
   isolation:isolate;
-  background:
-    radial-gradient(120% 90% at 0% 0%,hsl(var(--glass-hue)/.16),transparent 58%),
-    linear-gradient(145deg,hsl(var(--glass-hue)/.13),hsl(228 30% 12%/.72) 48%,hsl(230 28% 7%/.86))!important;
-  border-color:hsl(var(--glass-hue)/.24)!important;
-  box-shadow:inset 0 1px 0 hsl(0 0% 100%/.12),inset 0 -1px 0 hsl(0 0% 0%/.22),0 20px 52px -34px hsl(var(--glass-hue)/.34)!important;
+  background:linear-gradient(145deg,hsl(0 0% 100%/.06),hsl(0 0% 100%/.025))!important;
+  border-color:hsl(0 0% 100%/.1)!important;
+  box-shadow:inset 0 1px 0 hsl(0 0% 100%/.06),0 20px 48px -34px hsl(0 0% 0%/.9)!important;
 }
-.dark .app-content :where(.glass-card,.surface-card,.premium-card,[class*="bg-card"][class*="rounded"]):has(.text-success,.text-emerald-400,.text-green-400,[class*="bg-success"],[class*="bg-emerald"],[class*="bg-green"]){--glass-hue:152 74% 50%}
-.dark .app-content :where(.glass-card,.surface-card,.premium-card,[class*="bg-card"][class*="rounded"]):has(.text-warning,.text-amber-400,.text-yellow-400,[class*="bg-warning"],[class*="bg-amber"],[class*="bg-yellow"]){--glass-hue:38 96% 58%}
-.dark .app-content :where(.glass-card,.surface-card,.premium-card,[class*="bg-card"][class*="rounded"]):has(.text-destructive,.text-red-400,.text-rose-400,[class*="bg-destructive"],[class*="bg-red"],[class*="bg-rose"]){--glass-hue:0 82% 62%}
-.dark .app-content :where(.glass-card,.surface-card,.premium-card,[class*="bg-card"][class*="rounded"]):has(.text-purple-400,.text-violet-400,.text-indigo-400,[class*="bg-purple"],[class*="bg-violet"],[class*="bg-indigo"]){--glass-hue:266 84% 68%}
-.dark .app-content :where(.glass-card,.surface-card,.premium-card,[class*="bg-card"][class*="rounded"]):has(.text-cyan-400,.text-sky-400,.text-info,[class*="bg-cyan"],[class*="bg-sky"],[class*="bg-info"]){--glass-hue:193 92% 62%}
-.dark .app-content :where(.glass-card,.surface-card,.premium-card,[class*="bg-card"][class*="rounded"])::after{content:"";position:absolute;z-index:-1;inset:auto -15% -52% 8%;height:65%;background:radial-gradient(ellipse,hsl(var(--glass-hue)/.15),transparent 68%);filter:blur(18px);pointer-events:none}
-.dark .app-content :where(.glass-card,.surface-card,.premium-card,[class*="bg-card"][class*="rounded"]):hover{border-color:hsl(var(--glass-hue)/.42)!important;box-shadow:inset 0 1px 0 hsl(0 0% 100%/.16),0 24px 60px -34px hsl(var(--glass-hue)/.46)!important}
+.dark .app-content :where(.glass-card,.surface-card,.premium-card,[class*="bg-card"][class*="rounded"]):hover{border-color:hsl(0 0% 100%/.18)!important}
 
-/* Light mode gets the same accents with a brighter, higher contrast surface. */
+/* Light mode: same neutral glass on a bright surface. */
 :root:not(.dark) .app-content :where(.glass-card,.surface-card,.premium-card,[class*="bg-card"][class*="rounded"]){
-  --glass-hue:214 86% 52%;
+  --glass-hue:0 0% 40%;
   background:linear-gradient(145deg,hsl(var(--glass-hue)/.09),hsl(0 0% 100%/.86) 52%,hsl(var(--glass-hue)/.045))!important;
   border-color:hsl(var(--glass-hue)/.2)!important;
   box-shadow:inset 0 1px 0 #fff,0 16px 42px -30px hsl(var(--glass-hue)/.28)!important;
 }
-.app-content :where(.glass-card,.surface-card,.premium-card,[class*="bg-card"][class*="rounded"]):has(.text-success,.text-emerald-400,.text-green-400,[class*="bg-success"],[class*="bg-emerald"],[class*="bg-green"]){--glass-hue:152 68% 40%}
-.app-content :where(.glass-card,.surface-card,.premium-card,[class*="bg-card"][class*="rounded"]):has(.text-warning,.text-amber-400,.text-yellow-400,[class*="bg-warning"],[class*="bg-amber"],[class*="bg-yellow"]){--glass-hue:34 90% 45%}
-.app-content :where(.glass-card,.surface-card,.premium-card,[class*="bg-card"][class*="rounded"]):has(.text-destructive,.text-red-400,.text-rose-400,[class*="bg-destructive"],[class*="bg-red"],[class*="bg-rose"]){--glass-hue:0 72% 46%}
-.app-content :where(.glass-card,.surface-card,.premium-card,[class*="bg-card"][class*="rounded"]):has(.text-purple-400,.text-violet-400,.text-indigo-400,[class*="bg-purple"],[class*="bg-violet"],[class*="bg-indigo"]){--glass-hue:266 62% 52%}
-.app-content :where(.glass-card,.surface-card,.premium-card,[class*="bg-card"][class*="rounded"]):has(.text-cyan-400,.text-sky-400,.text-info,[class*="bg-cyan"],[class*="bg-sky"],[class*="bg-info"]){--glass-hue:193 80% 46%}

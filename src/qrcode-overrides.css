@@ -8,7 +8,7 @@
   position: fixed;
   inset: 0;
   pointer-events: none;
-  background: radial-gradient(circle at 78% 8%, hsl(var(--primary) / .09), transparent 30%), radial-gradient(circle at 12% 76%, hsl(215 85% 60% / .055), transparent 25%);
+  background: radial-gradient(circle at 78% 8%, hsl(var(--primary) / .09), transparent 30%), radial-gradient(circle at 12% 76%, hsl(0 0% 60% / .055), transparent 25%);
   z-index: -1;
 }
 
